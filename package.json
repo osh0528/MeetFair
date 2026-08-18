@@ -1,0 +1,19 @@
+{
+  "name": "meetfair",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @meetfair/shared",
+    "dev:server": "npm run build:shared && npm run dev --workspace @meetfair/server",
+    "dev:mobile": "npm run build:shared && npm run start --workspace @meetfair/mobile",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "build": "npm run build:shared && npm run build --workspace @meetfair/server"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

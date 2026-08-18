@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MeetingStatus {
+  PLANNING
+  CONFIRMED
+  TRACKING
+  COMPLETED
+  CANCELLED
+}
+
+enum SharingStatus {
+  NOT_STARTED
+  SHARING
+  PAUSED
+  ARRIVED
+}
+
+model User {
+  id              String               @id @default(uuid())
+  email           String               @unique
+  passwordHash    String
+  nickname        String
+  createdAt       DateTime             @default(now())
+  hostedMeetings  Meeting[]            @relation("MeetingHost")
+  participations  MeetingParticipant[]
+  deviceTokens    DeviceToken[]
+  votes           Vote[]
+  travelEstimates TravelEstimate[]
+  sentPokes       Poke[]               @relation("PokeSender")
+  receivedPokes   Poke[]               @relation("PokeTarget")
+}
+
+model DeviceToken {
+  id            String   @id @default(uuid())
+  userId        String
+  expoPushToken String   @unique
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Meeting {
+  id               String               @id @default(uuid())
+  title            String
+  hostId           String
+  inviteCode       String               @unique
+  scheduledAt      DateTime
+  status           MeetingStatus        @default(PLANNING)
+  confirmedPlaceId String?              @unique
+  createdAt        DateTime             @default(now())
+  host             User                 @relation("MeetingHost", fields: [hostId], references: [id])
+  confirmedPlace   PlaceCandidate?      @relation("ConfirmedPlace", fields: [confirmedPlaceId], references: [id], onDelete: SetNull)
+  participants     MeetingParticipant[]
+  placeCandidates  PlaceCandidate[]     @relation("MeetingCandidates")
+  votes            Vote[]
+  pokes            Poke[]
+
+  @@index([hostId])
+  @@index([scheduledAt])
+}
+
+model MeetingParticipant {
+  id                  String        @id @default(uuid())
+  meetingId           String
+  userId              String
+  originAddress       String?
+  originLatitude      Float?
+  originLongitude     Float?
+  locationConsent     Boolean       @default(false)
+  sharingStatus       SharingStatus @default(NOT_STARTED)
+  readinessVerifiedAt DateTime?
+  joinedAt            DateTime      @default(now())
+  meeting             Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([userId])
+}
+
+model PlaceCandidate {
+  id              String           @id @default(uuid())
+  meetingId       String
+  name            String
+  address         String
+  latitude        Float
+  longitude       Float
+  category        String
+  meeting         Meeting          @relation("MeetingCandidates", fields: [meetingId], references: [id], onDelete: Cascade)
+  confirmedFor    Meeting?         @relation("ConfirmedPlace")
+  travelEstimates TravelEstimate[]
+  votes           Vote[]
+
+  @@index([meetingId])
+}
+
+model TravelEstimate {
+  id               String         @id @default(uuid())
+  placeCandidateId String
+  userId           String
+  durationMinutes  Int
+  distanceMeters   Int
+  placeCandidate   PlaceCandidate @relation(fields: [placeCandidateId], references: [id], onDelete: Cascade)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([placeCandidateId, userId])
+  @@index([userId])
+}
+
+model Vote {
+  id               String         @id @default(uuid())
+  meetingId        String
+  placeCandidateId String
+  userId           String
+  meeting          Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  placeCandidate   PlaceCandidate @relation(fields: [placeCandidateId], references: [id], onDelete: Cascade)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([placeCandidateId])
+}
+
+model Poke {
+  id        String   @id @default(uuid())
+  meetingId String
+  senderId  String
+  targetId  String
+  createdAt DateTime @default(now())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  sender    User     @relation("PokeSender", fields: [senderId], references: [id], onDelete: Cascade)
+  target    User     @relation("PokeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, targetId, createdAt])
+  @@index([senderId])
+}
