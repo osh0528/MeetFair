@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import { NaverMapMarkerOverlay, NaverMapView } from "@mj-studio/react-native-naver-map";
 
 interface Coordinate {
   latitude: number;
@@ -15,12 +15,12 @@ const initialCoordinate: Coordinate = {
 
 export function TrackingScreen() {
   const [coordinate, setCoordinate] = useState(initialCoordinate);
-  const [message, setMessage] = useState("버튼을 눌러 위치 공유를 시작하세요.");
+  const [message, setMessage] = useState("Tap the button to update your current location.");
 
   const showMyLocation = async () => {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
-      setMessage("위치 권한이 허용되지 않았습니다.");
+      setMessage("Location permission is required.");
       return;
     }
 
@@ -29,29 +29,32 @@ export function TrackingScreen() {
       latitude: current.coords.latitude,
       longitude: current.coords.longitude,
     });
-    setMessage("현재 위치를 표시하고 있습니다.");
+    setMessage("Current location has been updated.");
   };
 
   return (
     <View style={styles.container}>
-      <MapView
+      <NaverMapView
         style={styles.map}
-        region={{
-          ...coordinate,
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
-        }}
+        initialCamera={{ ...coordinate, zoom: 16 }}
+        isShowLocationButton
       >
-        <Marker coordinate={coordinate} title="내 위치" />
-      </MapView>
+        <NaverMapMarkerOverlay
+          latitude={coordinate.latitude}
+          longitude={coordinate.longitude}
+          image={{ symbol: "blue" }}
+          anchor={{ x: 0.5, y: 1 }}
+          caption={{ text: "Current location" }}
+        />
+      </NaverMapView>
       <View style={styles.panel}>
-        <Text style={styles.title}>출발 체크인</Text>
+        <Text style={styles.title}>Tracking</Text>
         <Text style={styles.message}>{message}</Text>
         <Pressable style={styles.button} onPress={showMyLocation}>
-          <Text style={styles.buttonText}>내 위치 표시</Text>
+          <Text style={styles.buttonText}>Show my location</Text>
         </Pressable>
         <Pressable style={styles.pokeButton}>
-          <Text style={styles.pokeButtonText}>친구 찌르기 👉</Text>
+          <Text style={styles.pokeButtonText}>Send a poke</Text>
         </Pressable>
       </View>
     </View>
