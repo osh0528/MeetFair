@@ -4,6 +4,8 @@ import helmet from "helmet";
 import { env } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { healthRouter } from "./routes/health.js";
+import { authRouter } from "./routes/auth.js";
+import { meetingsRouter } from "./routes/meetings.js";
 
 export function createApp() {
   const app = express();
@@ -18,6 +20,8 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/api/health", healthRouter);
+  app.use("/api/auth", authRouter);
+  app.use("/api/meetings", meetingsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

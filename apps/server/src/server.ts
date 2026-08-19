@@ -7,6 +7,7 @@ import { Server } from "socket.io";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { registerRealtimeHandlers } from "./realtime/register-handlers.js";
+import { setRealtimeServer } from "./realtime/events.js";
 
 const app = createApp();
 const httpServer = createServer(app);
@@ -18,6 +19,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 });
 
 registerRealtimeHandlers(io);
+setRealtimeServer(io);
 
 httpServer.listen(env.PORT, () => {
   console.log(`MeetFair server listening on http://localhost:${env.PORT}`);

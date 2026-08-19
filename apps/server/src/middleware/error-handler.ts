@@ -1,4 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
+import { ZodError } from "zod";
+import { AppError } from "../lib/app-error.js";
 
 export const notFoundHandler: RequestHandler = (_request, response) => {
   response.status(404).json({
@@ -17,6 +19,20 @@ export const errorHandler: ErrorRequestHandler = (
   _next,
 ) => {
   console.error(error);
+  if (error instanceof AppError) {
+    response.status(error.status).json({
+      success: false,
+      error: { code: error.code, message: error.message },
+    });
+    return;
+  }
+  if (error instanceof ZodError) {
+    response.status(400).json({
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: "Request data is invalid." },
+    });
+    return;
+  }
   response.status(500).json({
     success: false,
     error: {
