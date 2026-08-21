@@ -72,8 +72,10 @@ GitHub에서 각자 `suhyeok → main`, `friend → main` Pull Request를 만들
 
 ## Pull Request 전 확인
 
+저장소 루트에서 실행합니다 (npm 단일 매니저, `package-lock.json` 사용).
+
 ```powershell
-npm run typecheck
+npm run typecheck   # 내부: npm run build -w @meetfair/shared && npm run typecheck --workspaces --if-present
 ```
 
 - 실행되지 않는 코드가 없는지 확인합니다.

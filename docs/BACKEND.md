@@ -2,14 +2,17 @@
 
 ## Start locally
 
+All commands run from the **repository root** (`C:\Users\dudgh\Desktop\MeetFair`). The package manager is **npm only** (`package-lock.json`).
+
 1. Copy `apps/server/.env.example` to `apps/server/.env`.
 2. Set `DATABASE_URL` to a running PostgreSQL database and replace `JWT_SECRET` with a private value of at least 32 characters.
 3. Run the following commands from the repository root.
 
 ```powershell
-npm run prisma:generate --workspace @meetfair/server
-npm run prisma:migrate --workspace @meetfair/server
-npm run dev:server
+npm install
+npm run prisma:generate   # proxy: npm run prisma:generate -w @meetfair/server -> generates apps/server/src/generated/prisma
+npm run prisma:migrate    # proxy: npm run prisma:migrate -w @meetfair/server
+npm run dev:server        # proxy: npm run build -w @meetfair/shared && npm run dev -w @meetfair/server (tsx watch src/server.ts)
 ```
 
 The server starts at `http://localhost:4000`. Every endpoint other than `/api/health`, `/api/auth/register`, and `/api/auth/login` needs this header:

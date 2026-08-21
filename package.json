@@ -6,19 +6,18 @@
     "apps/*",
     "packages/*"
   ],
-  "scripts": {
-    "build:shared": "npm run build --workspace @meetfair/shared",
-    "dev:server": "npm run build:shared && npm run dev --workspace @meetfair/server",
-    "dev:mobile": "npm run build:shared && npm run start --workspace @meetfair/mobile",
-    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
-    "build": "npm run build:shared && npm run build --workspace @meetfair/server"
-  },
+  "packageManager": "npm@10.9.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "npm": ">=10"
   },
-  "allowScripts": {
-    "@prisma/engines@7.9.1": true,
-    "prisma@7.9.1": true,
-    "esbuild@0.28.2": true
+  "scripts": {
+    "build:shared": "npm run build -w @meetfair/shared",
+    "build": "npm run build:shared && npm run build -w @meetfair/server",
+    "dev:server": "npm run build:shared && npm run dev -w @meetfair/server",
+    "dev:mobile": "npm run build:shared && npm run start -w @meetfair/mobile",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate -w @meetfair/server",
+    "prisma:migrate": "npm run prisma:migrate -w @meetfair/server"
   }
 }

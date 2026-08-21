@@ -11,9 +11,61 @@ export type SharingStatus =
   | "PAUSED"
   | "ARRIVED";
 
+export type FriendRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+
+export type MeetingInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+
+export type FriendshipStatus = "FRIEND";
+
+export type MeetingMemberStatus = "OWNER" | "PENDING" | "ACCEPTED" | "DECLINED";
+
 export interface UserSummary {
   id: string;
+  accountId: string;
   nickname: string;
+}
+
+export interface PublicUser extends UserSummary {
+  email: string;
+}
+
+export interface FriendSummary {
+  friendshipId: string;
+  userId: string;
+  accountId: string;
+  nickname: string;
+  status: FriendshipStatus;
+  createdAt: string;
+}
+
+export interface FriendRequestSummary {
+  id: string;
+  requester: UserSummary;
+  recipient: UserSummary;
+  status: FriendRequestStatus;
+  createdAt: string;
+  respondedAt: string | null;
+}
+
+export interface MeetingInvitationSummary {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  scheduledAt: string;
+  inviter: UserSummary;
+  invitee: UserSummary;
+  status: MeetingInvitationStatus;
+  createdAt: string;
+  respondedAt: string | null;
+}
+
+export interface MeetingMemberStatusEntry {
+  userId: string;
+  accountId: string;
+  nickname: string;
+  status: MeetingMemberStatus;
+  invitationId: string | null;
+  respondedAt: string | null;
 }
 
 export interface MeetingSummary {
@@ -92,6 +144,22 @@ export interface PokeReceivedPayload {
   sentAt: string;
 }
 
+export interface FriendRequestReceivedPayload {
+  request: FriendRequestSummary;
+}
+
+export interface FriendRequestAcceptedPayload {
+  request: FriendRequestSummary;
+}
+
+export interface MeetingInvitationReceivedPayload {
+  invitation: MeetingInvitationSummary;
+}
+
+export interface MeetingInvitationRespondedPayload {
+  invitation: MeetingInvitationSummary;
+}
+
 export interface MeetingErrorPayload {
   code: string;
   message: string;
@@ -107,5 +175,9 @@ export interface ServerToClientEvents {
   "participant:location": (payload: ParticipantLocationPayload) => void;
   "participant:status": (payload: ParticipantStatusPayload) => void;
   "poke:received": (payload: PokeReceivedPayload) => void;
+  "friend-request:received": (payload: FriendRequestReceivedPayload) => void;
+  "friend-request:accepted": (payload: FriendRequestAcceptedPayload) => void;
+  "meeting-invitation:received": (payload: MeetingInvitationReceivedPayload) => void;
+  "meeting-invitation:responded": (payload: MeetingInvitationRespondedPayload) => void;
   "meeting:error": (payload: MeetingErrorPayload) => void;
 }

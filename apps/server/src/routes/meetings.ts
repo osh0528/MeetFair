@@ -2,9 +2,19 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
+import {
+  toMeetingInvitationSummary,
+  toMeetingMemberStatusEntry,
+} from "../lib/serializers.js";
+import { accountIdSchema } from "../lib/users.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
-import { emitPoke } from "../realtime/events.js";
+import { Prisma } from "../generated/prisma/client.js";
+import {
+  emitMeetingInvitationReceived,
+  emitMeetingInvitationResponded,
+  emitPoke,
+} from "../realtime/events.js";
 
 export const meetingsRouter = Router();
 meetingsRouter.use(requireAuth);
@@ -13,6 +23,8 @@ const idSchema = z.string().uuid();
 const meetingInputSchema = z.object({
   title: z.string().trim().min(1).max(80),
   scheduledAt: z.coerce.date().refine((date) => date > new Date(), "scheduledAt must be in the future"),
+  inviteeUserIds: z.array(idSchema).max(50).optional(),
+  inviteeAccountIds: z.array(accountIdSchema).max(50).optional(),
 });
 const originSchema = z.object({
   address: z.string().trim().min(1).max(255),
@@ -25,10 +37,17 @@ function userId(request: AuthenticatedRequest): string {
   return request.userId;
 }
 
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 async function participantFor(meetingId: string, currentUserId: string) {
   const participant = await prisma.meetingParticipant.findUnique({
     where: { meetingId_userId: { meetingId, userId: currentUserId } },
-    include: { meeting: true, user: { select: { id: true, nickname: true } } },
+    include: {
+      meeting: true,
+      user: { select: { id: true, accountId: true, nickname: true } },
+    },
   });
   if (!participant) throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant of this meeting.");
   return participant;
@@ -48,7 +67,7 @@ function createInviteCode() {
 
 function recommendationSummary(candidate: {
   id: string; name: string; address: string; latitude: number; longitude: number; category: string;
-  travelEstimates: { userId: string; durationMinutes: number; distanceMeters: number; user: { nickname: string } }[];
+  travelEstimates: { userId: string; durationMinutes: number; distanceMeters: number; user: { id: string; accountId: string; nickname: string } }[];
 }) {
   const times = candidate.travelEstimates.map((estimate) => estimate.durationMinutes);
   const averageDurationMinutes = times.length ? Math.round(times.reduce((sum, time) => sum + time, 0) / times.length) : 0;
@@ -65,24 +84,106 @@ function recommendationSummary(candidate: {
   };
 }
 
+async function resolveInvitees(input: {
+  inviteeUserIds?: string[];
+  inviteeAccountIds?: string[];
+  hostId: string;
+}) {
+  const uniqueUserIds = [...new Set(input.inviteeUserIds ?? [])];
+  const uniqueAccountIds = [...new Set(input.inviteeAccountIds ?? [])];
+
+  const accountUsers = uniqueAccountIds.length
+    ? await prisma.user.findMany({
+        where: { accountId: { in: uniqueAccountIds } },
+        select: { id: true, accountId: true, nickname: true },
+      })
+    : [];
+  if (accountUsers.length !== uniqueAccountIds.length) {
+    throw new AppError(404, "ACCOUNT_NOT_FOUND", "One or more account IDs were not found.");
+  }
+
+  const directUsers = uniqueUserIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: uniqueUserIds } },
+        select: { id: true, accountId: true, nickname: true },
+      })
+    : [];
+  if (directUsers.length !== uniqueUserIds.length) {
+    throw new AppError(404, "USER_NOT_FOUND", "One or more user IDs were not found.");
+  }
+
+  const inviteesById = new Map<string, { id: string; accountId: string; nickname: string }>();
+  for (const user of [...accountUsers, ...directUsers]) {
+    inviteesById.set(user.id, user);
+  }
+
+  if (inviteesById.has(input.hostId)) {
+    throw new AppError(400, "CANNOT_INVITE_SELF", "You cannot invite yourself.");
+  }
+
+  return [...inviteesById.values()];
+}
+
 meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = meetingInputSchema.parse(request.body);
     const hostId = userId(request);
+    const invitees = await resolveInvitees({
+      inviteeUserIds: input.inviteeUserIds,
+      inviteeAccountIds: input.inviteeAccountIds,
+      hostId,
+    });
+
     let meeting;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        meeting = await prisma.meeting.create({
-          data: {
-            ...input, hostId, inviteCode: createInviteCode(),
-            participants: { create: { userId: hostId } },
-          },
+        meeting = await prisma.$transaction(async (tx) => {
+          const created = await tx.meeting.create({
+            data: {
+              title: input.title,
+              scheduledAt: input.scheduledAt,
+              hostId,
+              inviteCode: createInviteCode(),
+              participants: { create: { userId: hostId } },
+            },
+          });
+
+          if (invitees.length) {
+            await tx.meetingInvitation.createMany({
+              data: invitees.map((invitee) => ({
+                meetingId: created.id,
+                invitedUserId: invitee.id,
+                invitedById: hostId,
+              })),
+            });
+          }
+
+          return created;
         });
         break;
       } catch (error) {
-        if (attempt === 2) throw error;
+        if (attempt < 2 && isUniqueConstraintError(error)) continue;
+        throw error;
       }
     }
+    if (!meeting) throw new AppError(500, "MEETING_CREATE_FAILED", "Meeting creation failed.");
+
+    if (invitees.length) {
+      const invitations = await prisma.meetingInvitation.findMany({
+        where: { meetingId: meeting.id },
+        include: {
+          meeting: { select: { title: true, scheduledAt: true } },
+          invitedBy: { select: { id: true, accountId: true, nickname: true } },
+          invitedUser: { select: { id: true, accountId: true, nickname: true } },
+        },
+      });
+      for (const invitation of invitations) {
+        emitMeetingInvitationReceived(invitation.invitedUserId, {
+          invitation: toMeetingInvitationSummary(invitation),
+        });
+      }
+    }
+
     response.status(201).json({ success: true, data: meeting });
   } catch (error) { next(error); }
 });
@@ -91,7 +192,7 @@ meetingsRouter.get("/", async (request: AuthenticatedRequest, response, next) =>
   try {
     const meetings = await prisma.meeting.findMany({
       where: { participants: { some: { userId: userId(request) } } },
-      include: { host: { select: { id: true, nickname: true } }, confirmedPlace: true, _count: { select: { participants: true } } },
+      include: { host: { select: { id: true, accountId: true, nickname: true } }, confirmedPlace: true, _count: { select: { participants: true } } },
       orderBy: { scheduledAt: "asc" },
     });
     response.json({ success: true, data: meetings });
@@ -121,13 +222,40 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
     const meeting = await prisma.meeting.findUnique({
       where: { id: meetingId },
       include: {
-        host: { select: { id: true, nickname: true } }, confirmedPlace: true,
-        participants: { include: { user: { select: { id: true, nickname: true } } } },
-        placeCandidates: { include: { votes: { select: { userId: true } }, travelEstimates: { include: { user: { select: { nickname: true } } } } } },
+        host: { select: { id: true, accountId: true, nickname: true } },
+        confirmedPlace: true,
+        participants: { include: { user: { select: { id: true, accountId: true, nickname: true } } } },
+        invitations: {
+          include: {
+            invitedUser: { select: { id: true, accountId: true, nickname: true } },
+            invitedBy: { select: { id: true, accountId: true, nickname: true } },
+          },
+        },
+        placeCandidates: {
+          include: {
+            votes: { select: { userId: true } },
+            travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } },
+          },
+        },
       },
     });
     if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
-    response.json({ success: true, data: meeting });
+    const memberStatuses = [
+      toMeetingMemberStatusEntry({
+        user: meeting.host,
+        status: "OWNER",
+        invitationId: null,
+        respondedAt: null,
+      }),
+      ...meeting.invitations.map((invitation) =>
+        toMeetingMemberStatusEntry({
+          user: invitation.invitedUser,
+          status: invitation.status,
+          invitationId: invitation.id,
+          respondedAt: invitation.respondedAt,
+        })),
+    ];
+    response.json({ success: true, data: { ...meeting, memberStatuses } });
   } catch (error) { next(error); }
 });
 
@@ -179,7 +307,7 @@ meetingsRouter.post("/:meetingId/recommendations", async (request: Authenticated
         });
       }
     });
-    const candidates = await prisma.placeCandidate.findMany({ where: { meetingId }, include: { travelEstimates: { include: { user: { select: { nickname: true } } } } } });
+    const candidates = await prisma.placeCandidate.findMany({ where: { meetingId }, include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } } });
     const recommendations = candidates.map(recommendationSummary).sort((a, b) => a.maximumDurationMinutes - b.maximumDurationMinutes || a.timeGapMinutes - b.timeGapMinutes || a.averageDurationMinutes - b.averageDurationMinutes);
     response.status(201).json({ success: true, data: { recommendations } });
   } catch (error) { next(error); }
@@ -240,7 +368,7 @@ meetingsRouter.post("/:meetingId/pokes", async (request: AuthenticatedRequest, r
     if (targetId === userId(request)) throw new AppError(400, "INVALID_POKE_TARGET", "You cannot poke yourself.");
     await participantFor(meetingId, targetId);
     const poke = await prisma.poke.create({ data: { meetingId, senderId: userId(request), targetId } });
-    const sender = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) }, select: { nickname: true } });
+    const sender = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) }, select: { accountId: true, nickname: true } });
     emitPoke(targetId, { meetingId, senderId: userId(request), senderNickname: sender.nickname, sentAt: poke.createdAt.toISOString() });
     response.status(201).json({ success: true, data: poke });
   } catch (error) { next(error); }

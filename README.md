@@ -25,31 +25,35 @@ docs/           프로젝트와 API 문서
 
 ## 시작하기
 
-Node.js 22 이상과 npm이 필요합니다.
+Node.js 22 이상과 npm 10 이상이 필요합니다. pnpm은 사용하지 않습니다 (`package-lock.json` 단일 소스).
 
 ```powershell
+# 저장소 루트에서 실행
 npm install
 Copy-Item apps/server/.env.example apps/server/.env
 Copy-Item apps/mobile/.env.example apps/mobile/.env
-npm run dev:server
+npm run dev:server   # packages/shared 빌드 -> apps/server/src/server.ts 실행 (tsx watch)
 ```
 
 다른 터미널에서 모바일 앱을 실행합니다.
 
 ```powershell
-npm run dev:mobile
+# 저장소 루트에서 실행
+npm run dev:mobile   # packages/shared 빌드 -> apps/mobile (expo start)
 ```
 
 실제 휴대폰에서 실행할 때는 `apps/mobile/.env`의 주소를 개발 PC의 내부 IP로 바꿉니다. Android 에뮬레이터에서는 일반적으로 `localhost` 대신 `10.0.2.2`를 사용합니다.
 
 ## 데이터베이스 준비
 
-PostgreSQL을 준비하고 `apps/server/.env`의 `DATABASE_URL`을 수정한 뒤 실행합니다.
+PostgreSQL을 준비하고 `apps/server/.env`의 `DATABASE_URL`을 수정한 뒤 **저장소 루트**에서 실행합니다.
 
 ```powershell
-npm run prisma:generate --workspace @meetfair/server
-npm run prisma:migrate --workspace @meetfair/server
+npm run prisma:generate   # = npm run prisma:generate -w @meetfair/server  -> apps/server/src/generated/prisma 생성
+npm run prisma:migrate    # = npm run prisma:migrate -w @meetfair/server
 ```
+
+> 직접 워크스페이스를 지정하려면 `npm run prisma:generate -w @meetfair/server` 형태도 동일하게 동작합니다.
 
 ## 현재 포함된 기능
 

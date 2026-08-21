@@ -1,10 +1,16 @@
 node_modules/
 dist/
+apps/server/dist/
+packages/shared/dist/
 apps/server/src/generated/
 .expo/
 .turbo/
 coverage/
 *.log
+
+# npm only - do not use pnpm (package-lock.json is the single lockfile)
+pnpm-lock.yaml
+pnpm-workspace.yaml
 
 .env
 .env.*

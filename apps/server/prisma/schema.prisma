@@ -22,14 +22,33 @@ enum SharingStatus {
   ARRIVED
 }
 
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum MeetingInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id              String               @id @default(uuid())
+  accountId       String               @unique
   email           String               @unique
   passwordHash    String
   nickname        String
   createdAt       DateTime             @default(now())
   hostedMeetings  Meeting[]            @relation("MeetingHost")
   participations  MeetingParticipant[]
+  sentFriendRequests FriendRequest[]   @relation("FriendRequestRequester")
+  receivedFriendRequests FriendRequest[] @relation("FriendRequestRecipient")
+  friendshipsA    Friendship[]         @relation("FriendshipUserA")
+  friendshipsB    Friendship[]         @relation("FriendshipUserB")
+  meetingInvitationsSent MeetingInvitation[] @relation("MeetingInvitationSender")
+  meetingInvitationsReceived MeetingInvitation[] @relation("MeetingInvitationRecipient")
   deviceTokens    DeviceToken[]
   votes           Vote[]
   travelEstimates TravelEstimate[]
@@ -59,6 +78,7 @@ model Meeting {
   host             User                 @relation("MeetingHost", fields: [hostId], references: [id])
   confirmedPlace   PlaceCandidate?      @relation("ConfirmedPlace", fields: [confirmedPlaceId], references: [id], onDelete: SetNull)
   participants     MeetingParticipant[]
+  invitations      MeetingInvitation[]
   placeCandidates  PlaceCandidate[]     @relation("MeetingCandidates")
   votes            Vote[]
   pokes            Poke[]
@@ -83,6 +103,52 @@ model MeetingParticipant {
 
   @@unique([meetingId, userId])
   @@index([userId])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid())
+  requesterId String
+  recipientId String
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  respondedAt DateTime?
+  requester   User                @relation("FriendRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User                @relation("FriendRequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status])
+  @@index([requesterId, status])
+}
+
+model MeetingInvitation {
+  id            String                  @id @default(uuid())
+  meetingId     String
+  invitedUserId String
+  invitedById   String
+  status        MeetingInvitationStatus @default(PENDING)
+  createdAt     DateTime                @default(now())
+  respondedAt   DateTime?
+  meeting       Meeting                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  invitedUser   User                    @relation("MeetingInvitationRecipient", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedBy     User                    @relation("MeetingInvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, invitedUserId])
+  @@index([invitedUserId, status])
+  @@index([invitedById])
+  @@index([meetingId])
 }
 
 model PlaceCandidate {
