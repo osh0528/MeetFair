@@ -6,6 +6,9 @@ import type {
   MeetingInvitationReceivedPayload,
   MeetingInvitationRespondedPayload,
   PokeReceivedPayload,
+  MeetingCallIncomingPayload,
+  NotificationCreatedPayload,
+  MeetingUpdatedPayload,
   ServerToClientEvents,
 } from "@meetfair/shared";
 
@@ -45,4 +48,22 @@ export function emitMeetingInvitationResponded(
   payload: MeetingInvitationRespondedPayload,
 ) {
   realtimeServer?.to(`user:${targetUserId}`).emit("meeting-invitation:responded", payload);
+}
+
+export function emitNotificationCreated(
+  targetUserId: string,
+  payload: NotificationCreatedPayload,
+) {
+  realtimeServer?.to(`user:${targetUserId}`).emit("notification:created", payload);
+}
+
+export function emitMeetingCallIncoming(
+  targetUserId: string,
+  payload: MeetingCallIncomingPayload,
+) {
+  realtimeServer?.to(`user:${targetUserId}`).emit("meeting-call:incoming", payload);
+}
+
+export function emitMeetingUpdated(meetingId: string, payload: MeetingUpdatedPayload) {
+  realtimeServer?.to(`meeting:${meetingId}`).emit("meeting:updated", payload);
 }

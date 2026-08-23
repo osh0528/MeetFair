@@ -4,7 +4,7 @@ export const accountIdSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^[a-z0-9_]{4,20}$/, "accountId must be 4-20 characters of lowercase letters, numbers, or underscores.");
+  .regex(/^[a-z0-9]{4,20}$/, "accountId must be 4-20 lowercase letters or numbers.");
 
 export const nicknameSchema = z.string().trim().min(2).max(30);
 

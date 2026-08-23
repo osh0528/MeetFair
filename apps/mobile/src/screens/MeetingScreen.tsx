@@ -1,104 +1,187 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Camera } from "expo-camera";
+import { useEffect, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Avatar, Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
+import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
+import { apiRequest, createClientRequestId } from "../services/api";
+import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
+interface MeetingDetail {
+  id: string;
+  title: string;
+  scheduledAt: string;
+  status: string;
+  hostId: string;
+  locationShareMode: string;
+  shareMinutesBefore: number | null;
+  voteCountdownEndsAt: string | null;
+  confirmedPlace: { id: string; name: string; address: string; latitude: number; longitude: number } | null;
+  participants: Array<{
+    userId: string;
+    arrivedAt: string | null;
+    sharingStatus: string;
+    cameraPermissionGranted: boolean;
+    microphonePermissionGranted: boolean;
+    user: { id: string; nickname: string; accountId: string };
+  }>;
+  placeCandidates: Array<{
+    id: string;
+    name: string;
+    address: string;
+    category: string;
+    votes: Array<{ userId: string }>;
+  }>;
+}
 
-const members = [
-  { name: "수혁", place: "서울대입구역", time: "28분", color: "#DCD7FF" },
-  { name: "민지", place: "왕십리역", time: "30분", color: "#FFE7CC" },
-  { name: "도윤", place: "합정역", time: "32분", color: "#D9F3EE" },
-  { name: "유진", place: "강남역", time: "32분", color: "#DCEAFF" },
-];
+interface JoinRequest {
+  id: string;
+  status: string;
+  requester: { id: string; nickname: string; accountId: string };
+}
 
-export function MeetingScreen({ navigation }: Props) {
+export function MeetingScreen({ navigation, route }: Props) {
+  const { user } = useSession();
+  const meetingId = route.params.meetingId;
+  const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
+  const [locked, setLocked] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function load() {
+    const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
+    setMeeting(data);
+    if (data.hostId === user?.id) {
+      const requestData = await apiRequest<{ joinRequests: JoinRequest[] }>(`/meetings/${meetingId}/join-requests`);
+      setRequests(requestData.joinRequests.filter((item) => item.status === "PENDING"));
+    }
+  }
+
+  useEffect(() => {
+    void Promise.all([Camera.getCameraPermissionsAsync(), Camera.getMicrophonePermissionsAsync()])
+      .then(async ([camera, microphone]) => {
+        const allowed = camera.granted && microphone.granted;
+        setLocked(!allowed);
+        await apiRequest(`/meetings/${meetingId}/permissions`, {
+          method: "PATCH",
+          body: JSON.stringify({ cameraPermissionGranted: camera.granted, microphonePermissionGranted: microphone.granted }),
+        });
+        if (allowed) await load();
+      }).catch((error) => setMessage(error instanceof Error ? error.message : "모임을 불러오지 못했습니다."));
+  }, [meetingId]);
+
+  if (locked) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScreenHeader title="모임 접근 잠김" onBack={() => navigation.goBack()} />
+        <View style={styles.locked}>
+          <Text style={styles.title}>카메라·마이크 권한이 필요합니다</Text>
+          <Text style={styles.meta}>권한을 다시 허용할 때까지 모임 상세와 참여 기능을 이용할 수 없습니다.</Text>
+          <Button label="시스템 설정 열기" onPress={() => Linking.openSettings()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (!meeting) {
+    return <SafeAreaView style={styles.safeArea}><ScreenHeader title="모임" onBack={() => navigation.goBack()} /><Text style={styles.loading}>{message || "불러오는 중..."}</Text></SafeAreaView>;
+  }
+
+  const me = meeting.participants.find((participant) => participant.userId === user?.id);
+  const started = new Date(meeting.scheduledAt) <= new Date();
+
+  async function vote(placeCandidateId: string) {
+    await apiRequest(`/meetings/${meetingId}/votes`, { method: "POST", body: JSON.stringify({ placeCandidateId }) });
+    await load();
+  }
+  async function arrive() {
+    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
+    await load();
+  }
+  async function poke(targetId: string) {
+    await apiRequest(`/meetings/${meetingId}/pokes`, {
+      method: "POST",
+      body: JSON.stringify({ targetId, clientRequestId: createClientRequestId() }),
+    });
+    setMessage("찌르기 알림을 보냈습니다.");
+  }
+  async function respondJoin(requestId: string, action: "accept" | "reject") {
+    await apiRequest(`/meetings/${meetingId}/join-requests/${requestId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    });
+    await load();
+  }
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScreenHeader title="약속 상세" onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroTop}><Pill label="D-3" tone="green" /><Text style={styles.confirmed}>● 장소 확정</Text></View>
-        <Text style={styles.title}>성수에서 여름 모임</Text>
-        <Card style={styles.dateCard}>
-          <View style={styles.dateBox}><Text style={styles.month}>AUG</Text><Text style={styles.day}>22</Text></View>
-          <View><Text style={styles.dateTitle}>토요일 오후 2:00</Text><Text style={styles.dateSub}>알림은 오후 1:30에 시작돼요</Text></View>
-        </Card>
+    <SafeAreaView style={styles.safeArea}>
+      <ScreenHeader title="모임 상세" onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.row}><Pill label={meeting.status} tone="green" /><Text style={styles.meta}>{new Date(meeting.scheduledAt).toLocaleString("ko-KR")}</Text></View>
+        <Text style={styles.title}>{meeting.title}</Text>
+        <Text style={styles.meta}>위치 공유: {meeting.locationShareMode}{meeting.shareMinutesBefore ? ` · ${meeting.shareMinutesBefore}분 전` : ""}</Text>
 
-        <View style={styles.section}>
-          <SectionHeading title="만날 장소" action="지도 보기" />
-          <Card style={styles.placeCard}>
-            <View style={styles.mapPreview}><View style={styles.road} /><View style={styles.pin}><Text style={styles.pinText}>M</Text></View></View>
-            <View style={styles.placeCopy}><Text style={styles.placeName}>성수역 2번 출구</Text><Text style={styles.placeAddress}>서울 성동구 아차산로 100</Text></View>
-            <View style={styles.fairRow}><Pill label="공평 지수 96" /><Text style={styles.fairText}>최대 차이 4분</Text></View>
+        {meeting.confirmedPlace ? (
+          <Card style={styles.card}>
+            <Text style={styles.cardTitle}>확정 장소 · {meeting.confirmedPlace.name}</Text>
+            <Text style={styles.meta}>{meeting.confirmedPlace.address}</Text>
           </Card>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeading title="참가자 이동시간" action="4명" />
-          <Card style={styles.memberCard}>
-            {members.map((member, index) => (
-              <View key={member.name}>
-                <View style={styles.memberRow}>
-                  <Avatar name={member.name} size={42} backgroundColor={member.color} />
-                  <View style={styles.memberCopy}><Text style={styles.memberName}>{member.name}{index === 0 ? " (나)" : ""}</Text><Text style={styles.memberPlace}>{member.place} 출발</Text></View>
-                  <Text style={styles.memberTime}>{member.time}</Text>
-                </View>
-                {index < members.length - 1 ? <View style={styles.divider} /> : null}
-              </View>
+        ) : (
+          <>
+            <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
+            {meeting.placeCandidates.map((candidate) => (
+              <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
+                <Card style={styles.card}>
+                  <View style={styles.row}><Text style={styles.cardTitle}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                  <Text style={styles.meta}>{candidate.address}</Text>
+                </Card>
+              </Pressable>
             ))}
-          </Card>
-        </View>
+            {!meeting.placeCandidates.length ? <Button label="추천 후보 보기" onPress={() => navigation.navigate("Recommendations")} variant="soft" /> : null}
+          </>
+        )}
 
-        <Card style={styles.trackingCard}>
-          <View style={styles.trackingIcon}><Text style={styles.trackingIconText}>⌖</Text></View>
-          <View style={styles.trackingCopy}><Text style={styles.trackingTitle}>실시간 출발 확인</Text><Text style={styles.trackingSub}>30분 전부터 동의한 친구끼리 위치와 도착 예정 시간을 공유해요.</Text></View>
-          <Pill label="1:30 시작" tone="amber" />
-        </Card>
-        <Text style={styles.privacy}>✓ 위치정보는 약속 종료 후 자동 삭제됩니다.</Text>
+        <SectionHeading title="참여자" action={`${meeting.participants.length}명`} />
+        {meeting.participants.map((participant) => {
+          const late = started && !participant.arrivedAt;
+          return (
+            <Card key={participant.userId} style={styles.card}>
+              <View style={styles.row}>
+                <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
+                {late && me?.arrivedAt && participant.userId !== user?.id ? <Button label="찌르기" onPress={() => poke(participant.userId)} variant="soft" /> : null}
+              </View>
+            </Card>
+          );
+        })}
+
+        {requests.length ? <SectionHeading title="참가 신청" /> : null}
+        {requests.map((request) => (
+          <Card key={request.id} style={styles.card}>
+            <Text style={styles.cardTitle}>{request.requester.nickname} · @{request.requester.accountId}</Text>
+            <Button label="승인" onPress={() => respondJoin(request.id, "accept")} />
+            <Button label="거절" onPress={() => respondJoin(request.id, "reject")} variant="secondary" />
+          </Card>
+        ))}
+
+        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {!me?.arrivedAt ? <Button label="도착 처리" onPress={arrive} /> : null}
+        <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" />
       </ScrollView>
-      <View style={styles.footer}><Button label="출발 확인 화면 미리보기" onPress={() => navigation.navigate("Tracking")} /></View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24 },
-  heroTop: { flexDirection: "row", alignItems: "center", gap: 9 },
-  confirmed: { color: colors.green, fontSize: 11, fontWeight: "800" },
-  title: { color: colors.text, fontSize: 28, fontWeight: "900", marginTop: 14, marginBottom: 18 },
-  dateCard: { flexDirection: "row", alignItems: "center", gap: 14 },
-  dateBox: { width: 58, height: 60, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  month: { color: colors.primary, fontSize: 9, fontWeight: "900" },
-  day: { color: colors.primary, fontSize: 23, fontWeight: "900" },
-  dateTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  dateSub: { color: colors.muted, fontSize: 12, marginTop: 5 },
-  section: { marginTop: 28, gap: 12 },
-  placeCard: { padding: 0, overflow: "hidden" },
-  mapPreview: { height: 105, backgroundColor: "#E9EEF0", alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  road: { position: "absolute", left: -20, right: -20, height: 28, backgroundColor: colors.surface, transform: [{ rotate: "-6deg" }] },
-  pin: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  pinText: { color: colors.surface, fontSize: 17, fontWeight: "900" },
-  placeCopy: { paddingHorizontal: 16, paddingTop: 14 },
-  placeName: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  placeAddress: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  fairRow: { flexDirection: "row", alignItems: "center", gap: 9, padding: 16 },
-  fairText: { color: colors.green, fontSize: 11, fontWeight: "800" },
-  memberCard: { paddingVertical: 4, paddingHorizontal: 15 },
-  memberRow: { minHeight: 66, flexDirection: "row", alignItems: "center" },
-  memberCopy: { flex: 1, marginLeft: 11 },
-  memberName: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  memberPlace: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  memberTime: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  divider: { height: 1, backgroundColor: colors.border, marginLeft: 53 },
-  trackingCard: { marginTop: 28, flexDirection: "row", alignItems: "center", padding: 14 },
-  trackingIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  trackingIconText: { color: colors.amber, fontSize: 19, fontWeight: "900" },
-  trackingCopy: { flex: 1, marginHorizontal: 10 },
-  trackingTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  trackingSub: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
-  privacy: { color: colors.subtle, fontSize: 10, textAlign: "center", marginTop: 16 },
-  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  content: { padding: 20, gap: 12, paddingBottom: 40 },
+  loading: { padding: 20, color: colors.muted },
+  locked: { padding: 20, gap: 14 },
+  title: { color: colors.text, fontSize: 25, fontWeight: "900" },
+  card: { gap: 8 },
+  cardTitle: { color: colors.text, fontWeight: "900" },
+  meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  message: { color: colors.primary, fontWeight: "800" },
 });

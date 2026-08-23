@@ -18,6 +18,19 @@ export type MeetingInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
 export type FriendshipStatus = "FRIEND";
 
 export type MeetingMemberStatus = "OWNER" | "PENDING" | "ACCEPTED" | "DECLINED";
+export type MeetingVisibility = "PRIVATE" | "PUBLIC_FRIENDS";
+export type LocationShareMode = "DAY_OF" | "BEFORE_START" | "OFF";
+export type TravelMetric = "TRANSIT" | "CAR" | "DISTANCE";
+export type OriginType = "HOME" | "CURRENT" | "CUSTOM";
+export type JoinRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+export type PokeType = "MEETING" | "CASUAL";
+export type MeetingCallStatus = "RINGING" | "ACTIVE" | "ENDED";
+export type MeetingCallParticipantStatus =
+  | "RINGING"
+  | "JOINED"
+  | "DECLINED"
+  | "MISSED"
+  | "LEFT";
 
 export interface UserSummary {
   id: string;
@@ -27,6 +40,15 @@ export interface UserSummary {
 
 export interface PublicUser extends UserSummary {
   email: string;
+  accountIdChanged?: boolean;
+  homeAddress?: string | null;
+  homeLatitude?: number | null;
+  homeLongitude?: number | null;
+  shareLocationWithFriends?: boolean;
+  casualPokesEnabled?: boolean;
+  pokeQuietStartMinutes?: number | null;
+  pokeQuietEndMinutes?: number | null;
+  timezone?: string;
 }
 
 export interface FriendSummary {
@@ -36,6 +58,10 @@ export interface FriendSummary {
   nickname: string;
   status: FriendshipStatus;
   createdAt: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+  locationUpdatedAt?: string | null;
 }
 
 export interface FriendRequestSummary {
@@ -74,6 +100,48 @@ export interface MeetingSummary {
   scheduledAt: string;
   status: MeetingStatus;
   inviteCode: string;
+  visibility?: MeetingVisibility;
+  categories?: string[];
+  travelMetric?: TravelMetric;
+  locationShareMode?: LocationShareMode;
+  shareMinutesBefore?: number | null;
+}
+
+export interface MeetingJoinRequestSummary {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  requester: UserSummary;
+  status: JoinRequestStatus;
+  createdAt: string;
+  respondedAt: string | null;
+}
+
+export interface FriendActivitySummary {
+  meetingId: string;
+  friend: UserSummary;
+  createdAt: string;
+  joinRequestStatus: JoinRequestStatus | null;
+}
+
+export interface NotificationSummary {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface MeetingCallSummary {
+  id: string;
+  meetingId: string;
+  meetingTitle: string;
+  roomName: string;
+  status: MeetingCallStatus;
+  participantStatus: MeetingCallParticipantStatus;
+  createdAt: string;
 }
 
 export interface ParticipantTravelTime {
@@ -138,10 +206,25 @@ export interface ParticipantStatusPayload extends SharingStatusPayload {
 }
 
 export interface PokeReceivedPayload {
-  meetingId: string;
+  pokeId: string;
+  meetingId: string | null;
+  type: PokeType;
   senderId: string;
   senderNickname: string;
   sentAt: string;
+}
+
+export interface MeetingCallIncomingPayload {
+  call: MeetingCallSummary;
+}
+
+export interface NotificationCreatedPayload {
+  notification: NotificationSummary;
+}
+
+export interface MeetingUpdatedPayload {
+  meetingId: string;
+  reason: "MEMBERS" | "VOTES" | "PLACE" | "ARRIVAL" | "LOCATION_SHARING";
 }
 
 export interface FriendRequestReceivedPayload {
@@ -179,5 +262,8 @@ export interface ServerToClientEvents {
   "friend-request:accepted": (payload: FriendRequestAcceptedPayload) => void;
   "meeting-invitation:received": (payload: MeetingInvitationReceivedPayload) => void;
   "meeting-invitation:responded": (payload: MeetingInvitationRespondedPayload) => void;
+  "meeting-call:incoming": (payload: MeetingCallIncomingPayload) => void;
+  "notification:created": (payload: NotificationCreatedPayload) => void;
+  "meeting:updated": (payload: MeetingUpdatedPayload) => void;
   "meeting:error": (payload: MeetingErrorPayload) => void;
 }

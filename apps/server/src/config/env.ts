@@ -7,6 +7,9 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().default("*"),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
+  LIVEKIT_URL: z.string().url().optional(),
+  LIVEKIT_API_KEY: z.string().min(1).optional(),
+  LIVEKIT_API_SECRET: z.string().min(1).optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -42,8 +42,20 @@ friendsRouter.get("/", async (request: AuthenticatedRequest, response, next) => 
         OR: [{ userAId: userId }, { userBId: userId }],
       },
       include: {
-        userA: { select: { id: true, accountId: true, nickname: true } },
-        userB: { select: { id: true, accountId: true, nickname: true } },
+        userA: {
+          select: {
+            id: true, accountId: true, nickname: true, shareLocationWithFriends: true,
+            currentLatitude: true, currentLongitude: true, currentAccuracy: true,
+            currentLocationUpdatedAt: true,
+          },
+        },
+        userB: {
+          select: {
+            id: true, accountId: true, nickname: true, shareLocationWithFriends: true,
+            currentLatitude: true, currentLongitude: true, currentAccuracy: true,
+            currentLocationUpdatedAt: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
