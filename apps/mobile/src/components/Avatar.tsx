@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme/colors";
 
 interface AvatarProps {
@@ -6,14 +6,17 @@ interface AvatarProps {
   size?: number;
   backgroundColor?: string;
   status?: "moving" | "waiting" | "arrived";
+  imageUrl?: string;
 }
 
-export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, status }: AvatarProps) {
+export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, status, imageUrl }: AvatarProps) {
   const statusStyle = status === "moving" ? styles.movingDot : status === "waiting" ? styles.waitingDot : styles.arrivedDot;
   return (
     <View style={{ width: size, height: size }}>
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor }]}>
-        <Text style={[styles.avatarText, { fontSize: Math.max(12, size * 0.34) }]}>{name.slice(0, 1)}</Text>
+        {imageUrl ? <Image source={{ uri: imageUrl }} style={{ width: size, height: size }} /> : (
+          <Text style={[styles.avatarText, { fontSize: Math.max(12, size * 0.34) }]}>{name.slice(0, 1)}</Text>
+        )}
       </View>
       {status ? <View style={[styles.statusDot, statusStyle]} /> : null}
     </View>
@@ -21,7 +24,7 @@ export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, 
 }
 
 const styles = StyleSheet.create({
-  avatar: { alignItems: "center", justifyContent: "center" },
+  avatar: { alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarText: { color: colors.charcoal, fontWeight: "800" },
   statusDot: { position: "absolute", right: -1, bottom: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: colors.surface },
   movingDot: { backgroundColor: colors.green },

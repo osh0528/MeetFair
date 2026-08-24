@@ -26,7 +26,7 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "4mb" }));
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);

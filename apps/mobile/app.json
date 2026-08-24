@@ -12,6 +12,10 @@
         "recordAudioAndroid": true
       }],
       "expo-location",
+      ["expo-image-picker", {
+        "photosPermission": "프로필 사진을 선택하려면 사진 접근을 허용해 주세요.",
+        "cameraPermission": false
+      }],
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc"
     ],

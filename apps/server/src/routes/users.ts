@@ -8,12 +8,44 @@ import { toPublicUser } from "../lib/serializers.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 
 export const usersRouter = Router();
+const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
+const maxAvatarBytes = 2 * 1024 * 1024;
+
+function matchesAvatarMimeType(data: Buffer, mimeType: typeof avatarMimeTypes[number]) {
+  if (mimeType === "image/jpeg") {
+    return data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  }
+  if (mimeType === "image/png") {
+    return data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  return data.length >= 12
+    && data.subarray(0, 4).toString("ascii") === "RIFF"
+    && data.subarray(8, 12).toString("ascii") === "WEBP";
+}
 
 usersRouter.get("/account-id/availability", async (request, response, next) => {
   try {
     const accountId = accountIdSchema.parse(request.query.accountId);
     const user = await prisma.user.findUnique({ where: { accountId }, select: { id: true } });
     response.json({ success: true, data: { accountId, available: !user } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.get("/:userId/avatar", async (request, response, next) => {
+  try {
+    const targetUserId = z.string().uuid().parse(request.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { avatarData: true, avatarMimeType: true, avatarUpdatedAt: true },
+    });
+    if (!user?.avatarData || !user.avatarMimeType) {
+      throw new AppError(404, "AVATAR_NOT_FOUND", "Profile image was not found.");
+    }
+    response.setHeader("content-type", user.avatarMimeType);
+    response.setHeader("cross-origin-resource-policy", "cross-origin");
+    response.setHeader("cache-control", "public, max-age=31536000, immutable");
+    response.setHeader("content-length", String(user.avatarData.byteLength));
+    response.send(Buffer.from(user.avatarData));
   } catch (error) { next(error); }
 });
 
@@ -84,6 +116,44 @@ usersRouter.patch("/me", async (request: AuthenticatedRequest, response, next) =
       },
     });
     response.json({ success: true, data: { user: toPublicUser(user) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.put("/me/avatar", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = z.object({
+      imageBase64: z.string().min(1).max(3_000_000),
+      mimeType: z.enum(avatarMimeTypes),
+    }).parse(request.body);
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.imageBase64)) {
+      throw new AppError(400, "INVALID_AVATAR_DATA", "Profile image data is invalid.");
+    }
+    const avatarData = Buffer.from(input.imageBase64, "base64");
+    if (!avatarData.length || avatarData.length > maxAvatarBytes) {
+      throw new AppError(413, "AVATAR_TOO_LARGE", "Profile image must be 2 MB or smaller.");
+    }
+    if (!matchesAvatarMimeType(avatarData, input.mimeType)) {
+      throw new AppError(400, "AVATAR_TYPE_MISMATCH", "Profile image content does not match its file type.");
+    }
+    const user = await prisma.user.update({
+      where: { id: userId(request) },
+      data: {
+        avatarData,
+        avatarMimeType: input.mimeType,
+        avatarUpdatedAt: new Date(),
+      },
+    });
+    response.json({ success: true, data: { user: toPublicUser(user) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/me/avatar", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    await prisma.user.update({
+      where: { id: userId(request) },
+      data: { avatarData: null, avatarMimeType: null, avatarUpdatedAt: null },
+    });
+    response.status(204).send();
   } catch (error) { next(error); }
 });
 

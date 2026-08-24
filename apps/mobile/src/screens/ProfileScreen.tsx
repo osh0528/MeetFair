@@ -1,10 +1,12 @@
+import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Button, Card, ScreenHeader } from "../components/ui";
+import { Avatar, Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
+import { avatarUrl } from "../services/avatar";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -22,6 +24,7 @@ export function ProfileScreen({ navigation }: Props) {
   const [deleteAccountId, setDeleteAccountId] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   async function save() {
     setSubmitting(true);
@@ -67,11 +70,71 @@ export function ProfileScreen({ navigation }: Props) {
       setDeleting(false);
     }
   }
+  async function chooseAvatar() {
+    setAvatarBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("프로필 사진을 선택하려면 사진 접근 권한이 필요합니다.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (result.canceled) return;
+      const image = result.assets[0];
+      if (!image?.base64) throw new Error("선택한 사진을 읽지 못했습니다.");
+      const mimeType = image.mimeType === "image/png" || image.mimeType === "image/webp"
+        ? image.mimeType
+        : "image/jpeg";
+      await apiRequest("/users/me/avatar", {
+        method: "PUT",
+        body: JSON.stringify({ imageBase64: image.base64, mimeType }),
+      });
+      await session.refreshUser();
+      setMessage("프로필 사진을 변경했습니다.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "프로필 사진을 변경하지 못했습니다.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+  async function removeAvatar() {
+    setAvatarBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      await apiRequest("/users/me/avatar", { method: "DELETE" });
+      await session.refreshUser();
+      setMessage("프로필 사진을 삭제했습니다.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "프로필 사진을 삭제하지 못했습니다.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="개인정보" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Card style={styles.avatarCard}>
+          <Avatar
+            imageUrl={session.user ? avatarUrl(session.user.id, session.user.avatarUpdatedAt) : undefined}
+            name={session.user?.nickname ?? "M"}
+            size={96}
+          />
+          <Text style={styles.sectionTitle}>프로필 사진</Text>
+          <Button disabled={avatarBusy} label={avatarBusy ? "처리 중..." : "사진 선택"} onPress={chooseAvatar} variant="soft" />
+          {session.user?.avatarUpdatedAt ? <Button disabled={avatarBusy} label="사진 삭제" onPress={removeAvatar} variant="secondary" /> : null}
+          <Text style={styles.note}>JPEG·PNG·WebP, 최대 2MB까지 등록할 수 있습니다.</Text>
+        </Card>
         <Card style={styles.form}>
           <Field editable={false} label="계정 ID (수정 불가)" value={session.user?.accountId ?? ""} />
           <Field label="이름" onChangeText={setNickname} value={nickname} />
@@ -169,4 +232,5 @@ const styles = StyleSheet.create({
   error: { color: colors.red, fontSize: 13 },
   dangerCard: { gap: 10, borderColor: colors.red },
   dangerTitle: { color: colors.red, fontSize: 17, fontWeight: "900" },
+  avatarCard: { alignItems: "center", gap: 10 },
 });

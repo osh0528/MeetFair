@@ -1,6 +1,7 @@
 import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -21,8 +22,8 @@ export function HomeScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const [meetingData, invitationData, activityData, callData] = await Promise.all([
@@ -38,11 +39,13 @@ export function HomeScreen({ navigation }: Props) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "홈 정보를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
 
   useEffect(() => {
     if (!accessToken) return;
@@ -68,17 +71,30 @@ export function HomeScreen({ navigation }: Props) {
         ],
       );
     });
+    socket.on("meeting:invitation", ({ invitation }) => {
+      setInvitations((current) => [
+        invitation,
+        ...current.filter((item) => item.id !== invitation.id),
+      ]);
+    });
+    socket.on("meeting:invitation-responded", () => {
+      void load(true);
+    });
+    socket.on("meeting:updated", () => {
+      void load(true);
+    });
+    socket.on("notification:created", () => {
+      void load(true);
+    });
     socket.connect();
     const timer = setInterval(() => {
-      void apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending")
-        .then((data) => setCalls(data.calls))
-        .catch(() => undefined);
+      void load(true);
     }, 15_000);
     return () => {
       clearInterval(timer);
       socket.disconnect();
     };
-  }, [accessToken]);
+  }, [accessToken, load]);
 
   async function declineCall(callId: string) {
     await apiRequest(`/meeting-calls/${callId}`, {

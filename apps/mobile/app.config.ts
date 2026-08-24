@@ -42,6 +42,13 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
         defaultChannel: "meeting-reminders",
       },
     ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "프로필 사진을 선택하려면 사진 접근을 허용해 주세요.",
+        cameraPermission: false,
+      },
+    ],
     "expo-status-bar",
     "expo-web-browser",
     [

@@ -48,6 +48,7 @@ friendsRouter.get("/", async (request: AuthenticatedRequest, response, next) => 
              id: true, accountId: true, nickname: true, shareExactLocationWithFriends: true,
              currentLatitude: true, currentLongitude: true,
              currentLocationUpdatedAt: true,
+             avatarUpdatedAt: true,
            },
          },
          userB: {
@@ -55,6 +56,7 @@ friendsRouter.get("/", async (request: AuthenticatedRequest, response, next) => 
              id: true, accountId: true, nickname: true, shareExactLocationWithFriends: true,
              currentLatitude: true, currentLongitude: true,
              currentLocationUpdatedAt: true,
+             avatarUpdatedAt: true,
            },
          },
       },

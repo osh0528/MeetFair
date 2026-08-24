@@ -11,11 +11,13 @@ export function toUserSummary(user: {
   id: string;
   accountId: string;
   nickname: string;
+  avatarUpdatedAt?: Date | null;
 }): UserSummary {
   return {
     id: user.id,
     accountId: user.accountId,
     nickname: user.nickname,
+    avatarUpdatedAt: user.avatarUpdatedAt?.toISOString() ?? null,
   };
 }
 
@@ -33,6 +35,7 @@ export function toPublicUser(user: {
   pokeQuietStartMinutes?: number | null;
   pokeQuietEndMinutes?: number | null;
   timezone?: string;
+  avatarUpdatedAt?: Date | null;
 }): PublicUser {
   return {
     id: user.id,
@@ -48,6 +51,7 @@ export function toPublicUser(user: {
     pokeQuietStartMinutes: user.pokeQuietStartMinutes,
     pokeQuietEndMinutes: user.pokeQuietEndMinutes,
     timezone: user.timezone,
+    avatarUpdatedAt: user.avatarUpdatedAt?.toISOString() ?? null,
   };
 }
 
@@ -61,12 +65,14 @@ export function toFriendSummary(friendship: {
     shareExactLocationWithFriends?: boolean;
     currentLatitude?: number | null; currentLongitude?: number | null;
     currentLocationUpdatedAt?: Date | null;
+    avatarUpdatedAt?: Date | null;
   };
   userB: {
     id: string; accountId: string; nickname: string;
     shareExactLocationWithFriends?: boolean;
     currentLatitude?: number | null; currentLongitude?: number | null;
     currentLocationUpdatedAt?: Date | null;
+    avatarUpdatedAt?: Date | null;
   };
 }, currentUserId: string): FriendSummary {
   const otherUser = friendship.userA.id === currentUserId ? friendship.userB : friendship.userA;
@@ -85,6 +91,7 @@ export function toFriendSummary(friendship: {
     allowsPokesFromFriend: friendship.userA.id === currentUserId
       ? friendship.userAAllowsPokesFromB
       : friendship.userBAllowsPokesFromA,
+    avatarUpdatedAt: otherUser.avatarUpdatedAt?.toISOString() ?? null,
   };
 }
 

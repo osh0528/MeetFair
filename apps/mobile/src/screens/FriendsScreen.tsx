@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
+import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { apiRequest, createClientRequestId } from "../services/api";
+import { avatarUrl } from "../services/avatar";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Friends">;
@@ -97,7 +98,10 @@ export function FriendsScreen({ navigation }: Props) {
         <SectionHeading title="친구 목록" action={`${friends.length}명`} />
         {friends.map((friend) => (
           <Card key={friend.userId} style={styles.card}>
-            <Text style={styles.name}>{friend.nickname} · @{friend.accountId}</Text>
+            <View style={styles.friendHeader}>
+              <Avatar imageUrl={avatarUrl(friend.userId, friend.avatarUpdatedAt)} name={friend.nickname} />
+              <Text style={styles.name}>{friend.nickname} · @{friend.accountId}</Text>
+            </View>
             <Text style={styles.meta}>{friend.sharedLatitude != null ? `위치 공유 중 · ${friend.sharedLocationAt ? new Date(friend.sharedLocationAt).toLocaleTimeString("ko-KR") : ""}` : "위치 비공개"}</Text>
             <View style={styles.permissionRow}>
               <Text style={styles.meta}>이 친구의 찌르기 허용</Text>
@@ -124,5 +128,6 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 11 },
   buttons: { gap: 7 },
   permissionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  friendHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   disabled: { opacity: 0.5 },
 });

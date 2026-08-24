@@ -36,6 +36,7 @@ export interface UserSummary {
   id: string;
   accountId: string;
   nickname: string;
+  avatarUpdatedAt?: string | null;
 }
 
 export interface PublicUser extends UserSummary {
@@ -67,6 +68,7 @@ export interface FriendSummary {
   sharedLongitude?: number | null;
   sharedLocationAt?: string | null;
   allowsPokesFromFriend: boolean;
+  avatarUpdatedAt?: string | null;
 }
 
 export interface FriendRequestSummary {
