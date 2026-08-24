@@ -21,6 +21,18 @@ function summaryFor(call: {
     createdAt: call.createdAt.toISOString(),
   };
 }
+
+export async function endMeetingCallIfInactive(callId: string) {
+  const activeParticipantCount = await prisma.meetingCallParticipant.count({
+    where: { callId, status: { in: ["RINGING", "JOINED"] } },
+  });
+  if (activeParticipantCount > 0) return;
+  await prisma.meetingCall.updateMany({
+    where: { id: callId, status: { not: "ENDED" } },
+    data: { status: "ENDED", endedAt: new Date() },
+  });
+}
+
 export async function processDueMeetingCalls() {
   const now = new Date();
   const meetings = await prisma.meeting.findMany({
@@ -83,5 +95,30 @@ export async function processDueMeetingCalls() {
         data: { callId: participant.callId, meetingId: participant.call.meetingId },
       });
     }
+    await endMeetingCallIfInactive(participant.callId);
+  }
+
+  const staleCalls = await prisma.meetingCall.findMany({
+    where: {
+      status: { not: "ENDED" },
+      createdAt: { lte: new Date(now.getTime() - 60 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  for (const call of staleCalls) {
+    await prisma.$transaction([
+      prisma.meetingCallParticipant.updateMany({
+        where: { callId: call.id, status: "RINGING" },
+        data: { status: "MISSED", respondedAt: now },
+      }),
+      prisma.meetingCallParticipant.updateMany({
+        where: { callId: call.id, status: "JOINED" },
+        data: { status: "LEFT", leftAt: now },
+      }),
+      prisma.meetingCall.update({
+        where: { id: call.id },
+        data: { status: "ENDED", endedAt: now },
+      }),
+    ]);
   }
 }

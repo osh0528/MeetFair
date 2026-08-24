@@ -9,15 +9,24 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 dotenv.config({ path: path.resolve(process.cwd(), "apps/server/.env") });
 dotenv.config({ path: path.resolve(process.cwd(), "../..", ".env") });
 
+const optionalUrl = z.preprocess(
+  (value) => value === "" ? undefined : value,
+  z.string().url().optional(),
+);
+const optionalSecret = z.preprocess(
+  (value) => value === "" ? undefined : value,
+  z.string().min(1).optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   CLIENT_ORIGIN: z.string().default("*"),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
-  LIVEKIT_URL: z.string().url().optional(),
-  LIVEKIT_API_KEY: z.string().min(1).optional(),
-  LIVEKIT_API_SECRET: z.string().min(1).optional(),
+  LIVEKIT_URL: optionalUrl,
+  LIVEKIT_API_KEY: optionalSecret,
+  LIVEKIT_API_SECRET: optionalSecret,
   NAVER_MAP_CLIENT_ID: z.string().default(""),
   NAVER_MAP_CLIENT_SECRET: z.string().default(""),
 });

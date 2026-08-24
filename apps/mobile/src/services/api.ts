@@ -20,16 +20,34 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${appConfig.apiUrl}${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${appConfig.apiUrl}${path}`, {
+      ...init,
+      headers: {
+        "content-type": "application/json",
+        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    throw new ApiError(
+      "SERVER_UNREACHABLE",
+      "서버에 연결할 수 없습니다. 서버 주소와 실행 상태를 확인해 주세요.",
+      0,
+    );
+  }
   if (response.status === 204) return undefined as T;
-  const payload = await response.json() as ApiResponse<T>;
+  let payload: ApiResponse<T>;
+  try {
+    payload = await response.json() as ApiResponse<T>;
+  } catch {
+    throw new ApiError(
+      "INVALID_SERVER_RESPONSE",
+      "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      response.status,
+    );
+  }
   if (!payload.success) {
     throw new ApiError(payload.error.code, payload.error.message, response.status);
   }

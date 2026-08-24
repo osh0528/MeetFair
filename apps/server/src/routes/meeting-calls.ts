@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { endMeetingCallIfInactive } from "../services/meeting-calls.js";
 
 export const meetingCallsRouter = Router();
 meetingCallsRouter.use(requireAuth);
@@ -18,7 +19,11 @@ function userId(request: AuthenticatedRequest) {
 meetingCallsRouter.get("/pending", async (request: AuthenticatedRequest, response, next) => {
   try {
     const participants = await prisma.meetingCallParticipant.findMany({
-      where: { userId: userId(request), status: { in: ["RINGING", "JOINED"] } },
+      where: {
+        userId: userId(request),
+        status: { in: ["RINGING", "JOINED"] },
+        call: { status: { not: "ENDED" } },
+      },
       include: { call: { include: { meeting: { select: { title: true } } } } },
       orderBy: { call: { createdAt: "desc" } },
     });
@@ -84,8 +89,11 @@ meetingCallsRouter.patch("/:callId", async (request: AuthenticatedRequest, respo
     const { action } = z.object({ action: z.enum(["accept", "decline", "leave"]) }).parse(request.body);
     const participant = await prisma.meetingCallParticipant.findUnique({
       where: { callId_userId: { callId, userId: currentUserId } },
+      include: { call: { select: { status: true } } },
     });
-    if (!participant) throw new AppError(404, "MEETING_CALL_NOT_FOUND", "Meeting call was not found.");
+    if (!participant || participant.call.status === "ENDED") {
+      throw new AppError(404, "MEETING_CALL_NOT_FOUND", "Meeting call was not found.");
+    }
     const status = action === "accept" ? "JOINED" : action === "decline" ? "DECLINED" : "LEFT";
     await prisma.meetingCallParticipant.update({
       where: { id: participant.id },
@@ -99,12 +107,7 @@ meetingCallsRouter.patch("/:callId", async (request: AuthenticatedRequest, respo
     if (action === "accept") {
       await prisma.meetingCall.update({ where: { id: callId }, data: { status: "ACTIVE" } });
     }
-    if (action === "leave") {
-      const active = await prisma.meetingCallParticipant.count({ where: { callId, status: "JOINED" } });
-      if (active === 0) {
-        await prisma.meetingCall.update({ where: { id: callId }, data: { status: "ENDED", endedAt: new Date() } });
-      }
-    }
+    if (action !== "accept") await endMeetingCallIfInactive(callId);
     response.status(204).send();
   } catch (error) { next(error); }
 });

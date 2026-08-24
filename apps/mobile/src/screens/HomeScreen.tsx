@@ -1,34 +1,82 @@
-import type { FriendActivitySummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
+import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
+import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
 export function HomeScreen({ navigation }: Props) {
-  const { user } = useSession();
+  const { accessToken, user } = useSession();
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
   const [invitations, setInvitations] = useState<MeetingInvitationSummary[]>([]);
   const [activities, setActivities] = useState<FriendActivitySummary[]>([]);
+  const [calls, setCalls] = useState<MeetingCallSummary[]>([]);
 
   async function load() {
-    const [meetingData, invitationData, activityData] = await Promise.all([
+    const [meetingData, invitationData, activityData, callData] = await Promise.all([
       apiRequest<MeetingSummary[]>("/meetings"),
       apiRequest<{ invitations: MeetingInvitationSummary[] }>("/meeting-invitations"),
       apiRequest<{ activities: FriendActivitySummary[] }>("/meetings/activity/friends"),
+      apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending"),
     ]);
     setMeetings(meetingData);
     setInvitations(invitationData.invitations.filter((item) => item.status === "PENDING"));
     setActivities(activityData.activities);
+    setCalls(callData.calls);
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const socket = createMeetingSocket(accessToken);
+    socket.on("meeting-call:incoming", ({ call }) => {
+      setCalls((current) => [call, ...current.filter((item) => item.id !== call.id)]);
+      Alert.alert(
+        "영상통화 요청",
+        `${call.meetingTitle} 모임에서 영상통화를 요청했습니다.`,
+        [
+          {
+            text: "거절",
+            style: "cancel",
+            onPress: () => void declineCall(call.id),
+          },
+          {
+            text: "참여",
+            onPress: () => navigation.navigate("VideoCall", {
+              callId: call.id,
+              meetingId: call.meetingId,
+            }),
+          },
+        ],
+      );
+    });
+    socket.connect();
+    const timer = setInterval(() => {
+      void apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending")
+        .then((data) => setCalls(data.calls))
+        .catch(() => undefined);
+    }, 15_000);
+    return () => {
+      clearInterval(timer);
+      socket.disconnect();
+    };
+  }, [accessToken]);
+
+  async function declineCall(callId: string) {
+    await apiRequest(`/meeting-calls/${callId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "decline" }),
+    });
+    setCalls((current) => current.filter((call) => call.id !== callId));
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -44,6 +92,24 @@ export function HomeScreen({ navigation }: Props) {
           <Button label="친구" onPress={() => navigation.navigate("Friends")} variant="secondary" />
           <Button label="설정" onPress={() => navigation.navigate("Settings")} variant="secondary" />
         </View>
+
+        {calls.length ? <SectionHeading title="영상통화 요청" action={`${calls.length}개`} /> : null}
+        {calls.map((call) => (
+          <Card key={call.id} style={styles.callCard}>
+            <View style={styles.row}>
+              <View style={styles.callCopy}>
+                <Text style={styles.cardTitle}>{call.meetingTitle}</Text>
+                <Text style={styles.meta}>{call.participantStatus === "JOINED" ? "진행 중인 통화" : "모임원이 영상통화를 요청했습니다."}</Text>
+              </View>
+              <Pill label={call.participantStatus === "JOINED" ? "진행 중" : "수신 중"} tone="red" />
+            </View>
+            <Button
+              label={call.participantStatus === "JOINED" ? "다시 참여" : "통화 참여"}
+              onPress={() => navigation.navigate("VideoCall", { callId: call.id, meetingId: call.meetingId })}
+            />
+            {call.participantStatus === "RINGING" ? <Button label="거절" onPress={() => void declineCall(call.id)} variant="secondary" /> : null}
+          </Card>
+        ))}
 
         <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
         {invitations.map((item) => (
@@ -94,6 +160,8 @@ const styles = StyleSheet.create({
   accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
   actions: { gap: 9, marginBottom: 8 },
   card: { gap: 9 },
+  callCard: { gap: 9, borderColor: colors.red },
+  callCopy: { flex: 1, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
