@@ -22,6 +22,7 @@
     "expo-auth-session": "~57.0.8",
     "expo-build-properties": "~57.0.7",
     "expo-camera": "~57.0.3",
+    "expo-image-manipulator": "~57.0.13",
     "expo-image-picker": "~57.0.11",
     "expo-location": "~57.0.11",
     "expo-notifications": "~57.0.12",
