@@ -97,4 +97,28 @@ export async function processDueMeetingCalls() {
     }
     await endMeetingCallIfInactive(participant.callId);
   }
+
+  const staleCalls = await prisma.meetingCall.findMany({
+    where: {
+      status: { not: "ENDED" },
+      createdAt: { lte: new Date(now.getTime() - 60 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  for (const call of staleCalls) {
+    await prisma.$transaction([
+      prisma.meetingCallParticipant.updateMany({
+        where: { callId: call.id, status: "RINGING" },
+        data: { status: "MISSED", respondedAt: now },
+      }),
+      prisma.meetingCallParticipant.updateMany({
+        where: { callId: call.id, status: "JOINED" },
+        data: { status: "LEFT", leftAt: now },
+      }),
+      prisma.meetingCall.update({
+        where: { id: call.id },
+        data: { status: "ENDED", endedAt: now },
+      }),
+    ]);
+  }
 }
