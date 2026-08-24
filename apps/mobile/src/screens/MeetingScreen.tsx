@@ -1,3 +1,4 @@
+import type { FriendSummary, MeetingMemberStatusEntry } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
 import { useEffect, useState } from "react";
@@ -28,6 +29,7 @@ interface MeetingDetail {
     microphonePermissionGranted: boolean;
     user: { id: string; nickname: string; accountId: string };
   }>;
+  memberStatuses: MeetingMemberStatusEntry[];
   placeCandidates: Array<{
     id: string;
     name: string;
@@ -48,6 +50,9 @@ export function MeetingScreen({ navigation, route }: Props) {
   const meetingId = route.params.meetingId;
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
   const [requests, setRequests] = useState<JoinRequest[]>([]);
+  const [friends, setFriends] = useState<FriendSummary[]>([]);
+  const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
+  const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -55,8 +60,12 @@ export function MeetingScreen({ navigation, route }: Props) {
     const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
     setMeeting(data);
     if (data.hostId === user?.id) {
-      const requestData = await apiRequest<{ joinRequests: JoinRequest[] }>(`/meetings/${meetingId}/join-requests`);
+      const [requestData, friendData] = await Promise.all([
+        apiRequest<{ joinRequests: JoinRequest[] }>(`/meetings/${meetingId}/join-requests`),
+        apiRequest<{ friends: FriendSummary[] }>("/friends"),
+      ]);
       setRequests(requestData.joinRequests.filter((item) => item.status === "PENDING"));
+      setFriends(friendData.friends);
     }
   }
 
@@ -91,6 +100,17 @@ export function MeetingScreen({ navigation, route }: Props) {
 
   const me = meeting.participants.find((participant) => participant.userId === user?.id);
   const started = new Date(meeting.scheduledAt) <= new Date();
+  const inviteCutoff = new Date(meeting.scheduledAt).getTime() - 30 * 60_000;
+  const isHost = meeting.hostId === user?.id;
+  const canInvite = isHost
+    && Date.now() <= inviteCutoff
+    && meeting.status !== "COMPLETED"
+    && meeting.status !== "CANCELLED";
+  const unavailableUserIds = new Set([
+    ...meeting.participants.map((participant) => participant.userId),
+    ...meeting.memberStatuses.map((member) => member.userId),
+  ]);
+  const availableFriends = friends.filter((friend) => !unavailableUserIds.has(friend.userId));
 
   async function vote(placeCandidateId: string) {
     await apiRequest(`/meetings/${meetingId}/votes`, { method: "POST", body: JSON.stringify({ placeCandidateId }) });
@@ -113,6 +133,26 @@ export function MeetingScreen({ navigation, route }: Props) {
       body: JSON.stringify({ action }),
     });
     await load();
+  }
+  function toggleInvitee(friendId: string) {
+    setSelectedInvitees((current) => current.includes(friendId)
+      ? current.filter((id) => id !== friendId)
+      : [...current, friendId]);
+  }
+  async function inviteFriends() {
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}/invitations`, {
+        method: "POST",
+        body: JSON.stringify({ inviteeUserIds: selectedInvitees }),
+      });
+      setSelectedInvitees([]);
+      setShowInvitePicker(false);
+      setMessage("친구에게 모임 초대를 보냈습니다.");
+      await load();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "친구를 초대하지 못했습니다.");
+    }
   }
 
   return (
@@ -156,6 +196,35 @@ export function MeetingScreen({ navigation, route }: Props) {
           );
         })}
 
+        {isHost ? <SectionHeading title="친구 추가 초대" action="시작 30분 전까지" /> : null}
+        {isHost && canInvite ? (
+          <>
+            <Button
+              label={showInvitePicker ? "초대 목록 닫기" : "친구 선택하기"}
+              onPress={() => setShowInvitePicker((current) => !current)}
+              variant="soft"
+            />
+            {showInvitePicker ? availableFriends.map((friend) => {
+              const selected = selectedInvitees.includes(friend.userId);
+              return (
+                <Pressable key={friend.userId} onPress={() => toggleInvitee(friend.userId)}>
+                  <Card style={[styles.card, selected && styles.selectedCard]}>
+                    <View style={styles.row}>
+                      <Text style={styles.cardTitle}>{friend.nickname} · @{friend.accountId}</Text>
+                      <Text style={styles.selection}>{selected ? "선택됨" : "선택"}</Text>
+                    </View>
+                  </Card>
+                </Pressable>
+              );
+            }) : null}
+            {showInvitePicker && !availableFriends.length ? <Text style={styles.meta}>추가로 초대할 수 있는 친구가 없습니다.</Text> : null}
+            {showInvitePicker && selectedInvitees.length ? (
+              <Button label={`${selectedInvitees.length}명 초대하기`} onPress={inviteFriends} />
+            ) : null}
+          </>
+        ) : null}
+        {isHost && !canInvite ? <Text style={styles.meta}>모임 시작 30분 전부터는 친구를 추가로 초대할 수 없습니다.</Text> : null}
+
         {requests.length ? <SectionHeading title="참가 신청" /> : null}
         {requests.map((request) => (
           <Card key={request.id} style={styles.card}>
@@ -180,7 +249,9 @@ const styles = StyleSheet.create({
   locked: { padding: 20, gap: 14 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
+  selectedCard: { borderColor: colors.primary },
   cardTitle: { color: colors.text, fontWeight: "900" },
+  selection: { color: colors.primary, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   message: { color: colors.primary, fontWeight: "800" },

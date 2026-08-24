@@ -18,6 +18,7 @@ import {
 import { createNotification } from "../lib/notifications.js";
 import { evaluateMeetingVote } from "../services/meetings.js";
 import { generateRecommendations } from "../services/recommendations.js";
+import { canInviteToMeeting } from "../services/invitation-policy.js";
 
 export const meetingsRouter = Router();
 meetingsRouter.use(requireAuth);
@@ -61,6 +62,9 @@ const originSchema = z.object({
   address: z.string().trim().min(1).max(255),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+});
+const additionalInviteesSchema = z.object({
+  inviteeUserIds: z.array(idSchema).min(1).max(50),
 });
 
 function userId(request: AuthenticatedRequest): string {
@@ -331,6 +335,71 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
         })),
     ];
     response.json({ success: true, data: { ...meeting, participants: maskedParticipants, memberStatuses } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/invitations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const hostId = userId(request);
+    const host = await hostFor(meetingId, hostId);
+    if (host.meeting.status === "COMPLETED" || host.meeting.status === "CANCELLED") {
+      throw new AppError(409, "MEETING_CLOSED", "This meeting is no longer available.");
+    }
+    if (!canInviteToMeeting(host.meeting.scheduledAt)) {
+      throw new AppError(409, "INVITATION_WINDOW_CLOSED", "Friends can only be invited until 30 minutes before the meeting starts.");
+    }
+
+    const input = additionalInviteesSchema.parse(request.body);
+    const invitees = await resolveInvitees({ inviteeUserIds: input.inviteeUserIds, hostId });
+    const friendCount = await prisma.friendship.count({
+      where: {
+        OR: invitees.map((invitee) => hostId < invitee.id
+          ? { userAId: hostId, userBId: invitee.id }
+          : { userAId: invitee.id, userBId: hostId }),
+      },
+    });
+    if (friendCount !== invitees.length) {
+      throw new AppError(403, "INVITEES_MUST_BE_FRIENDS", "Only accepted friends can be invited.");
+    }
+
+    const [existingInvitationCount, participantCount] = await Promise.all([
+      prisma.meetingInvitation.count({
+        where: { meetingId, invitedUserId: { in: invitees.map((invitee) => invitee.id) } },
+      }),
+      prisma.meetingParticipant.count({
+        where: { meetingId, userId: { in: invitees.map((invitee) => invitee.id) } },
+      }),
+    ]);
+    if (existingInvitationCount || participantCount) {
+      throw new AppError(409, "ALREADY_INVITED", "One or more friends are already invited or participating.");
+    }
+
+    await prisma.meetingInvitation.createMany({
+      data: invitees.map((invitee) => ({ meetingId, invitedUserId: invitee.id, invitedById: hostId })),
+    });
+    const invitations = await prisma.meetingInvitation.findMany({
+      where: { meetingId, invitedUserId: { in: invitees.map((invitee) => invitee.id) } },
+      include: {
+        meeting: { select: { title: true, scheduledAt: true } },
+        invitedBy: { select: { id: true, accountId: true, nickname: true } },
+        invitedUser: { select: { id: true, accountId: true, nickname: true } },
+      },
+    });
+    for (const invitation of invitations) {
+      await createNotification({
+        userId: invitation.invitedUserId,
+        type: "MEETING_INVITATION",
+        title: "모임 초대가 도착했어요",
+        body: `${invitation.invitedBy.nickname}님이 "${invitation.meeting.title}" 모임에 초대했습니다.`,
+        data: { invitationId: invitation.id, meetingId: invitation.meetingId },
+      });
+      emitMeetingInvitationReceived(invitation.invitedUserId, {
+        invitation: toMeetingInvitationSummary(invitation),
+      });
+    }
+
+    response.status(201).json({ success: true, data: { invitations: invitations.map(toMeetingInvitationSummary) } });
   } catch (error) { next(error); }
 });
 
