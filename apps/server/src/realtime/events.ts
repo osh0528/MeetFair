@@ -1,4 +1,4 @@
-import type { Server } from "socket.io";
+﻿import type { Server } from "socket.io";
 import type {
   ClientToServerEvents,
   FriendRequestAcceptedPayload,
@@ -26,28 +26,28 @@ export function emitFriendRequestReceived(
   targetUserId: string,
   payload: FriendRequestReceivedPayload,
 ) {
-  realtimeServer?.to(`user:${targetUserId}`).emit("friend-request:received", payload);
+  realtimeServer?.to(`user:${targetUserId}`).emit("friend:request", payload);
 }
 
 export function emitFriendRequestAccepted(
   targetUserId: string,
   payload: FriendRequestAcceptedPayload,
 ) {
-  realtimeServer?.to(`user:${targetUserId}`).emit("friend-request:accepted", payload);
+  realtimeServer?.to(`user:${targetUserId}`).emit("friend:accepted", payload);
 }
 
 export function emitMeetingInvitationReceived(
   targetUserId: string,
   payload: MeetingInvitationReceivedPayload,
 ) {
-  realtimeServer?.to(`user:${targetUserId}`).emit("meeting-invitation:received", payload);
+  realtimeServer?.to(`user:${targetUserId}`).emit("meeting:invitation", payload);
 }
 
 export function emitMeetingInvitationResponded(
   targetUserId: string,
   payload: MeetingInvitationRespondedPayload,
 ) {
-  realtimeServer?.to(`user:${targetUserId}`).emit("meeting-invitation:responded", payload);
+  realtimeServer?.to(`user:${targetUserId}`).emit("meeting:invitation-responded", payload);
 }
 
 export function emitNotificationCreated(
@@ -61,7 +61,7 @@ export function emitMeetingCallIncoming(
   targetUserId: string,
   payload: MeetingCallIncomingPayload,
 ) {
-  realtimeServer?.to(`user:${targetUserId}`).emit("meeting-call:incoming", payload);
+  realtimeServer?.to(`user:${targetUserId}`).emit("meeting:call-incoming", payload);
 }
 
 export function emitMeetingUpdated(meetingId: string, payload: MeetingUpdatedPayload) {

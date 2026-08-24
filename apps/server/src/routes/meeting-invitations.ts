@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
+import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { Prisma } from "../generated/prisma/client.js";
@@ -81,6 +82,13 @@ meetingInvitationsRouter.patch("/:id", async (request: AuthenticatedRequest, res
           invitedUser: { select: { id: true, accountId: true, nickname: true } },
         },
       });
+      await createNotification({
+        userId: invitation.invitedById,
+        type: "MEETING_INVITATION_RESPONDED",
+        title: "모임 초대에 응답했어요",
+        body: `${updated.invitedUser.nickname}님이 초대를 거절했습니다.`,
+        data: { invitationId: updated.id, meetingId: invitation.meetingId, status: "DECLINED" },
+      });
       emitMeetingInvitationResponded(invitation.invitedById, {
         invitation: toMeetingInvitationSummary(updated),
       });
@@ -119,6 +127,13 @@ meetingInvitationsRouter.patch("/:id", async (request: AuthenticatedRequest, res
       throw error;
     });
 
+    await createNotification({
+      userId: invitation.invitedById,
+      type: "MEETING_INVITATION_RESPONDED",
+      title: "모임 초대에 응답했어요",
+      body: `${updated.invitedUser.nickname}님이 초대를 수락했습니다.`,
+      data: { invitationId: updated.id, meetingId: invitation.meetingId, status: "ACCEPTED" },
+    });
     emitMeetingInvitationResponded(invitation.invitedById, {
       invitation: toMeetingInvitationSummary(updated),
     });

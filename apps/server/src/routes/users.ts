@@ -8,9 +8,9 @@ import { toPublicUser } from "../lib/serializers.js";
 
 export const usersRouter = Router();
 
-usersRouter.get("/account-id/:accountId/availability", async (request, response, next) => {
+usersRouter.get("/account-id/availability", async (request, response, next) => {
   try {
-    const accountId = accountIdSchema.parse(request.params.accountId);
+    const accountId = accountIdSchema.parse(request.query.accountId);
     const user = await prisma.user.findUnique({ where: { accountId }, select: { id: true } });
     response.json({ success: true, data: { accountId, available: !user } });
   } catch (error) { next(error); }
@@ -23,27 +23,42 @@ function userId(request: AuthenticatedRequest) {
   return request.userId;
 }
 
+usersRouter.patch("/me/account-id", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const { accountId } = z.object({ accountId: accountIdSchema }).parse(request.body);
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) } });
+    if (current.accountIdChanged) {
+      throw new AppError(403, "ACCOUNT_ID_ALREADY_CHANGED", "The account ID can only be changed once.");
+    }
+    if (accountId === current.accountId) {
+      response.json({ success: true, data: { user: toPublicUser(current) } });
+      return;
+    }
+    const duplicate = await prisma.user.findFirst({ where: { accountId, NOT: { id: current.id } } });
+    if (duplicate) throw new AppError(409, "ACCOUNT_ID_TAKEN", "This account ID is already in use.");
+    try {
+      const user = await prisma.user.update({
+        where: { id: current.id },
+        data: { accountId, accountIdChanged: true },
+      });
+      response.json({ success: true, data: { user: toPublicUser(user) } });
+    } catch (error) {
+      if (error instanceof Error && (error as unknown as { code?: string }).code === "P2002") {
+        throw new AppError(409, "ACCOUNT_ID_TAKEN", "This account ID is already in use.");
+      }
+      throw error;
+    }
+  } catch (error) { next(error); }
+});
+
 usersRouter.patch("/me", async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = z.object({
-      accountId: accountIdSchema.optional(),
       nickname: nicknameSchema.optional(),
-    }).refine((value) => value.accountId !== undefined || value.nickname !== undefined).parse(request.body);
-    const current = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) } });
-    if (input.accountId && input.accountId !== current.accountId && current.accountIdChanged) {
-      throw new AppError(409, "ACCOUNT_ID_CHANGE_ALREADY_USED", "The account ID can only be changed once.");
-    }
-    const duplicate = input.accountId
-      ? await prisma.user.findFirst({ where: { accountId: input.accountId, NOT: { id: current.id } } })
-      : null;
-    if (duplicate) throw new AppError(409, "ACCOUNT_ID_ALREADY_USED", "This account ID is already in use.");
+    }).refine((value) => value.nickname !== undefined).parse(request.body);
     const user = await prisma.user.update({
-      where: { id: current.id },
-      data: {
-        accountId: input.accountId,
-        accountIdChanged: input.accountId && input.accountId !== current.accountId ? true : undefined,
-        nickname: input.nickname,
-      },
+      where: { id: userId(request) },
+      data: { nickname: input.nickname },
     });
     response.json({ success: true, data: { user: toPublicUser(user) } });
   } catch (error) { next(error); }
@@ -77,7 +92,7 @@ usersRouter.delete("/me/home", async (request: AuthenticatedRequest, response, n
 usersRouter.patch("/me/settings", async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = z.object({
-      shareLocationWithFriends: z.boolean().optional(),
+      shareExactLocationWithFriends: z.boolean().optional(),
       casualPokesEnabled: z.boolean().optional(),
       pokeQuietStartMinutes: z.number().int().min(0).max(1439).nullable().optional(),
       pokeQuietEndMinutes: z.number().int().min(0).max(1439).nullable().optional(),
@@ -96,7 +111,7 @@ usersRouter.put("/me/location", async (request: AuthenticatedRequest, response, 
       accuracy: z.number().nonnegative().max(10000),
     }).parse(request.body);
     const current = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) } });
-    if (!current.shareLocationWithFriends) {
+    if (!current.shareExactLocationWithFriends) {
       throw new AppError(403, "FRIEND_LOCATION_SHARING_DISABLED", "Friend location sharing is disabled.");
     }
     await prisma.user.update({

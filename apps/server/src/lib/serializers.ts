@@ -28,7 +28,7 @@ export function toPublicUser(user: {
   homeAddress?: string | null;
   homeLatitude?: number | null;
   homeLongitude?: number | null;
-  shareLocationWithFriends?: boolean;
+  shareExactLocationWithFriends?: boolean;
   casualPokesEnabled?: boolean;
   pokeQuietStartMinutes?: number | null;
   pokeQuietEndMinutes?: number | null;
@@ -43,7 +43,7 @@ export function toPublicUser(user: {
     homeAddress: user.homeAddress,
     homeLatitude: user.homeLatitude,
     homeLongitude: user.homeLongitude,
-    shareLocationWithFriends: user.shareLocationWithFriends,
+    shareExactLocationWithFriends: user.shareExactLocationWithFriends,
     casualPokesEnabled: user.casualPokesEnabled,
     pokeQuietStartMinutes: user.pokeQuietStartMinutes,
     pokeQuietEndMinutes: user.pokeQuietEndMinutes,
@@ -56,15 +56,15 @@ export function toFriendSummary(friendship: {
   createdAt: Date;
   userA: {
     id: string; accountId: string; nickname: string;
-    shareLocationWithFriends?: boolean;
+    shareExactLocationWithFriends?: boolean;
     currentLatitude?: number | null; currentLongitude?: number | null;
-    currentAccuracy?: number | null; currentLocationUpdatedAt?: Date | null;
+    currentLocationUpdatedAt?: Date | null;
   };
   userB: {
     id: string; accountId: string; nickname: string;
-    shareLocationWithFriends?: boolean;
+    shareExactLocationWithFriends?: boolean;
     currentLatitude?: number | null; currentLongitude?: number | null;
-    currentAccuracy?: number | null; currentLocationUpdatedAt?: Date | null;
+    currentLocationUpdatedAt?: Date | null;
   };
 }, currentUserId: string): FriendSummary {
   const otherUser = friendship.userA.id === currentUserId ? friendship.userB : friendship.userA;
@@ -75,10 +75,9 @@ export function toFriendSummary(friendship: {
     nickname: otherUser.nickname,
     status: "FRIEND",
     createdAt: friendship.createdAt.toISOString(),
-    latitude: otherUser.shareLocationWithFriends ? otherUser.currentLatitude : null,
-    longitude: otherUser.shareLocationWithFriends ? otherUser.currentLongitude : null,
-    accuracy: otherUser.shareLocationWithFriends ? otherUser.currentAccuracy : null,
-    locationUpdatedAt: otherUser.shareLocationWithFriends
+    sharedLatitude: otherUser.shareExactLocationWithFriends ? otherUser.currentLatitude : null,
+    sharedLongitude: otherUser.shareExactLocationWithFriends ? otherUser.currentLongitude : null,
+    sharedLocationAt: otherUser.shareExactLocationWithFriends
       ? otherUser.currentLocationUpdatedAt?.toISOString() ?? null
       : null,
   };

@@ -64,8 +64,8 @@ export function FriendsScreen({ navigation }: Props) {
         {friends.map((friend) => (
           <Card key={friend.userId} style={styles.card}>
             <Text style={styles.name}>{friend.nickname} · @{friend.accountId}</Text>
-            <Text style={styles.meta}>{friend.latitude != null ? `위치 공유 중 · ${friend.locationUpdatedAt ? new Date(friend.locationUpdatedAt).toLocaleTimeString("ko-KR") : ""}` : "위치 비공개"}</Text>
-            <Button label="찌르기" onPress={() => apiRequest(`/pokes/friends/${friend.userId}`, { method: "POST", body: JSON.stringify({ clientRequestId: createClientRequestId() }) })} variant="soft" />
+            <Text style={styles.meta}>{friend.sharedLatitude != null ? `위치 공유 중 · ${friend.sharedLocationAt ? new Date(friend.sharedLocationAt).toLocaleTimeString("ko-KR") : ""}` : "위치 비공개"}</Text>
+            <Button label="찌르기" onPress={() => apiRequest(`/pokes`, { method: "POST", body: JSON.stringify({ targetUserId: friend.userId, clientRequestId: createClientRequestId() }) })} variant="soft" />
           </Card>
         ))}
       </ScrollView>

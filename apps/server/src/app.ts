@@ -7,7 +7,7 @@ import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { friendsRouter } from "./routes/friends.js";
 import { meetingInvitationsRouter } from "./routes/meeting-invitations.js";
-import { meetingsRouter } from "./routes/meetings.js";
+import { meetingsRouter, recommendationsRouter } from "./routes/meetings.js";
 import { usersRouter } from "./routes/users.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { pokesRouter } from "./routes/pokes.js";
@@ -34,6 +34,7 @@ export function createApp() {
   app.use("/api/meeting-invitations", meetingInvitationsRouter);
   app.use("/api/meetings", meetingSocialRouter);
   app.use("/api/meetings", meetingsRouter);
+  app.use("/api/recommendations", recommendationsRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/pokes", pokesRouter);

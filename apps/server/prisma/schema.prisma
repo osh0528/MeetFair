@@ -92,7 +92,7 @@ model User {
   homeAddress      String?
   homeLatitude     Float?
   homeLongitude    Float?
-  shareLocationWithFriends Boolean     @default(false)
+  shareExactLocationWithFriends Boolean @default(false)
   currentLatitude  Float?
   currentLongitude Float?
   currentAccuracy  Float?
@@ -321,6 +321,7 @@ model Poke {
   clientRequestId String
   createdAt DateTime @default(now())
   readAt    DateTime?
+  summarizedAt DateTime?
   meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   sender    User     @relation("PokeSender", fields: [senderId], references: [id], onDelete: Cascade)
   target    User     @relation("PokeTarget", fields: [targetId], references: [id], onDelete: Cascade)
@@ -346,7 +347,7 @@ model Notification {
 
 model MeetingCall {
   id        String            @id @default(uuid())
-  meetingId String
+  meetingId String            @unique
   roomName  String            @unique
   status    MeetingCallStatus @default(RINGING)
   createdAt DateTime          @default(now())

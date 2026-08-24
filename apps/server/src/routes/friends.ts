@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
+import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import {
@@ -43,19 +44,19 @@ friendsRouter.get("/", async (request: AuthenticatedRequest, response, next) => 
       },
       include: {
         userA: {
-          select: {
-            id: true, accountId: true, nickname: true, shareLocationWithFriends: true,
-            currentLatitude: true, currentLongitude: true, currentAccuracy: true,
-            currentLocationUpdatedAt: true,
-          },
-        },
-        userB: {
-          select: {
-            id: true, accountId: true, nickname: true, shareLocationWithFriends: true,
-            currentLatitude: true, currentLongitude: true, currentAccuracy: true,
-            currentLocationUpdatedAt: true,
-          },
-        },
+           select: {
+             id: true, accountId: true, nickname: true, shareExactLocationWithFriends: true,
+             currentLatitude: true, currentLongitude: true,
+             currentLocationUpdatedAt: true,
+           },
+         },
+         userB: {
+           select: {
+             id: true, accountId: true, nickname: true, shareExactLocationWithFriends: true,
+             currentLatitude: true, currentLongitude: true,
+             currentLocationUpdatedAt: true,
+           },
+         },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -78,7 +79,7 @@ friendsRouter.post("/friend-requests", async (request: AuthenticatedRequest, res
       where: { accountId: recipientAccountId },
       select: { id: true, accountId: true, nickname: true },
     });
-    if (!recipient) throw new AppError(404, "ACCOUNT_NOT_FOUND", "Recipient account was not found.");
+    if (!recipient) throw new AppError(404, "USER_NOT_FOUND", "Recipient account was not found.");
     if (recipient.id === userId) throw new AppError(400, "CANNOT_FRIEND_SELF", "You cannot send a friend request to yourself.");
 
     const pair = orderedPair(userId, recipient.id);
@@ -109,6 +110,13 @@ friendsRouter.post("/friend-requests", async (request: AuthenticatedRequest, res
       },
     });
 
+    await createNotification({
+      userId: recipient.id,
+      type: "FRIEND_REQUEST",
+      title: "친구 요청이 도착했어요",
+      body: `${friendRequest.requester.nickname}님이 친구 요청을 보냈습니다.`,
+      data: { requestId: friendRequest.id, requesterId: userId },
+    });
     emitFriendRequestReceived(recipient.id, {
       request: toFriendRequestSummary(friendRequest),
     });
@@ -210,6 +218,13 @@ friendsRouter.patch("/friend-requests/:id", async (request: AuthenticatedRequest
       throw error;
     });
 
+    await createNotification({
+      userId: friendRequest.requesterId,
+      type: "FRIEND_REQUEST_ACCEPTED",
+      title: "친구 요청이 수락되었어요",
+      body: `${updated.recipient.nickname}님이 친구 요청을 수락했습니다.`,
+      data: { requestId: updated.id },
+    });
     emitFriendRequestAccepted(friendRequest.requesterId, {
       request: toFriendRequestSummary(updated),
     });
@@ -218,6 +233,26 @@ friendsRouter.patch("/friend-requests/:id", async (request: AuthenticatedRequest
   } catch (error) {
     next(error);
   }
+});
+
+friendsRouter.patch("/:friendshipId/poke-permission", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const callerId = currentUserId(request);
+    const friendshipId = z.string().uuid().parse(request.params.friendshipId);
+    const { allowed } = z.object({ allowed: z.boolean() }).parse(request.body);
+    const friendship = await prisma.friendship.findUnique({ where: { id: friendshipId } });
+    if (!friendship) throw new AppError(404, "FRIEND_NOT_FOUND", "Friend relationship was not found.");
+    if (friendship.userAId !== callerId && friendship.userBId !== callerId) {
+      throw new AppError(403, "FORBIDDEN", "You are not a member of this friendship.");
+    }
+    await prisma.friendship.update({
+      where: { id: friendshipId },
+      data: callerId === friendship.userAId
+        ? { userAAllowsPokesFromB: allowed }
+        : { userBAllowsPokesFromA: allowed },
+    });
+    response.status(204).send();
+  } catch (error) { next(error); }
 });
 
 friendsRouter.delete("/friends/:friendUserId", async (request: AuthenticatedRequest, response, next) => {
