@@ -103,7 +103,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
 }
 
 function ChoiceRow({ values, labels, selected, onSelect }: { values: string[]; labels: string[]; selected: string; onSelect(value: string): void }) {
-  return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index]} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
+  return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index] ?? value} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
 }
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress(): void }) {

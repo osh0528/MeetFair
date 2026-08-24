@@ -33,7 +33,11 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
       method: "PATCH",
       body: JSON.stringify({ action, ...permissions }),
     });
-    navigation.replace(action === "accept" ? "Meeting" : "Home", action === "accept" ? { meetingId: invitation.meetingId } : undefined);
+    if (action === "accept") {
+      navigation.replace("Meeting", { meetingId: invitation.meetingId });
+    } else {
+      navigation.replace("Home");
+    }
   }
 
   return (

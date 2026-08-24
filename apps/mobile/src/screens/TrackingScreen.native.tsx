@@ -192,7 +192,7 @@ export function TrackingScreen({ navigation, route }: Props) {
       <View style={styles.panel}>
         <View style={styles.row}>
           <Text style={styles.title}>{locations.filter((item) => item.latitude != null).length}명 위치 공유</Text>
-          <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "neutral"} />
+          <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "gray"} />
         </View>
         {locations.map((item) => (
           <Card key={item.userId} style={styles.person}>
