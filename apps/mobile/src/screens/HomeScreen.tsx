@@ -37,7 +37,7 @@ export function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     if (!accessToken) return;
     const socket = createMeetingSocket(accessToken);
-    socket.on("meeting-call:incoming", ({ call }) => {
+    socket.on("meeting:call-incoming", ({ call }) => {
       setCalls((current) => [call, ...current.filter((item) => item.id !== call.id)]);
       Alert.alert(
         "영상통화 요청",
