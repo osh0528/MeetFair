@@ -4,12 +4,15 @@ import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { accountIdSchema, nicknameSchema } from "../lib/users.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
-import { toPublicUser } from "../lib/serializers.js";
+import { toProfileGuestbookEntry, toPublicUser, toUserSummary } from "../lib/serializers.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
+import { createNotification } from "../lib/notifications.js";
+import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
 
 export const usersRouter = Router();
 const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxAvatarBytes = 2 * 1024 * 1024;
+const profileThemes = ["PURPLE", "PINK", "BLUE", "MINT", "SUNSET"] as const;
 
 function matchesAvatarMimeType(data: Buffer, mimeType: typeof avatarMimeTypes[number]) {
   if (mimeType === "image/jpeg") {
@@ -55,6 +58,144 @@ function userId(request: AuthenticatedRequest) {
   if (!request.userId) throw new AppError(401, "UNAUTHORIZED", "Authentication is required.");
   return request.userId;
 }
+
+async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPageSummary> {
+  const owner = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: {
+      id: true,
+      accountId: true,
+      nickname: true,
+      avatarUpdatedAt: true,
+      profileStatus: true,
+      profileBio: true,
+      profileEmoji: true,
+      profileTheme: true,
+      profileMusicTitle: true,
+      profileUpdatedAt: true,
+      profileGuestbookEntries: {
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        include: {
+          author: {
+            select: { id: true, accountId: true, nickname: true, avatarUpdatedAt: true },
+          },
+        },
+      },
+    },
+  });
+  if (!owner) throw new AppError(404, "USER_NOT_FOUND", "User was not found.");
+  if (ownerId !== viewerId) {
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { userAId: viewerId, userBId: ownerId },
+          { userAId: ownerId, userBId: viewerId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!friendship) {
+      throw new AppError(403, "PROFILE_PAGE_FORBIDDEN", "Only friends can view this profile page.");
+    }
+  }
+  const theme = profileThemes.includes(owner.profileTheme as typeof profileThemes[number])
+    ? owner.profileTheme as ProfileTheme
+    : "PURPLE";
+  return {
+    user: toUserSummary(owner),
+    statusMessage: owner.profileStatus,
+    bio: owner.profileBio,
+    emoji: owner.profileEmoji,
+    theme,
+    musicTitle: owner.profileMusicTitle,
+    updatedAt: owner.profileUpdatedAt?.toISOString() ?? null,
+    guestbook: owner.profileGuestbookEntries.map(toProfileGuestbookEntry),
+    isOwner: ownerId === viewerId,
+  };
+}
+
+usersRouter.get("/:userId/page", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const ownerId = z.string().uuid().parse(request.params.userId);
+    response.json({ success: true, data: { page: await loadUserPage(ownerId, userId(request)) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = z.object({
+      statusMessage: z.string().trim().max(60).nullable().optional(),
+      bio: z.string().trim().max(500).nullable().optional(),
+      emoji: z.string().trim().min(1).max(16).optional(),
+      theme: z.enum(profileThemes).optional(),
+      musicTitle: z.string().trim().max(100).nullable().optional(),
+    }).refine(
+      (value) => Object.values(value).some((item) => item !== undefined),
+      "At least one page field is required.",
+    ).parse(request.body);
+    const ownerId = userId(request);
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: {
+        profileStatus: input.statusMessage === "" ? null : input.statusMessage,
+        profileBio: input.bio === "" ? null : input.bio,
+        profileEmoji: input.emoji,
+        profileTheme: input.theme,
+        profileMusicTitle: input.musicTitle === "" ? null : input.musicTitle,
+        profileUpdatedAt: new Date(),
+      },
+    });
+    response.json({ success: true, data: { page: await loadUserPage(ownerId, ownerId) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.post("/:userId/guestbook", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const ownerId = z.string().uuid().parse(request.params.userId);
+    const authorId = userId(request);
+    const { content } = z.object({ content: z.string().trim().min(1).max(200) }).parse(request.body);
+    const page = await loadUserPage(ownerId, authorId);
+    const entry = await prisma.profileGuestbookEntry.create({
+      data: { ownerId, authorId, content },
+      include: {
+        author: {
+          select: { id: true, accountId: true, nickname: true, avatarUpdatedAt: true },
+        },
+      },
+    });
+    if (ownerId !== authorId) {
+      await createNotification({
+        userId: ownerId,
+        type: "PROFILE_GUESTBOOK",
+        title: "새 방명록",
+        body: page.isOwner ? "새 방명록이 등록되었습니다." : entry.author.nickname + "님이 방명록을 남겼습니다.",
+        data: { authorId, entryId: entry.id },
+      });
+    }
+    response.status(201).json({ success: true, data: { entry: toProfileGuestbookEntry(entry) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/:userId/guestbook/:entryId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const ownerId = z.string().uuid().parse(request.params.userId);
+    const entryId = z.string().uuid().parse(request.params.entryId);
+    const viewerId = userId(request);
+    const entry = await prisma.profileGuestbookEntry.findUnique({
+      where: { id: entryId },
+      select: { ownerId: true, authorId: true },
+    });
+    if (!entry || entry.ownerId !== ownerId) {
+      throw new AppError(404, "GUESTBOOK_ENTRY_NOT_FOUND", "Guestbook entry was not found.");
+    }
+    if (entry.ownerId !== viewerId && entry.authorId !== viewerId) {
+      throw new AppError(403, "GUESTBOOK_DELETE_FORBIDDEN", "You cannot delete this guestbook entry.");
+    }
+    await prisma.profileGuestbookEntry.delete({ where: { id: entryId } });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});
 
 usersRouter.patch("/me/account-id", async (request: AuthenticatedRequest, response, next) => {
   try {

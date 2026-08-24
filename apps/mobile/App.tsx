@@ -18,6 +18,7 @@ import { MeetingInvitationScreen } from "./src/screens/MeetingInvitationScreen";
 import { PublicMeetingRequestScreen } from "./src/screens/PublicMeetingRequestScreen";
 import { VideoCallScreen } from "./src/screens/VideoCallScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { UserPageScreen } from "./src/screens/UserPageScreen";
 import { SessionProvider } from "./src/services/session";
 import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
@@ -38,6 +39,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   Profile: undefined;
+  UserPage: { userId: string };
   MeetingInvitation: { invitation: MeetingInvitationSummary };
   PublicMeetingRequest: { meetingId: string };
   VideoCall: { callId: string; meetingId: string };
@@ -85,6 +87,7 @@ export default function App() {
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="UserPage" component={UserPageScreen} />
           <Stack.Screen name="MeetingInvitation" component={MeetingInvitationScreen} />
           <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />

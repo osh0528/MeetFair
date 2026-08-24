@@ -118,10 +118,10 @@ export function FriendsScreen({ navigation }: Props) {
         {onlineFriends.length ? (
           <ScrollView contentContainerStyle={styles.onlineRow} horizontal showsHorizontalScrollIndicator={false}>
             {onlineFriends.map((friend) => (
-              <View key={friend.userId} style={styles.onlineFriend}>
+              <Pressable key={friend.userId} onPress={() => navigation.navigate("UserPage", { userId: friend.userId })} style={styles.onlineFriend}>
                 <Avatar imageUrl={avatarUrl(friend.userId, friend.avatarUpdatedAt)} name={friend.nickname} size={58} status="online" />
                 <Text numberOfLines={1} style={styles.onlineName}>{friend.nickname}</Text>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
         ) : !loading ? <Text style={styles.empty}>현재 온라인인 친구가 없습니다.</Text> : null}
@@ -129,13 +129,13 @@ export function FriendsScreen({ navigation }: Props) {
         <SectionHeading title="전체 친구" action={friends.length + "명"} />
         {friends.map((friend) => (
           <Card key={friend.userId} style={styles.card}>
-            <View style={styles.friendHeader}>
+            <Pressable onPress={() => navigation.navigate("UserPage", { userId: friend.userId })} style={styles.friendHeader}>
               <Avatar imageUrl={avatarUrl(friend.userId, friend.avatarUpdatedAt)} name={friend.nickname} status={onlineUserIds.includes(friend.userId) ? "online" : undefined} />
               <View style={styles.friendCopy}>
                 <Text style={styles.name}>{friend.nickname} · @{friend.accountId}</Text>
                 <Text style={onlineUserIds.includes(friend.userId) ? styles.onlineMeta : styles.meta}>{onlineUserIds.includes(friend.userId) ? "온라인" : "오프라인"}</Text>
               </View>
-            </View>
+            </Pressable>
             <Text style={styles.meta}>{friend.sharedLatitude != null ? "위치 공유 중 · " + (friend.sharedLocationAt ? new Date(friend.sharedLocationAt).toLocaleTimeString("ko-KR") : "") : "위치 비공개"}</Text>
             <View style={styles.permissionRow}>
               <Text style={styles.meta}>이 친구의 찌르기 허용</Text>

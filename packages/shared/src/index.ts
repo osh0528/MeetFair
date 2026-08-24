@@ -71,6 +71,28 @@ export interface FriendSummary {
   avatarUpdatedAt?: string | null;
 }
 
+export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
+
+export interface ProfileGuestbookEntrySummary {
+  id: string;
+  ownerId: string;
+  author: UserSummary;
+  content: string;
+  createdAt: string;
+}
+
+export interface UserPageSummary {
+  user: UserSummary;
+  statusMessage: string | null;
+  bio: string | null;
+  emoji: string;
+  theme: ProfileTheme;
+  musicTitle: string | null;
+  updatedAt: string | null;
+  guestbook: ProfileGuestbookEntrySummary[];
+  isOwner: boolean;
+}
+
 export interface FriendRequestSummary {
   id: string;
   requester: UserSummary;

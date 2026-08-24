@@ -116,6 +116,7 @@ export function HomeScreen({ navigation }: Props) {
         <View style={styles.actions}>
           <Button label="새 모임" onPress={() => navigation.navigate("CreateMeeting")} />
           <Button label="친구" onPress={() => navigation.navigate("Friends")} variant="secondary" />
+          <Button disabled={!user} label="내 미니홈피" onPress={() => user && navigation.navigate("UserPage", { userId: user.id })} variant="soft" />
           <Button label="설정" onPress={() => navigation.navigate("Settings")} variant="secondary" />
         </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}

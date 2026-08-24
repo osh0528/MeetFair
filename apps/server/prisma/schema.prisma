@@ -92,6 +92,12 @@ model User {
   avatarData      Bytes?
   avatarMimeType  String?
   avatarUpdatedAt DateTime?
+  profileStatus   String?
+  profileBio      String?
+  profileEmoji    String               @default("🌟")
+  profileTheme    String               @default("PURPLE")
+  profileMusicTitle String?
+  profileUpdatedAt DateTime?
   accountIdChanged Boolean             @default(false)
   homeAddress      String?
   homeLatitude     Float?
@@ -122,6 +128,21 @@ model User {
   receivedPokes   Poke[]               @relation("PokeTarget")
   notifications   Notification[]
   callParticipants MeetingCallParticipant[]
+  profileGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookOwner")
+  authoredGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookAuthor")
+}
+
+model ProfileGuestbookEntry {
+  id        String   @id @default(uuid())
+  ownerId   String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  owner     User     @relation("ProfileGuestbookOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  author    User     @relation("ProfileGuestbookAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([authorId])
 }
 
 model DeviceToken {

@@ -3,9 +3,26 @@ import type {
   FriendSummary,
   MeetingInvitationSummary,
   MeetingMemberStatusEntry,
+  ProfileGuestbookEntrySummary,
   PublicUser,
   UserSummary,
 } from "@meetfair/shared";
+
+export function toProfileGuestbookEntry(entry: {
+  id: string;
+  ownerId: string;
+  content: string;
+  createdAt: Date;
+  author: { id: string; accountId: string; nickname: string; avatarUpdatedAt?: Date | null };
+}): ProfileGuestbookEntrySummary {
+  return {
+    id: entry.id,
+    ownerId: entry.ownerId,
+    author: toUserSummary(entry.author),
+    content: entry.content,
+    createdAt: entry.createdAt.toISOString(),
+  };
+}
 
 export function toUserSummary(user: {
   id: string;
