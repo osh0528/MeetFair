@@ -5,6 +5,7 @@ import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitMeetingUpdated } from "../realtime/events.js";
+import { canStartSharing } from "../lib/share-window.js";
 
 export const meetingSocialRouter = Router();
 meetingSocialRouter.use(requireAuth);
@@ -184,6 +185,14 @@ meetingSocialRouter.post("/:meetingId/arrive", async (request: AuthenticatedRequ
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
     const participant = await requireParticipant(meetingId, userId(request));
+    const shareDecision = canStartSharing(
+      { locationShareMode: participant.meeting.locationShareMode, scheduledAt: participant.meeting.scheduledAt, shareMinutesBefore: participant.meeting.shareMinutesBefore },
+      new Date(),
+    );
+    if (!shareDecision.allowed) {
+      const code = shareDecision.reason === "SHARE_MODE_OFF" ? "MEETING_LOCATION_SHARE_OFF" : "SHARING_TOO_EARLY";
+      throw new AppError(403, code, "Location sharing is not allowed at this time.");
+    }
     const updated = await prisma.meetingParticipant.update({
       where: { id: participant.id },
       data: { arrivedAt: new Date(), sharingStatus: "ARRIVED", locationConsent: false },
@@ -207,7 +216,14 @@ meetingSocialRouter.post("/:meetingId/arrive", async (request: AuthenticatedRequ
 meetingSocialRouter.get("/:meetingId/locations", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await requireParticipant(meetingId, userId(request));
+    const participant = await requireParticipant(meetingId, userId(request));
+    const shareDecision = canStartSharing(
+      { locationShareMode: participant.meeting.locationShareMode, scheduledAt: participant.meeting.scheduledAt, shareMinutesBefore: participant.meeting.shareMinutesBefore },
+      new Date(),
+    );
+    if (!shareDecision.allowed && participant.meeting.locationShareMode === "OFF") {
+      throw new AppError(403, "MEETING_LOCATION_SHARE_OFF", "Location sharing is disabled for this meeting.");
+    }
     const participants = await prisma.meetingParticipant.findMany({
       where: { meetingId },
       include: { user: { select: { id: true, nickname: true } } },

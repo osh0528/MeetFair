@@ -27,8 +27,11 @@ const envSchema = z.object({
   LIVEKIT_URL: optionalUrl,
   LIVEKIT_API_KEY: optionalSecret,
   LIVEKIT_API_SECRET: optionalSecret,
+  EXPO_PUSH_ACCESS_TOKEN: optionalSecret,
   NAVER_MAP_CLIENT_ID: z.string().default(""),
   NAVER_MAP_CLIENT_SECRET: z.string().default(""),
+  NAVER_SEARCH_CLIENT_ID: z.string().default(""),
+  NAVER_SEARCH_CLIENT_SECRET: z.string().default(""),
 });
 
 let parsed: z.infer<typeof envSchema>;

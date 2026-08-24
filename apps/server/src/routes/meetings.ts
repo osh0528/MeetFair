@@ -17,9 +17,21 @@ import {
 } from "../realtime/events.js";
 import { createNotification } from "../lib/notifications.js";
 import { evaluateMeetingVote } from "../services/meetings.js";
+import { generateRecommendations } from "../services/recommendations.js";
 
 export const meetingsRouter = Router();
 meetingsRouter.use(requireAuth);
+
+export const recommendationsRouter = Router();
+recommendationsRouter.use(requireAuth);
+recommendationsRouter.get("/", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const { meetingId } = z.object({ meetingId: idSchema }).parse(request.query);
+    await participantFor(meetingId, userId(request));
+    const recommendations = await generateRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
 
 const idSchema = z.string().uuid();
 const meetingInputSchema = z.object({
@@ -32,9 +44,16 @@ const meetingInputSchema = z.object({
   travelMetric: z.enum(["TRANSIT", "CAR", "DISTANCE"]).default("DISTANCE"),
   locationShareMode: z.enum(["DAY_OF", "BEFORE_START", "OFF"]).default("BEFORE_START"),
   shareMinutesBefore: z.number().int().min(1).max(1440).nullable().optional(),
+  originType: z.enum(["HOME", "CUSTOM"]).default("HOME"),
+  customOriginAddress: z.string().trim().min(1).max(255).optional(),
+  customOriginLatitude: z.number().min(-90).max(90).optional(),
+  customOriginLongitude: z.number().min(-180).max(180).optional(),
 }).superRefine((input, context) => {
   if (input.locationShareMode === "BEFORE_START" && input.shareMinutesBefore == null) {
     context.addIssue({ code: "custom", path: ["shareMinutesBefore"], message: "shareMinutesBefore is required." });
+  }
+  if (input.originType === "CUSTOM" && (input.customOriginAddress == null || input.customOriginLatitude == null || input.customOriginLongitude == null)) {
+    context.addIssue({ code: "custom", path: ["customOriginAddress"], message: "custom origin fields are required when originType is CUSTOM." });
   }
 });
 const originSchema = z.object({
@@ -111,7 +130,7 @@ async function resolveInvitees(input: {
       })
     : [];
   if (accountUsers.length !== uniqueAccountIds.length) {
-    throw new AppError(404, "ACCOUNT_NOT_FOUND", "One or more account IDs were not found.");
+    throw new AppError(404, "USER_NOT_FOUND", "One or more account IDs were not found.");
   }
 
   const directUsers = uniqueUserIds.length
@@ -180,6 +199,10 @@ meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) =
                   userId: hostId,
                   cameraPermissionGranted: true,
                   microphonePermissionGranted: true,
+                  originType: input.originType === "CUSTOM" ? "CUSTOM" : "HOME",
+                  originAddress: input.originType === "CUSTOM" ? input.customOriginAddress ?? null : null,
+                  originLatitude: input.originType === "CUSTOM" ? input.customOriginLatitude ?? null : null,
+                  originLongitude: input.originType === "CUSTOM" ? input.customOriginLongitude ?? null : null,
                 },
               },
             },
@@ -215,6 +238,13 @@ meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) =
         },
       });
       for (const invitation of invitations) {
+        await createNotification({
+          userId: invitation.invitedUserId,
+          type: "MEETING_INVITATION",
+          title: "모임 초대가 도착했어요",
+          body: `${invitation.invitedBy.nickname}님이 "${invitation.meeting.title}" 모임에 초대했습니다.`,
+          data: { invitationId: invitation.id, meetingId: invitation.meetingId },
+        });
         emitMeetingInvitationReceived(invitation.invitedUserId, {
           invitation: toMeetingInvitationSummary(invitation),
         });
@@ -255,13 +285,14 @@ meetingsRouter.post("/join", async (request: AuthenticatedRequest, response, nex
 meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
+    const currentUserId = userId(request);
+    await participantFor(meetingId, currentUserId);
     const meeting = await prisma.meeting.findUnique({
       where: { id: meetingId },
       include: {
         host: { select: { id: true, accountId: true, nickname: true } },
         confirmedPlace: true,
-        participants: { include: { user: { select: { id: true, accountId: true, nickname: true } } } },
+        participants: { include: { user: { select: { id: true, accountId: true, nickname: true, homeLatitude: true, homeLongitude: true } } } },
         invitations: {
           include: {
             invitedUser: { select: { id: true, accountId: true, nickname: true } },
@@ -277,6 +308,13 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
       },
     });
     if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+    const maskedParticipants = meeting.participants.map((p) => {
+      if (p.userId === currentUserId) return p;
+      const { originLatitude: _1, originLongitude: _2, originAddress: _3, ...rest } = p as Record<string, unknown>;
+      const user = p.user as Record<string, unknown>;
+      const { homeLatitude: _4, homeLongitude: _5, ...userRest } = user;
+      return { ...rest, originLatitude: null, originLongitude: null, originAddress: null, user: userRest };
+    });
     const memberStatuses = [
       toMeetingMemberStatusEntry({
         user: meeting.host,
@@ -292,7 +330,7 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
           respondedAt: invitation.respondedAt,
         })),
     ];
-    response.json({ success: true, data: { ...meeting, memberStatuses } });
+    response.json({ success: true, data: { ...meeting, participants: maskedParticipants, memberStatuses } });
   } catch (error) { next(error); }
 });
 
@@ -366,7 +404,22 @@ meetingsRouter.post("/:meetingId/votes", async (request: AuthenticatedRequest, r
       where: { meetingId_userId: { meetingId, userId: userId(request) } },
       update: { placeCandidateId }, create: { meetingId, placeCandidateId, userId: userId(request) },
     });
+    await evaluateMeetingVote(meetingId);
     response.json({ success: true, data: vote });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/votes/finalize", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await hostFor(meetingId, userId(request));
+    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+    if (meeting.confirmedPlaceId) throw new AppError(409, "VOTE_ALREADY_FINALIZED", "Vote has already been finalized.");
+    const { finalizeMeetingVote: doFinalize } = await import("../services/meetings.js");
+    await doFinalize(meetingId);
+    const updated = await prisma.meeting.findUnique({ where: { id: meetingId }, include: { confirmedPlace: true } });
+    response.json({ success: true, data: updated });
   } catch (error) { next(error); }
 });
 

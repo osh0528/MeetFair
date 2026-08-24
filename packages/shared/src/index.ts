@@ -44,11 +44,16 @@ export interface PublicUser extends UserSummary {
   homeAddress?: string | null;
   homeLatitude?: number | null;
   homeLongitude?: number | null;
-  shareLocationWithFriends?: boolean;
+  shareExactLocationWithFriends?: boolean;
   casualPokesEnabled?: boolean;
   pokeQuietStartMinutes?: number | null;
   pokeQuietEndMinutes?: number | null;
   timezone?: string;
+}
+
+export interface AccountIdAvailability {
+  accountId: string;
+  available: boolean;
 }
 
 export interface FriendSummary {
@@ -58,10 +63,9 @@ export interface FriendSummary {
   nickname: string;
   status: FriendshipStatus;
   createdAt: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  accuracy?: number | null;
-  locationUpdatedAt?: string | null;
+  sharedLatitude?: number | null;
+  sharedLongitude?: number | null;
+  sharedLocationAt?: string | null;
 }
 
 export interface FriendRequestSummary {
@@ -149,6 +153,21 @@ export interface ParticipantTravelTime {
   nickname: string;
   durationMinutes: number;
   distanceMeters: number;
+}
+
+export interface MeetingRecommendation {
+  id?: string;
+  providerPlaceId: string | null;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  category: string;
+  recommendationRank: number;
+  averageDurationMinutes: number;
+  maximumDurationMinutes: number;
+  timeGapMinutes: number;
+  participantTravelTimes: ParticipantTravelTime[];
 }
 
 export interface PlaceRecommendation {
@@ -258,11 +277,11 @@ export interface ServerToClientEvents {
   "participant:location": (payload: ParticipantLocationPayload) => void;
   "participant:status": (payload: ParticipantStatusPayload) => void;
   "poke:received": (payload: PokeReceivedPayload) => void;
-  "friend-request:received": (payload: FriendRequestReceivedPayload) => void;
-  "friend-request:accepted": (payload: FriendRequestAcceptedPayload) => void;
-  "meeting-invitation:received": (payload: MeetingInvitationReceivedPayload) => void;
-  "meeting-invitation:responded": (payload: MeetingInvitationRespondedPayload) => void;
-  "meeting-call:incoming": (payload: MeetingCallIncomingPayload) => void;
+  "friend:request": (payload: FriendRequestReceivedPayload) => void;
+  "friend:accepted": (payload: FriendRequestAcceptedPayload) => void;
+  "meeting:invitation": (payload: MeetingInvitationReceivedPayload) => void;
+  "meeting:invitation-responded": (payload: MeetingInvitationRespondedPayload) => void;
+  "meeting:call-incoming": (payload: MeetingCallIncomingPayload) => void;
   "notification:created": (payload: NotificationCreatedPayload) => void;
   "meeting:updated": (payload: MeetingUpdatedPayload) => void;
   "meeting:error": (payload: MeetingErrorPayload) => void;

@@ -50,14 +50,22 @@ export async function processDueMeetingCalls() {
     const late = meeting.participants.filter((participant) => !participant.arrivedAt);
     if (!late.length) continue;
     const targetIds = [...new Set([meeting.hostId, ...late.map((participant) => participant.userId)])];
-    const call = await prisma.meetingCall.create({
-      data: {
-        meetingId: meeting.id,
-        roomName: `meeting-${meeting.id}-${Date.now()}`,
-        participants: { create: targetIds.map((targetId) => ({ userId: targetId })) },
-      },
-      include: { meeting: { select: { title: true } }, participants: true },
-    });
+    let call: { id: string; meetingId: string; roomName: string; status: "RINGING" | "ACTIVE" | "ENDED"; createdAt: Date; meeting: { title: string }; participants: Array<{ userId: string; status: "RINGING" | "JOINED" | "DECLINED" | "MISSED" | "LEFT" }> };
+    try {
+      call = await prisma.meetingCall.create({
+        data: {
+          meetingId: meeting.id,
+          roomName: `meeting-${meeting.id}-${Date.now()}`,
+          participants: { create: targetIds.map((targetId) => ({ userId: targetId })) },
+        },
+        include: { meeting: { select: { title: true } }, participants: true },
+      });
+    } catch (error) {
+      if (error instanceof Error && (error as unknown as { code?: string }).code === "P2002") {
+        continue;
+      }
+      throw error;
+    }
     for (const participant of call.participants) {
       const summary = summaryFor(call, participant.status);
       emitMeetingCallIncoming(participant.userId, { call: summary });
@@ -67,6 +75,7 @@ export async function processDueMeetingCalls() {
         title: "모임 영상통화",
         body: `${meeting.title} 모임에 지각자가 있어 영상통화가 시작됐습니다.`,
         data: { callId: call.id, meetingId: meeting.id },
+        important: true,
       });
     }
   }
@@ -93,6 +102,7 @@ export async function processDueMeetingCalls() {
         title: "영상통화에 응답하지 않았어요",
         body: `${participant.call.meeting.title} 모임이 기다리고 있습니다.`,
         data: { callId: participant.callId, meetingId: participant.call.meetingId },
+        important: true,
       });
     }
     await endMeetingCallIfInactive(participant.callId);

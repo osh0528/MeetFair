@@ -8,6 +8,7 @@
     "build": "npm run build -w @meetfair/shared && prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
@@ -31,6 +32,7 @@
     "@types/pg": "^8.23.1",
     "prisma": "^7.0.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.11"
   }
 }

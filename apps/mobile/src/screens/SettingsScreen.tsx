@@ -12,10 +12,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export function SettingsScreen({ navigation }: Props) {
   const session = useSession();
-  const [location, setLocation] = useState(Boolean(session.user?.shareLocationWithFriends));
+  const [location, setLocation] = useState(Boolean(session.user?.shareExactLocationWithFriends));
   const [pokes, setPokes] = useState(Boolean(session.user?.casualPokesEnabled));
 
-  async function update(input: { shareLocationWithFriends?: boolean; casualPokesEnabled?: boolean }) {
+  async function update(input: { shareExactLocationWithFriends?: boolean; casualPokesEnabled?: boolean }) {
     await apiRequest("/users/me/settings", { method: "PATCH", body: JSON.stringify(input) });
     await session.refreshUser();
   }
@@ -26,7 +26,7 @@ export function SettingsScreen({ navigation }: Props) {
       <View style={styles.content}>
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
-          <Switch value={location} onValueChange={(value) => { setLocation(value); void update({ shareLocationWithFriends: value }); }} />
+           <Switch value={location} onValueChange={(value) => { setLocation(value); void update({ shareExactLocationWithFriends: value }); }} />
         </Card>
         <Card style={styles.card}>
           <Text style={styles.title}>평상시 친구 찌르기 허용</Text>

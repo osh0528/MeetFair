@@ -5,18 +5,12 @@ import type {
 import type { Server } from "socket.io";
 import { prisma } from "../lib/prisma.js";
 import { verifyAccessToken } from "../lib/auth.js";
+import { canStartSharing } from "../lib/share-window.js";
+import { distanceMeters, nextProximityCount, hasConsecutivelyArrived } from "../lib/geo.js";
 
 const meetingRoom = (meetingId: string) => `meeting:${meetingId}`;
 
-function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const radius = 6_371_000;
-  const toRadians = (value: number) => value * Math.PI / 180;
-  const dLat = toRadians(bLat - aLat);
-  const dLng = toRadians(bLng - aLng);
-  const value = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * radius * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
-}
+
 
 export function registerRealtimeHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
@@ -63,17 +57,26 @@ export function registerRealtimeHandlers(
         socket.emit("meeting:error", { code: "LOCATION_NOT_ALLOWED", message: "Location sharing is not enabled." });
         return;
       }
+      const shareDecision = canStartSharing(
+        { locationShareMode: participant.meeting.locationShareMode, scheduledAt: participant.meeting.scheduledAt, shareMinutesBefore: participant.meeting.shareMinutesBefore },
+        new Date(),
+      );
+      if (!shareDecision.allowed) {
+        const code = shareDecision.reason === "SHARE_MODE_OFF" ? "MEETING_LOCATION_SHARE_OFF" : "SHARING_TOO_EARLY";
+        socket.emit("meeting:error", { code, message: "Location sharing is not allowed at this time." });
+        return;
+      }
       const capturedAt = new Date(payload.sentAt);
       if (Number.isNaN(capturedAt.getTime()) || Math.abs(Date.now() - capturedAt.getTime()) > 10 * 60 * 1000) {
         socket.emit("meeting:error", { code: "INVALID_LOCATION_TIME", message: "Location timestamp is invalid." });
         return;
       }
       const place = participant.meeting.confirmedPlace;
-      const nearDestination = place
+      const withinRadius = place
         ? distanceMeters(payload.latitude, payload.longitude, place.latitude, place.longitude) <= 100
         : false;
-      const proximityCount = nearDestination ? participant.arrivalProximityCount + 1 : 0;
-      const arrived = proximityCount >= 2;
+      const proximityCount = nextProximityCount(participant.arrivalProximityCount, withinRadius);
+      const arrived = hasConsecutivelyArrived(proximityCount);
       await prisma.$transaction([
         prisma.locationSample.create({
           data: {

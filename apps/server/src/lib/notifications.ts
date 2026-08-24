@@ -1,7 +1,10 @@
 import type { NotificationSummary } from "@meetfair/shared";
+import { env } from "../config/env.js";
 import { prisma } from "./prisma.js";
 import { emitNotificationCreated } from "../realtime/events.js";
 import { Prisma } from "../generated/prisma/client.js";
+
+export { isQuietTime, lastEndedQuietWindow } from "./quiet-time.js";
 
 function toSummary(notification: {
   id: string;
@@ -29,9 +32,11 @@ async function sendExpoPush(userId: string, title: string, body: string, data: R
     select: { expoPushToken: true },
   });
   if (!tokens.length) return;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (env.EXPO_PUSH_ACCESS_TOKEN) headers.authorization = `Bearer ${env.EXPO_PUSH_ACCESS_TOKEN}`;
   await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(tokens.map(({ expoPushToken }) => ({
       to: expoPushToken,
       sound: "default",
@@ -49,6 +54,8 @@ export async function createNotification(input: {
   body: string;
   data?: Record<string, unknown>;
   push?: boolean;
+  /** Important notifications bypass quiet hours and always attempt an immediate push. */
+  important?: boolean;
 }) {
   const notification = await prisma.notification.create({
     data: {
@@ -61,22 +68,10 @@ export async function createNotification(input: {
   });
   const summary = toSummary(notification);
   emitNotificationCreated(input.userId, { notification: summary });
-  if (input.push !== false) {
+  const shouldPush = input.important === true ? true : input.push !== false;
+  if (shouldPush) {
     await sendExpoPush(input.userId, input.title, input.body, input.data ?? {});
   }
   return summary;
 }
 
-export function isQuietTime(start: number | null, end: number | null, timezone: string) {
-  if (start === null || end === null) return false;
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
-  const now = hour * 60 + minute;
-  return start <= end ? now >= start && now < end : now >= start || now < end;
-}
