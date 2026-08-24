@@ -1,10 +1,10 @@
 import type { NotificationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Card, ScreenHeader } from "../components/ui";
+import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { colors } from "../theme/colors";
 
@@ -12,14 +12,27 @@ type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
 
 export function NotificationsScreen({ navigation }: Props) {
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
-  useEffect(() => {
-    void apiRequest<{ notifications: NotificationSummary[] }>("/notifications")
-      .then((data) => setNotifications(data.notifications));
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiRequest<{ notifications: NotificationSummary[] }>("/notifications");
+      setNotifications(data.notifications);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "알림을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { void load(); }, []);
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="알림" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
+        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
         {notifications.map((item) => (
           <Card key={item.id} style={styles.card}>
             <Text style={styles.title}>{item.title}</Text>
@@ -27,7 +40,7 @@ export function NotificationsScreen({ navigation }: Props) {
             <Text style={styles.date}>{new Date(item.createdAt).toLocaleString("ko-KR")}</Text>
           </Card>
         ))}
-        {!notifications.length ? <Text style={styles.empty}>알림이 없습니다.</Text> : null}
+        {!loading && !error && !notifications.length ? <Text style={styles.empty}>알림이 없습니다.</Text> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -41,4 +54,5 @@ const styles = StyleSheet.create({
   body: { color: colors.muted, fontSize: 12 },
   date: { color: colors.subtle, fontSize: 10 },
   empty: { color: colors.muted },
+  error: { color: colors.red, fontSize: 12 },
 });

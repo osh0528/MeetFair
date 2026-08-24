@@ -1,7 +1,7 @@
 import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
@@ -18,18 +18,28 @@ export function HomeScreen({ navigation }: Props) {
   const [invitations, setInvitations] = useState<MeetingInvitationSummary[]>([]);
   const [activities, setActivities] = useState<FriendActivitySummary[]>([]);
   const [calls, setCalls] = useState<MeetingCallSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-    const [meetingData, invitationData, activityData, callData] = await Promise.all([
-      apiRequest<MeetingSummary[]>("/meetings"),
-      apiRequest<{ invitations: MeetingInvitationSummary[] }>("/meeting-invitations"),
-      apiRequest<{ activities: FriendActivitySummary[] }>("/meetings/activity/friends"),
-      apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending"),
-    ]);
-    setMeetings(meetingData);
-    setInvitations(invitationData.invitations.filter((item) => item.status === "PENDING"));
-    setActivities(activityData.activities);
-    setCalls(callData.calls);
+    setLoading(true);
+    setError("");
+    try {
+      const [meetingData, invitationData, activityData, callData] = await Promise.all([
+        apiRequest<MeetingSummary[]>("/meetings"),
+        apiRequest<{ invitations: MeetingInvitationSummary[] }>("/meeting-invitations"),
+        apiRequest<{ activities: FriendActivitySummary[] }>("/meetings/activity/friends"),
+        apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending"),
+      ]);
+      setMeetings(meetingData);
+      setInvitations(invitationData.invitations.filter((item) => item.status === "PENDING"));
+      setActivities(activityData.activities);
+      setCalls(callData.calls);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "홈 정보를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { void load(); }, []);
@@ -92,6 +102,8 @@ export function HomeScreen({ navigation }: Props) {
           <Button label="친구" onPress={() => navigation.navigate("Friends")} variant="secondary" />
           <Button label="설정" onPress={() => navigation.navigate("Settings")} variant="secondary" />
         </View>
+        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
         {calls.length ? <SectionHeading title="영상통화 요청" action={`${calls.length}개`} /> : null}
         {calls.map((call) => (
@@ -166,4 +178,5 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
   empty: { color: colors.muted, fontSize: 12 },
+  error: { color: colors.red, fontSize: 12 },
 });

@@ -2,7 +2,7 @@ import type { FriendSummary, MeetingMemberStatusEntry } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
 import { useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
@@ -53,12 +53,18 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
   const [showInvitePicker, setShowInvitePicker] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editScheduledAt, setEditScheduledAt] = useState("");
+  const [busyAction, setBusyAction] = useState("");
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
 
   async function load() {
     const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
     setMeeting(data);
+    setEditTitle(data.title);
+    setEditScheduledAt(new Date(data.scheduledAt).toISOString().slice(0, 16));
     if (data.hostId === user?.id) {
       const [requestData, friendData] = await Promise.all([
         apiRequest<{ joinRequests: JoinRequest[] }>(`/meetings/${meetingId}/join-requests`),
@@ -154,6 +160,69 @@ export function MeetingScreen({ navigation, route }: Props) {
       setMessage(caught instanceof Error ? caught.message : "친구를 초대하지 못했습니다.");
     }
   }
+  async function saveMeeting() {
+    setBusyAction("save");
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          scheduledAt: new Date(editScheduledAt).toISOString(),
+        }),
+      });
+      setEditing(false);
+      setMessage("모임 정보를 수정했습니다.");
+      await load();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "모임 정보를 수정하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+  function cancelMeeting() {
+    confirmAction("모임 취소", "모임을 취소하면 참여자들에게 알림이 전송됩니다.", () => {
+      setBusyAction("cancel");
+      void apiRequest(`/meetings/${meetingId}/cancel`, { method: "PATCH", body: "{}" })
+        .then(async () => {
+          setMessage("모임을 취소했습니다.");
+          await load();
+        })
+        .catch((caught) => setMessage(caught instanceof Error ? caught.message : "모임을 취소하지 못했습니다."))
+        .finally(() => setBusyAction(""));
+    });
+  }
+  function removeParticipant(participantUserId: string, nickname: string) {
+    confirmAction("참여자 내보내기", `${nickname}님을 모임에서 내보낼까요?`, () => {
+      setBusyAction(participantUserId);
+      void apiRequest(`/meetings/${meetingId}/participants/${participantUserId}`, { method: "DELETE" })
+        .then(load)
+        .catch((caught) => setMessage(caught instanceof Error ? caught.message : "참여자를 내보내지 못했습니다."))
+        .finally(() => setBusyAction(""));
+    });
+  }
+  function deleteMeeting() {
+    confirmAction("모임 기록 삭제", "모임과 관련된 초대, 투표, 위치 기록이 모두 삭제되며 복구할 수 없습니다.", () => {
+      setBusyAction("delete");
+      void apiRequest(`/meetings/${meetingId}`, { method: "DELETE" })
+        .then(() => navigation.replace("Home"))
+        .catch((caught) => setMessage(caught instanceof Error ? caught.message : "모임 기록을 삭제하지 못했습니다."))
+        .finally(() => setBusyAction(""));
+    });
+  }
+  async function cancelInvitation(invitationId: string) {
+    setBusyAction(invitationId);
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}/invitations/${invitationId}`, { method: "DELETE" });
+      setMessage("초대를 취소했습니다.");
+      await load();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "초대를 취소하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -162,6 +231,18 @@ export function MeetingScreen({ navigation, route }: Props) {
         <View style={styles.row}><Pill label={meeting.status} tone="green" /><Text style={styles.meta}>{new Date(meeting.scheduledAt).toLocaleString("ko-KR")}</Text></View>
         <Text style={styles.title}>{meeting.title}</Text>
         <Text style={styles.meta}>위치 공유: {meeting.locationShareMode}{meeting.shareMinutesBefore ? ` · ${meeting.shareMinutesBefore}분 전` : ""}</Text>
+        {isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+          <>
+            <Button label={editing ? "수정 닫기" : "모임 정보 수정"} onPress={() => setEditing((current) => !current)} variant="secondary" />
+            {editing ? (
+              <Card style={styles.card}>
+                <TextInput onChangeText={setEditTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={editTitle} />
+                <TextInput autoCapitalize="none" onChangeText={setEditScheduledAt} placeholder="2026-08-24T18:00" placeholderTextColor={colors.subtle} style={styles.input} value={editScheduledAt} />
+                <Button disabled={busyAction === "save" || !editTitle.trim()} label={busyAction === "save" ? "저장 중..." : "수정 저장"} onPress={saveMeeting} />
+              </Card>
+            ) : null}
+          </>
+        ) : null}
 
         {meeting.confirmedPlace ? (
           <Card style={styles.card}>
@@ -190,7 +271,12 @@ export function MeetingScreen({ navigation, route }: Props) {
             <Card key={participant.userId} style={styles.card}>
               <View style={styles.row}>
                 <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
-                {late && me?.arrivedAt && participant.userId !== user?.id ? <Button label="찌르기" onPress={() => poke(participant.userId)} variant="soft" /> : null}
+                <View style={styles.compactActions}>
+                  {late && me?.arrivedAt && participant.userId !== user?.id ? <Button label="찌르기" onPress={() => poke(participant.userId)} variant="soft" /> : null}
+                  {isHost && participant.userId !== user?.id && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+                    <Button disabled={busyAction === participant.userId} label={busyAction === participant.userId ? "처리 중..." : "내보내기"} onPress={() => removeParticipant(participant.userId, participant.user.nickname)} variant="secondary" />
+                  ) : null}
+                </View>
               </View>
             </Card>
           );
@@ -225,6 +311,16 @@ export function MeetingScreen({ navigation, route }: Props) {
         ) : null}
         {isHost && !canInvite ? <Text style={styles.meta}>모임 시작 30분 전부터는 친구를 추가로 초대할 수 없습니다.</Text> : null}
 
+        {isHost && meeting.memberStatuses.some((member) => member.status === "PENDING") ? <SectionHeading title="응답 대기 중인 초대" /> : null}
+        {isHost && meeting.memberStatuses.filter((member) => member.status === "PENDING").map((member) => (
+          <Card key={member.invitationId ?? member.userId} style={styles.card}>
+            <View style={styles.row}>
+              <View><Text style={styles.cardTitle}>{member.nickname}</Text><Text style={styles.meta}>@{member.accountId}</Text></View>
+              {member.invitationId ? <Button disabled={busyAction === member.invitationId} label={busyAction === member.invitationId ? "처리 중..." : "초대 취소"} onPress={() => cancelInvitation(member.invitationId!)} variant="secondary" /> : null}
+            </View>
+          </Card>
+        ))}
+
         {requests.length ? <SectionHeading title="참가 신청" /> : null}
         {requests.map((request) => (
           <Card key={request.id} style={styles.card}>
@@ -235,11 +331,28 @@ export function MeetingScreen({ navigation, route }: Props) {
         ))}
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
-        {!me?.arrivedAt ? <Button label="도착 처리" onPress={arrive} /> : null}
-        <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" />
+        {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button label="도착 처리" onPress={arrive} /> : null}
+        {meeting.status !== "CANCELLED" ? <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" /> : null}
+        {isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+          <Button disabled={busyAction === "cancel"} label={busyAction === "cancel" ? "취소 처리 중..." : "모임 취소"} onPress={cancelMeeting} variant="secondary" />
+        ) : null}
+        {isHost && (meeting.status === "COMPLETED" || meeting.status === "CANCELLED") ? (
+          <Button disabled={busyAction === "delete"} label={busyAction === "delete" ? "삭제 중..." : "모임 기록 삭제"} onPress={deleteMeeting} variant="secondary" />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function confirmAction(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === "web") {
+    if (globalThis.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: "돌아가기", style: "cancel" },
+    { text: "확인", style: "destructive", onPress: onConfirm },
+  ]);
 }
 
 const styles = StyleSheet.create({
@@ -251,6 +364,8 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   selectedCard: { borderColor: colors.primary },
   cardTitle: { color: colors.text, fontWeight: "900" },
+  input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
+  compactActions: { gap: 6 },
   selection: { color: colors.primary, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },

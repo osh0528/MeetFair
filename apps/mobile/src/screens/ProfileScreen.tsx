@@ -19,6 +19,9 @@ export function ProfileScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [deleteAccountId, setDeleteAccountId] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   async function save() {
     setSubmitting(true);
@@ -42,6 +45,26 @@ export function ProfileScreen({ navigation }: Props) {
       setError(caught instanceof Error ? caught.message : "개인정보를 수정하지 못했습니다.");
     } finally {
       setSubmitting(false);
+    }
+  }
+  async function deleteAccount() {
+    setDeleting(true);
+    setMessage("");
+    setError("");
+    try {
+      await apiRequest("/users/me", {
+        method: "DELETE",
+        body: JSON.stringify({
+          accountId: deleteAccountId.trim(),
+          currentPassword: deletePassword || undefined,
+        }),
+      });
+      await session.logout();
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "회원 탈퇴를 처리하지 못했습니다.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -85,6 +108,28 @@ export function ProfileScreen({ navigation }: Props) {
           label={submitting ? "저장 중..." : "저장"}
           onPress={save}
         />
+        <Card style={styles.dangerCard}>
+          <Text style={styles.dangerTitle}>회원 탈퇴</Text>
+          <Text style={styles.note}>탈퇴하면 내가 만든 모임과 계정 데이터가 삭제되며 복구할 수 없습니다. 확인을 위해 계정 ID를 입력해 주세요.</Text>
+          <Field
+            autoCapitalize="none"
+            label="계정 ID 확인"
+            onChangeText={setDeleteAccountId}
+            value={deleteAccountId}
+          />
+          <Field
+            label="현재 비밀번호"
+            onChangeText={setDeletePassword}
+            secureTextEntry
+            value={deletePassword}
+          />
+          <Button
+            disabled={deleting || deleteAccountId.trim() !== session.user?.accountId}
+            label={deleting ? "탈퇴 처리 중..." : "회원 탈퇴"}
+            onPress={deleteAccount}
+            variant="secondary"
+          />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -122,4 +167,6 @@ const styles = StyleSheet.create({
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   success: { color: colors.green, fontSize: 13, fontWeight: "700" },
   error: { color: colors.red, fontSize: 13 },
+  dangerCard: { gap: 10, borderColor: colors.red },
+  dangerTitle: { color: colors.red, fontSize: 17, fontWeight: "900" },
 });

@@ -87,6 +87,27 @@ usersRouter.patch("/me", async (request: AuthenticatedRequest, response, next) =
   } catch (error) { next(error); }
 });
 
+usersRouter.delete("/me", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = z.object({
+      accountId: accountIdSchema,
+      currentPassword: z.string().max(128).optional(),
+    }).parse(request.body);
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) } });
+    if (input.accountId !== current.accountId) {
+      throw new AppError(400, "ACCOUNT_ID_CONFIRMATION_MISMATCH", "Account ID confirmation does not match.");
+    }
+    if (current.passwordHash && (!input.currentPassword || !(await verifyPassword(input.currentPassword, current.passwordHash)))) {
+      throw new AppError(401, "CURRENT_PASSWORD_INVALID", "Current password is incorrect.");
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.meeting.deleteMany({ where: { hostId: current.id } });
+      await tx.user.delete({ where: { id: current.id } });
+    });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});
+
 usersRouter.put("/me/home", async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = z.object({

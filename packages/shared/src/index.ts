@@ -66,6 +66,7 @@ export interface FriendSummary {
   sharedLatitude?: number | null;
   sharedLongitude?: number | null;
   sharedLocationAt?: string | null;
+  allowsPokesFromFriend: boolean;
 }
 
 export interface FriendRequestSummary {
@@ -243,7 +244,7 @@ export interface NotificationCreatedPayload {
 
 export interface MeetingUpdatedPayload {
   meetingId: string;
-  reason: "MEMBERS" | "VOTES" | "PLACE" | "ARRIVAL" | "LOCATION_SHARING";
+  reason: "MEMBERS" | "VOTES" | "PLACE" | "ARRIVAL" | "LOCATION_SHARING" | "DETAILS" | "STATUS";
 }
 
 export interface FriendRequestReceivedPayload {

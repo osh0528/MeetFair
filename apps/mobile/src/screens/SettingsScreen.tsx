@@ -1,11 +1,12 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
-import { StyleSheet, Switch, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Switch, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
+import { isPokeSoundEnabled, setPokeSoundEnabled } from "../services/poke-sound";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -14,16 +15,56 @@ export function SettingsScreen({ navigation }: Props) {
   const session = useSession();
   const [location, setLocation] = useState(Boolean(session.user?.shareExactLocationWithFriends));
   const [pokes, setPokes] = useState(Boolean(session.user?.casualPokesEnabled));
+  const [sound, setSound] = useState(true);
+  const [quietStart, setQuietStart] = useState(minutesToTime(session.user?.pokeQuietStartMinutes ?? 23 * 60));
+  const [quietEnd, setQuietEnd] = useState(minutesToTime(session.user?.pokeQuietEndMinutes ?? 8 * 60));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void isPokeSoundEnabled().then(setSound);
+  }, []);
 
   async function update(input: { shareExactLocationWithFriends?: boolean; casualPokesEnabled?: boolean }) {
-    await apiRequest("/users/me/settings", { method: "PATCH", body: JSON.stringify(input) });
-    await session.refreshUser();
+    setSaving(true);
+    setMessage("");
+    try {
+      await apiRequest("/users/me/settings", { method: "PATCH", body: JSON.stringify(input) });
+      await session.refreshUser();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "설정을 저장하지 못했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveQuietTime() {
+    const start = timeToMinutes(quietStart);
+    const end = timeToMinutes(quietEnd);
+    if (start === null || end === null) {
+      setMessage("시간을 HH:MM 형식으로 입력해 주세요.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      await apiRequest("/users/me/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ pokeQuietStartMinutes: start, pokeQuietEndMinutes: end, timezone: "Asia/Seoul" }),
+      });
+      await session.refreshUser();
+      setMessage("방해 금지 시간을 저장했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "방해 금지 시간을 저장하지 못했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="설정" onBack={() => navigation.goBack()} />
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Button label="개인정보 관리" onPress={() => navigation.navigate("Profile")} variant="secondary" />
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
@@ -33,9 +74,20 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.title}>평상시 친구 찌르기 허용</Text>
           <Switch value={pokes} onValueChange={(value) => { setPokes(value); void update({ casualPokesEnabled: value }); }} />
         </Card>
-        <Text style={styles.note}>방해 금지 기본 시간은 23:00~08:00으로 서버 설정 화면에서 확장할 수 있습니다.</Text>
+        <Card style={styles.card}>
+          <Text style={styles.title}>찌르기 효과음</Text>
+          <Switch value={sound} onValueChange={(value) => { setSound(value); void setPokeSoundEnabled(value); }} />
+        </Card>
+        <Card style={styles.formCard}>
+          <Text style={styles.title}>찌르기 방해 금지 시간</Text>
+          <Text style={styles.note}>이 시간에는 일반 찌르기 푸시를 모아서 나중에 알려줍니다.</Text>
+          <TextInput onChangeText={setQuietStart} placeholder="23:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietStart} />
+          <TextInput onChangeText={setQuietEnd} placeholder="08:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietEnd} />
+          <Button disabled={saving} label={saving ? "저장 중..." : "방해 금지 시간 저장"} onPress={saveQuietTime} variant="soft" />
+        </Card>
+        {message ? <Text style={styles.message}>{message}</Text> : null}
         <Button label="로그아웃" onPress={async () => { await session.logout(); navigation.replace("Login"); }} variant="secondary" />
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -44,6 +96,22 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12 },
   card: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  formCard: { gap: 9 },
+  input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, color: colors.text },
   title: { flex: 1, color: colors.text, fontWeight: "900", paddingRight: 10 },
   note: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
 });
+
+function minutesToTime(minutes: number) {
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function timeToMinutes(value: string) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}

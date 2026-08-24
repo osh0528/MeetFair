@@ -13,6 +13,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   emitMeetingInvitationReceived,
   emitMeetingInvitationResponded,
+  emitMeetingUpdated,
   emitPoke,
 } from "../realtime/events.js";
 import { createNotification } from "../lib/notifications.js";
@@ -66,6 +67,10 @@ const originSchema = z.object({
 const additionalInviteesSchema = z.object({
   inviteeUserIds: z.array(idSchema).min(1).max(50),
 });
+const meetingUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(80).optional(),
+  scheduledAt: z.coerce.date().optional(),
+}).refine((input) => input.title !== undefined || input.scheduledAt !== undefined, "At least one meeting field is required.");
 
 function userId(request: AuthenticatedRequest): string {
   if (!request.userId) throw new AppError(401, "UNAUTHORIZED", "Authentication is required.");
@@ -335,6 +340,122 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
         })),
     ];
     response.json({ success: true, data: { ...meeting, participants: maskedParticipants, memberStatuses } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.patch("/:meetingId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const host = await hostFor(meetingId, userId(request));
+    if (host.meeting.status === "COMPLETED" || host.meeting.status === "CANCELLED") {
+      throw new AppError(409, "MEETING_CLOSED", "This meeting is no longer editable.");
+    }
+    const input = meetingUpdateSchema.parse(request.body);
+    if (input.scheduledAt && input.scheduledAt.getTime() < Date.now() + 30 * 60_000) {
+      throw new AppError(400, "MEETING_TIME_TOO_SOON", "The meeting must start at least 30 minutes from now.");
+    }
+    const meeting = await prisma.meeting.update({
+      where: { id: meetingId },
+      data: input,
+    });
+    emitMeetingUpdated(meetingId, { meetingId, reason: "DETAILS" });
+    response.json({ success: true, data: meeting });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.patch("/:meetingId/cancel", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const host = await hostFor(meetingId, userId(request));
+    if (host.meeting.status === "COMPLETED" || host.meeting.status === "CANCELLED") {
+      throw new AppError(409, "MEETING_CLOSED", "This meeting is already closed.");
+    }
+    const members = await prisma.meetingParticipant.findMany({
+      where: { meetingId, userId: { not: host.meeting.hostId } },
+      select: { userId: true },
+    });
+    const meeting = await prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: "CANCELLED",
+        participants: { updateMany: { where: {}, data: { locationConsent: false, sharingStatus: "NOT_STARTED" } } },
+      },
+    });
+    for (const member of members) {
+      await createNotification({
+        userId: member.userId,
+        type: "MEETING_CANCELLED",
+        title: "모임이 취소됐어요",
+        body: `"${meeting.title}" 모임이 방장에 의해 취소됐습니다.`,
+        data: { meetingId },
+      });
+    }
+    emitMeetingUpdated(meetingId, { meetingId, reason: "STATUS" });
+    response.json({ success: true, data: meeting });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.delete("/:meetingId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const host = await hostFor(meetingId, userId(request));
+    if (host.meeting.status !== "COMPLETED" && host.meeting.status !== "CANCELLED") {
+      throw new AppError(409, "MEETING_MUST_BE_CLOSED", "Cancel or complete the meeting before deleting it.");
+    }
+    await prisma.meeting.delete({ where: { id: meetingId } });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.delete("/:meetingId/invitations/:invitationId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const invitationId = idSchema.parse(request.params.invitationId);
+    await hostFor(meetingId, userId(request));
+    const invitation = await prisma.meetingInvitation.findFirst({
+      where: { id: invitationId, meetingId, status: "PENDING" },
+      include: { meeting: { select: { title: true } } },
+    });
+    if (!invitation) throw new AppError(404, "PENDING_INVITATION_NOT_FOUND", "Pending invitation was not found.");
+    await prisma.meetingInvitation.delete({ where: { id: invitationId } });
+    await createNotification({
+      userId: invitation.invitedUserId,
+      type: "MEETING_INVITATION_CANCELLED",
+      title: "모임 초대가 취소됐어요",
+      body: `"${invitation.meeting.title}" 모임 초대가 취소됐습니다.`,
+      data: { meetingId },
+    });
+    emitMeetingUpdated(meetingId, { meetingId, reason: "MEMBERS" });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.delete("/:meetingId/participants/:participantUserId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const participantUserId = idSchema.parse(request.params.participantUserId);
+    const host = await hostFor(meetingId, userId(request));
+    if (participantUserId === host.meeting.hostId) {
+      throw new AppError(400, "CANNOT_REMOVE_HOST", "The meeting host cannot be removed.");
+    }
+    const participant = await prisma.meetingParticipant.findUnique({
+      where: { meetingId_userId: { meetingId, userId: participantUserId } },
+      include: { user: { select: { nickname: true } } },
+    });
+    if (!participant) throw new AppError(404, "PARTICIPANT_NOT_FOUND", "Participant was not found.");
+    await prisma.$transaction([
+      prisma.meetingParticipant.delete({ where: { id: participant.id } }),
+      prisma.meetingInvitation.deleteMany({ where: { meetingId, invitedUserId: participantUserId } }),
+    ]);
+    await createNotification({
+      userId: participantUserId,
+      type: "MEETING_PARTICIPANT_REMOVED",
+      title: "모임 참여가 취소됐어요",
+      body: `"${host.meeting.title}" 모임에서 제외됐습니다.`,
+      data: { meetingId },
+    });
+    emitMeetingUpdated(meetingId, { meetingId, reason: "MEMBERS" });
+    response.status(204).send();
   } catch (error) { next(error); }
 });
 

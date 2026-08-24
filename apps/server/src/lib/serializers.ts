@@ -54,6 +54,8 @@ export function toPublicUser(user: {
 export function toFriendSummary(friendship: {
   id: string;
   createdAt: Date;
+  userAAllowsPokesFromB: boolean;
+  userBAllowsPokesFromA: boolean;
   userA: {
     id: string; accountId: string; nickname: string;
     shareExactLocationWithFriends?: boolean;
@@ -80,6 +82,9 @@ export function toFriendSummary(friendship: {
     sharedLocationAt: otherUser.shareExactLocationWithFriends
       ? otherUser.currentLocationUpdatedAt?.toISOString() ?? null
       : null,
+    allowsPokesFromFriend: friendship.userA.id === currentUserId
+      ? friendship.userAAllowsPokesFromB
+      : friendship.userBAllowsPokesFromA,
   };
 }
 

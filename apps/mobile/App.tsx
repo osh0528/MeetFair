@@ -18,6 +18,7 @@ import { PublicMeetingRequestScreen } from "./src/screens/PublicMeetingRequestSc
 import { VideoCallScreen } from "./src/screens/VideoCallScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SessionProvider } from "./src/services/session";
+import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
@@ -57,6 +58,7 @@ const navigationTheme = {
 export default function App() {
   return (
     <SessionProvider>
+    <PokeNotificationBridge />
     <SafeAreaProvider>
       <NavigationContainer theme={navigationTheme}>
         <StatusBar style="dark" />
