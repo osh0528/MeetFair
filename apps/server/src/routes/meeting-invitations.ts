@@ -14,6 +14,8 @@ meetingInvitationsRouter.use(requireAuth);
 
 const actionBodySchema = z.object({
   action: z.enum(["accept", "reject"]),
+  cameraPermissionGranted: z.boolean().optional(),
+  microphonePermissionGranted: z.boolean().optional(),
 });
 
 function currentUserId(request: AuthenticatedRequest): string {
@@ -49,7 +51,7 @@ meetingInvitationsRouter.patch("/:id", async (request: AuthenticatedRequest, res
   try {
     const userId = currentUserId(request);
     const invitationId = z.string().uuid().parse(request.params.id);
-    const { action } = actionBodySchema.parse(request.body);
+    const { action, cameraPermissionGranted, microphonePermissionGranted } = actionBodySchema.parse(request.body);
 
     const invitation = await prisma.meetingInvitation.findUnique({
       where: { id: invitationId },
@@ -85,6 +87,9 @@ meetingInvitationsRouter.patch("/:id", async (request: AuthenticatedRequest, res
       response.json({ success: true, data: { invitation: toMeetingInvitationSummary(updated) } });
       return;
     }
+    if (cameraPermissionGranted !== true || microphonePermissionGranted !== true) {
+      throw new AppError(403, "MEDIA_PERMISSIONS_REQUIRED", "Camera and microphone permissions are required to join a meeting.");
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       const invitationRecord = await tx.meetingInvitation.update({
@@ -99,7 +104,12 @@ meetingInvitationsRouter.patch("/:id", async (request: AuthenticatedRequest, res
       await tx.meetingParticipant.upsert({
         where: { meetingId_userId: { meetingId: invitation.meetingId, userId } },
         update: {},
-        create: { meetingId: invitation.meetingId, userId },
+        create: {
+          meetingId: invitation.meetingId,
+          userId,
+          cameraPermissionGranted: true,
+          microphonePermissionGranted: true,
+        },
       });
       return invitationRecord;
     }).catch((error) => {

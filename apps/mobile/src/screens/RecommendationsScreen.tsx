@@ -150,7 +150,7 @@ export function RecommendationsScreen({ navigation }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button label="이 장소에 투표하고 약속 만들기" onPress={() => navigation.replace("Meeting")} />
+        <Button label="이 장소로 약속 만들기" onPress={() => navigation.replace("CreateMeeting")} />
       </View>
     </SafeAreaView>
   );

@@ -34,12 +34,73 @@ enum MeetingInvitationStatus {
   DECLINED
 }
 
+enum MeetingVisibility {
+  PRIVATE
+  PUBLIC_FRIENDS
+}
+
+enum LocationShareMode {
+  DAY_OF
+  BEFORE_START
+  OFF
+}
+
+enum TravelMetric {
+  TRANSIT
+  CAR
+  DISTANCE
+}
+
+enum OriginType {
+  HOME
+  CURRENT
+  CUSTOM
+}
+
+enum JoinRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum PokeType {
+  MEETING
+  CASUAL
+}
+
+enum MeetingCallStatus {
+  RINGING
+  ACTIVE
+  ENDED
+}
+
+enum MeetingCallParticipantStatus {
+  RINGING
+  JOINED
+  DECLINED
+  MISSED
+  LEFT
+}
+
 model User {
   id              String               @id @default(uuid())
   accountId       String               @unique
   email           String               @unique
   passwordHash    String
   nickname        String
+  accountIdChanged Boolean             @default(false)
+  homeAddress      String?
+  homeLatitude     Float?
+  homeLongitude    Float?
+  shareLocationWithFriends Boolean     @default(false)
+  currentLatitude  Float?
+  currentLongitude Float?
+  currentAccuracy  Float?
+  currentLocationUpdatedAt DateTime?
+  casualPokesEnabled Boolean            @default(false)
+  pokeQuietStartMinutes Int?
+  pokeQuietEndMinutes Int?
+  timezone          String              @default("Asia/Seoul")
   createdAt       DateTime             @default(now())
   hostedMeetings  Meeting[]            @relation("MeetingHost")
   participations  MeetingParticipant[]
@@ -49,11 +110,14 @@ model User {
   friendshipsB    Friendship[]         @relation("FriendshipUserB")
   meetingInvitationsSent MeetingInvitation[] @relation("MeetingInvitationSender")
   meetingInvitationsReceived MeetingInvitation[] @relation("MeetingInvitationRecipient")
+  meetingJoinRequests MeetingJoinRequest[]
   deviceTokens    DeviceToken[]
   votes           Vote[]
   travelEstimates TravelEstimate[]
   sentPokes       Poke[]               @relation("PokeSender")
   receivedPokes   Poke[]               @relation("PokeTarget")
+  notifications   Notification[]
+  callParticipants MeetingCallParticipant[]
 }
 
 model DeviceToken {
@@ -73,15 +137,27 @@ model Meeting {
   inviteCode       String               @unique
   scheduledAt      DateTime
   status           MeetingStatus        @default(PLANNING)
+  visibility       MeetingVisibility     @default(PRIVATE)
+  categories       String[]
+  travelMetric     TravelMetric          @default(DISTANCE)
+  locationShareMode LocationShareMode    @default(BEFORE_START)
+  shareMinutesBefore Int?
+  voteCountdownEndsAt DateTime?
+  votingClosedAt   DateTime?
+  placeFinalizedAt DateTime?
+  completedAt      DateTime?
+  locationPurgeAt  DateTime?
   confirmedPlaceId String?              @unique
   createdAt        DateTime             @default(now())
   host             User                 @relation("MeetingHost", fields: [hostId], references: [id])
   confirmedPlace   PlaceCandidate?      @relation("ConfirmedPlace", fields: [confirmedPlaceId], references: [id], onDelete: SetNull)
   participants     MeetingParticipant[]
   invitations      MeetingInvitation[]
+  joinRequests     MeetingJoinRequest[]
   placeCandidates  PlaceCandidate[]     @relation("MeetingCandidates")
   votes            Vote[]
   pokes            Poke[]
+  calls            MeetingCall[]
 
   @@index([hostId])
   @@index([scheduledAt])
@@ -92,17 +168,54 @@ model MeetingParticipant {
   meetingId           String
   userId              String
   originAddress       String?
+  originType          OriginType?
   originLatitude      Float?
   originLongitude     Float?
   locationConsent     Boolean       @default(false)
   sharingStatus       SharingStatus @default(NOT_STARTED)
   readinessVerifiedAt DateTime?
+  cameraPermissionGranted Boolean @default(false)
+  microphonePermissionGranted Boolean @default(false)
+  arrivedAt           DateTime?
+  lastLatitude        Float?
+  lastLongitude       Float?
+  lastAccuracy        Float?
+  lastLocationAt      DateTime?
+  arrivalProximityCount Int          @default(0)
   joinedAt            DateTime      @default(now())
   meeting             Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationSamples     LocationSample[]
 
   @@unique([meetingId, userId])
   @@index([userId])
+}
+
+model LocationSample {
+  id            String             @id @default(uuid())
+  participantId String
+  latitude      Float
+  longitude     Float
+  accuracy      Float
+  capturedAt    DateTime
+  participant   MeetingParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId, capturedAt])
+}
+
+model MeetingJoinRequest {
+  id          String            @id @default(uuid())
+  meetingId   String
+  requesterId String
+  status      JoinRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  respondedAt DateTime?
+  meeting     Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  requester   User              @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, requesterId])
+  @@index([meetingId, status])
+  @@index([requesterId, status])
 }
 
 model Friendship {
@@ -110,6 +223,8 @@ model Friendship {
   userAId   String
   userBId   String
   createdAt DateTime @default(now())
+  userAAllowsPokesFromB Boolean @default(true)
+  userBAllowsPokesFromA Boolean @default(true)
   userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
   userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
 
@@ -159,12 +274,16 @@ model PlaceCandidate {
   latitude        Float
   longitude       Float
   category        String
+  providerPlaceId String?
+  createdById     String?
+  recommendationRank Int?
   meeting         Meeting          @relation("MeetingCandidates", fields: [meetingId], references: [id], onDelete: Cascade)
   confirmedFor    Meeting?         @relation("ConfirmedPlace")
   travelEstimates TravelEstimate[]
   votes           Vote[]
 
   @@index([meetingId])
+  @@unique([meetingId, providerPlaceId])
 }
 
 model TravelEstimate {
@@ -195,14 +314,60 @@ model Vote {
 
 model Poke {
   id        String   @id @default(uuid())
-  meetingId String
+  meetingId String?
   senderId  String
   targetId  String
+  type      PokeType
+  clientRequestId String
   createdAt DateTime @default(now())
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  readAt    DateTime?
+  meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   sender    User     @relation("PokeSender", fields: [senderId], references: [id], onDelete: Cascade)
   target    User     @relation("PokeTarget", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@index([meetingId, targetId, createdAt])
   @@index([senderId])
+  @@unique([senderId, clientRequestId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model MeetingCall {
+  id        String            @id @default(uuid())
+  meetingId String
+  roomName  String            @unique
+  status    MeetingCallStatus @default(RINGING)
+  createdAt DateTime          @default(now())
+  endedAt   DateTime?
+  meeting   Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  participants MeetingCallParticipant[]
+
+  @@index([meetingId, createdAt])
+}
+
+model MeetingCallParticipant {
+  id        String                       @id @default(uuid())
+  callId    String
+  userId    String
+  status    MeetingCallParticipantStatus @default(RINGING)
+  respondedAt DateTime?
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  call      MeetingCall                  @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user      User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@index([userId, status])
 }

@@ -15,6 +15,8 @@ import {
   emitMeetingInvitationResponded,
   emitPoke,
 } from "../realtime/events.js";
+import { createNotification } from "../lib/notifications.js";
+import { evaluateMeetingVote } from "../services/meetings.js";
 
 export const meetingsRouter = Router();
 meetingsRouter.use(requireAuth);
@@ -25,8 +27,18 @@ const meetingInputSchema = z.object({
   scheduledAt: z.coerce.date().refine((date) => date > new Date(), "scheduledAt must be in the future"),
   inviteeUserIds: z.array(idSchema).max(50).optional(),
   inviteeAccountIds: z.array(accountIdSchema).max(50).optional(),
+  visibility: z.enum(["PRIVATE", "PUBLIC_FRIENDS"]).default("PRIVATE"),
+  categories: z.array(z.string().trim().min(1).max(50)).max(10).default([]),
+  travelMetric: z.enum(["TRANSIT", "CAR", "DISTANCE"]).default("DISTANCE"),
+  locationShareMode: z.enum(["DAY_OF", "BEFORE_START", "OFF"]).default("BEFORE_START"),
+  shareMinutesBefore: z.number().int().min(1).max(1440).nullable().optional(),
+}).superRefine((input, context) => {
+  if (input.locationShareMode === "BEFORE_START" && input.shareMinutesBefore == null) {
+    context.addIssue({ code: "custom", path: ["shareMinutesBefore"], message: "shareMinutesBefore is required." });
+  }
 });
 const originSchema = z.object({
+  originType: z.enum(["HOME", "CURRENT", "CUSTOM"]).default("CUSTOM"),
   address: z.string().trim().min(1).max(255),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
@@ -133,6 +145,18 @@ meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) =
       inviteeAccountIds: input.inviteeAccountIds,
       hostId,
     });
+    if (invitees.length) {
+      const friendCount = await prisma.friendship.count({
+        where: {
+          OR: invitees.map((invitee) => hostId < invitee.id
+            ? { userAId: hostId, userBId: invitee.id }
+            : { userAId: invitee.id, userBId: hostId }),
+        },
+      });
+      if (friendCount !== invitees.length) {
+        throw new AppError(403, "INVITEES_MUST_BE_FRIENDS", "Only accepted friends can be invited.");
+      }
+    }
 
     let meeting;
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -144,7 +168,20 @@ meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) =
               scheduledAt: input.scheduledAt,
               hostId,
               inviteCode: createInviteCode(),
-              participants: { create: { userId: hostId } },
+              visibility: input.visibility,
+              categories: input.categories,
+              travelMetric: input.travelMetric,
+              locationShareMode: input.locationShareMode,
+              shareMinutesBefore: input.locationShareMode === "BEFORE_START"
+                ? (input.shareMinutesBefore ?? 60)
+                : null,
+              participants: {
+                create: {
+                  userId: hostId,
+                  cameraPermissionGranted: true,
+                  microphonePermissionGranted: true,
+                },
+              },
             },
           });
 
@@ -266,7 +303,12 @@ meetingsRouter.put("/:meetingId/origin", async (request: AuthenticatedRequest, r
     const origin = originSchema.parse(request.body);
     const participant = await prisma.meetingParticipant.update({
       where: { meetingId_userId: { meetingId, userId: userId(request) } },
-      data: { originAddress: origin.address, originLatitude: origin.latitude, originLongitude: origin.longitude },
+      data: {
+        originType: origin.originType,
+        originAddress: origin.address,
+        originLatitude: origin.latitude,
+        originLongitude: origin.longitude,
+      },
     });
     response.json({ success: true, data: participant });
   } catch (error) { next(error); }
@@ -363,13 +405,46 @@ meetingsRouter.patch("/:meetingId/readiness", async (request: AuthenticatedReque
 meetingsRouter.post("/:meetingId/pokes", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
-    const { targetId } = z.object({ targetId: idSchema }).parse(request.body);
-    if (targetId === userId(request)) throw new AppError(400, "INVALID_POKE_TARGET", "You cannot poke yourself.");
-    await participantFor(meetingId, targetId);
-    const poke = await prisma.poke.create({ data: { meetingId, senderId: userId(request), targetId } });
-    const sender = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) }, select: { accountId: true, nickname: true } });
-    emitPoke(targetId, { meetingId, senderId: userId(request), senderNickname: sender.nickname, sentAt: poke.createdAt.toISOString() });
+    const senderId = userId(request);
+    const senderParticipant = await participantFor(meetingId, senderId);
+    const { targetId, clientRequestId } = z.object({
+      targetId: idSchema,
+      clientRequestId: idSchema,
+    }).parse(request.body);
+    if (targetId === senderId) throw new AppError(400, "INVALID_POKE_TARGET", "You cannot poke yourself.");
+    if (!senderParticipant.arrivedAt) {
+      throw new AppError(403, "SENDER_NOT_ARRIVED", "Only arrived participants can poke late members.");
+    }
+    if (senderParticipant.meeting.scheduledAt > new Date()) {
+      throw new AppError(409, "MEETING_NOT_STARTED", "The meeting has not started.");
+    }
+    if (senderParticipant.meeting.status === "COMPLETED" || senderParticipant.meeting.status === "CANCELLED") {
+      throw new AppError(409, "MEETING_ENDED", "The meeting has ended.");
+    }
+    const target = await participantFor(meetingId, targetId);
+    if (target.arrivedAt) throw new AppError(409, "TARGET_ALREADY_ARRIVED", "The target has already arrived.");
+    const poke = await prisma.poke.upsert({
+      where: { senderId_clientRequestId: { senderId, clientRequestId } },
+      update: {},
+      create: { meetingId, senderId, targetId, type: "MEETING", clientRequestId },
+    });
+    await evaluateMeetingVote(meetingId);
+    const sender = await prisma.user.findUniqueOrThrow({ where: { id: senderId }, select: { nickname: true } });
+    emitPoke(targetId, {
+      pokeId: poke.id,
+      meetingId,
+      type: "MEETING",
+      senderId,
+      senderNickname: sender.nickname,
+      sentAt: poke.createdAt.toISOString(),
+    });
+    await createNotification({
+      userId: targetId,
+      type: "MEETING_POKE",
+      title: `${sender.nickname}님이 모임에서 찔렀어요`,
+      body: `${senderParticipant.meeting.title} 모임에 늦고 있습니다.`,
+      data: { meetingId, pokeId: poke.id, senderId },
+    });
     response.status(201).json({ success: true, data: poke });
   } catch (error) { next(error); }
 });
@@ -378,7 +453,15 @@ meetingsRouter.post("/:meetingId/complete", async (request: AuthenticatedRequest
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
     await hostFor(meetingId, userId(request));
-    const meeting = await prisma.meeting.update({ where: { id: meetingId }, data: { status: "COMPLETED", participants: { updateMany: { where: {}, data: { locationConsent: false, sharingStatus: "NOT_STARTED" } } } } });
+    const meeting = await prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        locationPurgeAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        participants: { updateMany: { where: {}, data: { locationConsent: false, sharingStatus: "NOT_STARTED" } } },
+      },
+    });
     response.json({ success: true, data: meeting });
   } catch (error) { next(error); }
 });

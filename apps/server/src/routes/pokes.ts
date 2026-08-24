@@ -1,0 +1,79 @@
+import { Router } from "express";
+import { z } from "zod";
+import { AppError } from "../lib/app-error.js";
+import { createNotification, isQuietTime } from "../lib/notifications.js";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { emitPoke } from "../realtime/events.js";
+
+export const pokesRouter = Router();
+pokesRouter.use(requireAuth);
+
+function userId(request: AuthenticatedRequest) {
+  if (!request.userId) throw new AppError(401, "UNAUTHORIZED", "Authentication is required.");
+  return request.userId;
+}
+
+pokesRouter.post("/friends/:friendUserId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const senderId = userId(request);
+    const targetId = z.string().uuid().parse(request.params.friendUserId);
+    const { clientRequestId } = z.object({ clientRequestId: z.string().uuid() }).parse(request.body);
+    const pair = senderId < targetId
+      ? { userAId: senderId, userBId: targetId }
+      : { userAId: targetId, userBId: senderId };
+    const friendship = await prisma.friendship.findUnique({ where: { userAId_userBId: pair } });
+    if (!friendship) throw new AppError(403, "NOT_FRIEND", "Only friends can send casual pokes.");
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId } });
+    const allowedByFriend = senderId === friendship.userAId
+      ? friendship.userBAllowsPokesFromA
+      : friendship.userAAllowsPokesFromB;
+    if (!target.casualPokesEnabled || !allowedByFriend) {
+      throw new AppError(403, "POKE_NOT_ALLOWED", "This friend does not accept casual pokes.");
+    }
+    const sender = await prisma.user.findUniqueOrThrow({ where: { id: senderId }, select: { nickname: true } });
+    const poke = await prisma.poke.upsert({
+      where: { senderId_clientRequestId: { senderId, clientRequestId } },
+      update: {},
+      create: { senderId, targetId, type: "CASUAL", clientRequestId },
+    });
+    emitPoke(targetId, {
+      pokeId: poke.id,
+      meetingId: null,
+      type: "CASUAL",
+      senderId,
+      senderNickname: sender.nickname,
+      sentAt: poke.createdAt.toISOString(),
+    });
+    const quiet = isQuietTime(target.pokeQuietStartMinutes, target.pokeQuietEndMinutes, target.timezone);
+    await createNotification({
+      userId: targetId,
+      type: "CASUAL_POKE",
+      title: `${sender.nickname}님이 찔렀어요`,
+      body: "친구가 MeetFair에서 찌르기를 보냈습니다.",
+      data: { pokeId: poke.id, senderId },
+      push: !quiet,
+    });
+    response.status(201).json({ success: true, data: { poke } });
+  } catch (error) { next(error); }
+});
+
+pokesRouter.patch("/friends/:friendUserId/permission", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const currentUserId = userId(request);
+    const friendUserId = z.string().uuid().parse(request.params.friendUserId);
+    const { allowed } = z.object({ allowed: z.boolean() }).parse(request.body);
+    const pair = currentUserId < friendUserId
+      ? { userAId: currentUserId, userBId: friendUserId }
+      : { userAId: friendUserId, userBId: currentUserId };
+    const friendship = await prisma.friendship.findUnique({ where: { userAId_userBId: pair } });
+    if (!friendship) throw new AppError(404, "FRIEND_NOT_FOUND", "Friend relationship was not found.");
+    await prisma.friendship.update({
+      where: { userAId_userBId: pair },
+      data: currentUserId === friendship.userAId
+        ? { userAAllowsPokesFromB: allowed }
+        : { userBAllowsPokesFromA: allowed },
+    });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});

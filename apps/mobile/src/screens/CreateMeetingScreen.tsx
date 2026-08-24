@@ -1,195 +1,129 @@
+import type { FriendSummary, LocationShareMode, MeetingSummary, MeetingVisibility, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { Camera } from "expo-camera";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
+import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
+import { apiRequest } from "../services/api";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateMeeting">;
-
-const days = [
-  { day: "금", date: "21" },
-  { day: "토", date: "22" },
-  { day: "일", date: "23" },
-  { day: "월", date: "24" },
-  { day: "화", date: "25" },
-];
-
-const times = ["오후 1:00", "오후 2:00", "오후 3:00"];
+const categoryOptions = ["카페", "음식점", "술집", "문화시설"];
 
 export function CreateMeetingScreen({ navigation }: Props) {
-  const [title, setTitle] = useState("성수에서 여름 모임");
-  const [selectedDay, setSelectedDay] = useState("22");
-  const [selectedTime, setSelectedTime] = useState("오후 2:00");
-  const [departure, setDeparture] = useState("서울대입구역");
+  const defaultDate = useMemo(() => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16), []);
+  const [title, setTitle] = useState("");
+  const [scheduledAt, setScheduledAt] = useState(defaultDate);
+  const [visibility, setVisibility] = useState<MeetingVisibility>("PRIVATE");
+  const [travelMetric, setTravelMetric] = useState<TravelMetric>("DISTANCE");
+  const [shareMode, setShareMode] = useState<LocationShareMode>("BEFORE_START");
+  const [minutesBefore, setMinutesBefore] = useState("60");
+  const [categories, setCategories] = useState<string[]>(["카페"]);
+  const [friends, setFriends] = useState<FriendSummary[]>([]);
+  const [invitees, setInvitees] = useState<string[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void apiRequest<{ friends: FriendSummary[] }>("/friends").then((data) => setFriends(data.friends));
+  }, []);
+
+  function toggle<T>(items: T[], item: T) {
+    return items.includes(item) ? items.filter((value) => value !== item) : [...items, item];
+  }
+
+  async function createMeeting() {
+    setError("");
+    const [camera, microphone] = await Promise.all([
+      Camera.requestCameraPermissionsAsync(),
+      Camera.requestMicrophonePermissionsAsync(),
+    ]);
+    if (!camera.granted || !microphone.granted) {
+      setError("모임 생성과 참여에는 카메라·마이크 권한이 필요합니다.");
+      return;
+    }
+    try {
+      const meeting = await apiRequest<MeetingSummary>("/meetings", {
+        method: "POST",
+        body: JSON.stringify({
+          title: title.trim(),
+          scheduledAt: new Date(scheduledAt).toISOString(),
+          inviteeUserIds: invitees,
+          visibility,
+          categories,
+          travelMetric,
+          locationShareMode: shareMode,
+          shareMinutesBefore: shareMode === "BEFORE_START" ? Number(minutesBefore) : null,
+        }),
+      });
+      navigation.replace("Meeting", { meetingId: meeting.id });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "모임을 만들지 못했습니다.");
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScreenHeader title="새 약속" subtitle="1 / 2" onBack={() => navigation.goBack()} />
-      <View style={styles.progressTrack}>
-        <View style={styles.progressValue} />
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <ScreenHeader title="새 모임" onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.title}>언제, 누구와 만날까요?</Text>
+        <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={title} />
+        <TextInput autoCapitalize="none" onChangeText={setScheduledAt} placeholder="2026-08-22T14:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledAt} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.intro}>
-          <Text style={styles.eyebrow}>약속 정보</Text>
-          <Text style={styles.title}>언제, 누구와 만날까요?</Text>
-          <Text style={styles.description}>약속 정보를 입력하면 모두에게 공평한 장소를 찾아드려요.</Text>
-        </View>
+        <SectionHeading title="공개 여부" />
+        <ChoiceRow values={["PRIVATE", "PUBLIC_FRIENDS"]} selected={visibility} labels={["비공개", "친구 피드 공개"]} onSelect={(value) => setVisibility(value as MeetingVisibility)} />
 
-        <View style={styles.formSection}>
-          <Text style={styles.label}>약속 이름</Text>
-          <TextInput
-            onChangeText={setTitle}
-            placeholder="예: 주말 점심 모임"
-            placeholderTextColor={colors.subtle}
-            style={styles.input}
-            value={title}
-          />
-        </View>
+        <SectionHeading title="추천 이동 기준" />
+        <ChoiceRow values={["DISTANCE", "CAR", "TRANSIT"]} selected={travelMetric} labels={["직선거리", "자동차", "대중교통"]} onSelect={(value) => setTravelMetric(value as TravelMetric)} />
+        {travelMetric === "TRANSIT" ? <Text style={styles.note}>대중교통 경로 API가 서버에 준비되지 않으면 추천 요청이 비활성화됩니다.</Text> : null}
 
-        <View style={styles.formSection}>
-          <View style={styles.inlineLabel}>
-            <Text style={styles.label}>날짜</Text>
-            <Text style={styles.month}>2026년 8월</Text>
-          </View>
-          <View style={styles.dayRow}>
-            {days.map((item) => {
-              const selected = item.date === selectedDay;
-              return (
-                <Pressable
-                  key={item.date}
-                  onPress={() => setSelectedDay(item.date)}
-                  style={[styles.dayButton, selected && styles.dayButtonSelected]}
-                >
-                  <Text style={[styles.dayName, selected && styles.dayTextSelected]}>{item.day}</Text>
-                  <Text style={[styles.dayDate, selected && styles.dayTextSelected]}>{item.date}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <SectionHeading title="위치 공유" />
+        <ChoiceRow values={["BEFORE_START", "DAY_OF", "OFF"]} selected={shareMode} labels={["시작 전", "당일 0시", "공유 안 함"]} onSelect={(value) => setShareMode(value as LocationShareMode)} />
+        {shareMode === "BEFORE_START" ? <TextInput keyboardType="number-pad" onChangeText={setMinutesBefore} placeholder="몇 분 전" style={styles.input} value={minutesBefore} /> : null}
 
-        <View style={styles.formSection}>
-          <Text style={styles.label}>시간</Text>
-          <View style={styles.timeRow}>
-            {times.map((time) => {
-              const selected = time === selectedTime;
-              return (
-                <Pressable
-                  key={time}
-                  onPress={() => setSelectedTime(time)}
-                  style={[styles.timeButton, selected && styles.timeButtonSelected]}
-                >
-                  <Text style={[styles.timeText, selected && styles.timeTextSelected]}>{time}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <SectionHeading title="장소 종류" />
+        <View style={styles.wrap}>{categoryOptions.map((category) => <Chip key={category} label={category} selected={categories.includes(category)} onPress={() => setCategories(toggle(categories, category))} />)}</View>
 
-        <View style={styles.formSection}>
-          <SectionHeading title="함께할 친구" action="친구 추가" />
-          <Card style={styles.peopleCard}>
-            <Person name="나" detail="서울대입구역" color="#DCD7FF" owner />
-            <View style={styles.personDivider} />
-            <Person name="민지" detail="왕십리역" color="#FFE7CC" />
-            <View style={styles.personDivider} />
-            <Person name="도윤" detail="합정역" color="#D9F3EE" />
-          </Card>
-        </View>
-
-        <View style={styles.formSection}>
-          <Text style={styles.label}>내 출발지</Text>
-          <View style={styles.locationInput}>
-            <View style={styles.pinBox}><Text style={styles.pin}>⌖</Text></View>
-            <TextInput
-              onChangeText={setDeparture}
-              placeholder="출발지를 검색하세요"
-              placeholderTextColor={colors.subtle}
-              style={styles.locationTextInput}
-              value={departure}
-            />
-            <Text style={styles.currentLocation}>현재 위치</Text>
-          </View>
-          <View style={styles.infoBox}>
-            <Text style={styles.infoMark}>i</Text>
-            <Text style={styles.infoText}>출발지는 장소 추천에만 사용되며 약속 종료 후 자동 삭제돼요.</Text>
-          </View>
-        </View>
+        <SectionHeading title="초대할 친구" action={`${invitees.length}명`} />
+        {friends.map((friend) => (
+          <Pressable key={friend.userId} onPress={() => setInvitees(toggle(invitees, friend.userId))}>
+            <Card style={[styles.friend, invitees.includes(friend.userId) && styles.selectedCard]}>
+              <Text style={styles.friendName}>{friend.nickname} · @{friend.accountId}</Text>
+              <Text>{invitees.includes(friend.userId) ? "✓" : "+"}</Text>
+            </Card>
+          </Pressable>
+        ))}
+        <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라·마이크와 위치 공유 조건을 확인합니다.</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button disabled={!title.trim() || categories.length === 0} label="모임 만들기" onPress={createMeeting} />
       </ScrollView>
-
-      <View style={styles.footer}>
-        <Button
-          label="공평한 장소 추천받기"
-          leftLabel="M"
-          onPress={() => navigation.navigate("Recommendations")}
-        />
-      </View>
     </SafeAreaView>
   );
 }
 
-function Person({ name, detail, color, owner = false }: {
-  name: string;
-  detail: string;
-  color: string;
-  owner?: boolean;
-}) {
-  return (
-    <View style={styles.personRow}>
-      <Avatar name={name} size={42} backgroundColor={color} />
-      <View style={styles.personCopy}>
-        <Text style={styles.personName}>{name}{owner ? " (나)" : ""}</Text>
-        <Text style={styles.personDetail}>{detail}</Text>
-      </View>
-      <View style={styles.readyDot} />
-      <Text style={styles.readyText}>입력 완료</Text>
-    </View>
-  );
+function ChoiceRow({ values, labels, selected, onSelect }: { values: string[]; labels: string[]; selected: string; onSelect(value: string): void }) {
+  return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index] ?? value} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
+}
+
+function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress(): void }) {
+  return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  progressTrack: { height: 3, backgroundColor: colors.border },
-  progressValue: { width: "50%", height: 3, backgroundColor: colors.primary },
-  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 },
-  intro: { gap: 7, marginBottom: 28 },
-  eyebrow: { color: colors.primary, fontSize: 13, fontWeight: "900" },
-  title: { color: colors.text, fontSize: 26, lineHeight: 34, fontWeight: "900" },
-  description: { color: colors.muted, fontSize: 14, lineHeight: 21 },
-  formSection: { marginBottom: 26, gap: 11 },
-  label: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  input: { height: 55, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text, fontSize: 15, fontWeight: "600" },
-  inlineLabel: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  month: { color: colors.muted, fontSize: 13, fontWeight: "700" },
-  dayRow: { flexDirection: "row", gap: 8 },
-  dayButton: { flex: 1, minHeight: 68, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 5 },
-  dayButtonSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayName: { color: colors.muted, fontSize: 11, fontWeight: "700" },
-  dayDate: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  dayTextSelected: { color: colors.surface },
-  timeRow: { flexDirection: "row", gap: 8 },
-  timeButton: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  timeButtonSelected: { backgroundColor: colors.primarySoft, borderColor: "#C7C0F7" },
-  timeText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
-  timeTextSelected: { color: colors.primary },
-  peopleCard: { paddingVertical: 7, paddingHorizontal: 15 },
-  personRow: { minHeight: 65, flexDirection: "row", alignItems: "center" },
-  personCopy: { flex: 1, marginLeft: 12 },
-  personName: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  personDetail: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  readyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.green, marginRight: 6 },
-  readyText: { color: colors.green, fontSize: 11, fontWeight: "800" },
-  personDivider: { height: 1, backgroundColor: colors.border, marginLeft: 54 },
-  locationInput: { minHeight: 58, borderRadius: 17, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 10 },
-  pinBox: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  pin: { color: colors.primary, fontSize: 18, fontWeight: "900" },
-  locationTextInput: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "700", paddingHorizontal: 11 },
-  currentLocation: { color: colors.primary, fontSize: 11, fontWeight: "800" },
-  infoBox: { flexDirection: "row", backgroundColor: colors.blueSoft, borderRadius: 14, padding: 12, gap: 9, alignItems: "flex-start" },
-  infoMark: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.blue, color: colors.surface, textAlign: "center", fontSize: 12, fontWeight: "900", lineHeight: 18 },
-  infoText: { flex: 1, color: "#4771AA", fontSize: 11, lineHeight: 17 },
-  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  content: { padding: 20, gap: 13, paddingBottom: 40 },
+  title: { color: colors.text, fontSize: 25, fontWeight: "900" },
+  input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.muted, fontWeight: "800" },
+  chipTextSelected: { color: colors.surface },
+  friend: { flexDirection: "row", justifyContent: "space-between" },
+  selectedCard: { borderColor: colors.primary },
+  friendName: { color: colors.text, fontWeight: "800" },
+  notice: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  note: { color: colors.amber, fontSize: 11 },
+  error: { color: colors.red, fontSize: 12 },
 });

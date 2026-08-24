@@ -10,6 +10,14 @@ import { MeetingScreen } from "./src/screens/MeetingScreen";
 import { RecommendationsScreen } from "./src/screens/RecommendationsScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { TrackingScreen } from "./src/screens/TrackingScreen";
+import { FriendsScreen } from "./src/screens/FriendsScreen";
+import { NotificationsScreen } from "./src/screens/NotificationsScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { MeetingInvitationScreen } from "./src/screens/MeetingInvitationScreen";
+import { PublicMeetingRequestScreen } from "./src/screens/PublicMeetingRequestScreen";
+import { VideoCallScreen } from "./src/screens/VideoCallScreen";
+import { SessionProvider } from "./src/services/session";
+import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
 
@@ -20,8 +28,14 @@ export type RootStackParamList = {
   Home: undefined;
   CreateMeeting: undefined;
   Recommendations: undefined;
-  Meeting: undefined;
-  Tracking: undefined;
+  Meeting: { meetingId: string };
+  Tracking: { meetingId: string };
+  Friends: undefined;
+  Notifications: undefined;
+  Settings: undefined;
+  MeetingInvitation: { invitation: MeetingInvitationSummary };
+  PublicMeetingRequest: { meetingId: string };
+  VideoCall: { callId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,6 +54,7 @@ const navigationTheme = {
 
 export default function App() {
   return (
+    <SessionProvider>
     <SafeAreaProvider>
       <NavigationContainer theme={navigationTheme}>
         <StatusBar style="dark" />
@@ -59,8 +74,15 @@ export default function App() {
           <Stack.Screen name="Recommendations" component={RecommendationsScreen} />
           <Stack.Screen name="Meeting" component={MeetingScreen} />
           <Stack.Screen name="Tracking" component={TrackingScreen} />
+          <Stack.Screen name="Friends" component={FriendsScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="MeetingInvitation" component={MeetingInvitationScreen} />
+          <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
+          <Stack.Screen name="VideoCall" component={VideoCallScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
+    </SessionProvider>
   );
 }
