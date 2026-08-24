@@ -1,5 +1,5 @@
 import cors from "cors";
-import express from "express";
+import express, { type RequestHandler } from "express";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
@@ -17,7 +17,9 @@ import { meetingCallsRouter } from "./routes/meeting-calls.js";
 export function createApp() {
   const app = express();
 
-  app.use(helmet());
+  // Vercel's Express compiler resolves Helmet's CJS declaration as a module
+  // namespace even though its ESM default export is the middleware factory.
+  app.use((helmet as unknown as () => RequestHandler)());
   app.use(
     cors({
       origin: env.CLIENT_ORIGIN === "*" ? true : env.CLIENT_ORIGIN,
