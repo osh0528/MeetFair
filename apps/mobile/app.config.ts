@@ -50,6 +50,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       },
     ],
     "expo-status-bar",
+    "expo-audio",
     "expo-web-browser",
     [
       "expo-build-properties",

@@ -88,6 +88,8 @@ export interface UserPageSummary {
   emoji: string;
   theme: ProfileTheme;
   musicTitle: string | null;
+  hasMusic: boolean;
+  musicUpdatedAt: string | null;
   updatedAt: string | null;
   guestbook: ProfileGuestbookEntrySummary[];
   isOwner: boolean;

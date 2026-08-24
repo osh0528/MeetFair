@@ -1,13 +1,16 @@
 import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
+import * as DocumentPicker from "expo-document-picker";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { avatarUrl } from "../services/avatar";
+import { profileMusicUrl } from "../services/profileMusic";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -34,6 +37,16 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [emoji, setEmoji] = useState("🌟");
   const [theme, setTheme] = useState<ProfileTheme>("PURPLE");
   const [musicTitle, setMusicTitle] = useState("");
+  const [musicBusy, setMusicBusy] = useState(false);
+  const musicSource = page?.hasMusic
+    ? profileMusicUrl(page.user.id, page.musicUpdatedAt)
+    : null;
+  const musicPlayer = useAudioPlayer(musicSource, { updateInterval: 500 });
+  const musicStatus = useAudioPlayerStatus(musicPlayer);
+
+  useEffect(() => {
+    musicPlayer.loop = true;
+  }, [musicPlayer]);
 
   const applyPage = useCallback((next: UserPageSummary) => {
     setPage(next);
@@ -120,6 +133,91 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
+  function musicMimeType(file: DocumentPicker.DocumentPickerAsset) {
+    const mimeType = file.mimeType?.toLowerCase();
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (mimeType === "audio/mpeg" || extension === "mp3") return "audio/mpeg";
+    if (mimeType === "audio/mp4" || mimeType === "audio/x-m4a" || extension === "m4a" || extension === "mp4") return "audio/mp4";
+    if (mimeType === "audio/wav" || mimeType === "audio/x-wav" || extension === "wav") return "audio/wav";
+    if (mimeType === "audio/ogg" || extension === "ogg") return "audio/ogg";
+    return null;
+  }
+
+  async function chooseMusic() {
+    if (!musicTitle.trim() || musicBusy) return;
+    setMusicBusy(true);
+    setMessage("");
+    try {
+      musicPlayer.pause();
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/x-wav", "audio/ogg"],
+        copyToCacheDirectory: true,
+        base64: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      if (!file) throw new Error("선택한 음원 파일을 읽지 못했습니다.");
+      if (file.size && file.size > 6 * 1024 * 1024) {
+        throw new Error("BGM 파일은 6MB 이하만 등록할 수 있습니다.");
+      }
+      const mimeType = musicMimeType(file);
+      if (!mimeType) throw new Error("MP3, M4A, WAV, OGG 파일만 등록할 수 있습니다.");
+      const rawBase64 = file.base64?.includes(",") ? file.base64.split(",").pop() : file.base64;
+      if (!rawBase64) throw new Error("선택한 음원 파일을 변환하지 못했습니다.");
+      const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page-music", {
+        method: "PUT",
+        body: JSON.stringify({
+          fileBase64: rawBase64,
+          mimeType,
+          title: musicTitle.trim(),
+        }),
+      });
+      applyPage(data.page);
+      setMessage("미니홈피 BGM을 등록했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "BGM을 등록하지 못했습니다.");
+    } finally {
+      setMusicBusy(false);
+    }
+  }
+
+  async function removeMusic() {
+    if (musicBusy) return;
+    setMusicBusy(true);
+    setMessage("");
+    try {
+      musicPlayer.pause();
+      await apiRequest("/users/me/page-music", { method: "DELETE" });
+      setPage((current) => current
+        ? { ...current, hasMusic: false, musicTitle: null, musicUpdatedAt: null }
+        : current);
+      setMusicTitle("");
+      setMessage("미니홈피 BGM을 삭제했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "BGM을 삭제하지 못했습니다.");
+    } finally {
+      setMusicBusy(false);
+    }
+  }
+
+  async function toggleMusic() {
+    if (!page?.hasMusic) return;
+    if (musicStatus.playing) {
+      musicPlayer.pause();
+      return;
+    }
+    if (musicStatus.duration > 0 && musicStatus.currentTime >= musicStatus.duration - 0.2) {
+      await musicPlayer.seekTo(0);
+    }
+    musicPlayer.play();
+  }
+
+  function formatTime(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+    const whole = Math.floor(seconds);
+    return Math.floor(whole / 60) + ":" + String(whole % 60).padStart(2, "0");
+  }
+
   const palette = themes[page?.theme ?? theme];
 
   return (
@@ -160,6 +258,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
                 <Text style={styles.label}>BGM 제목</Text>
                 <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+                <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
+                <Button
+                  disabled={musicBusy || !musicTitle.trim()}
+                  label={musicBusy ? "BGM 처리 중..." : page.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"}
+                  onPress={() => void chooseMusic()}
+                  variant="soft"
+                />
+                {page.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
                 <Text style={styles.label}>테마</Text>
                 <View style={styles.themeRow}>
                   {(Object.keys(themes) as ProfileTheme[]).map((item) => (
@@ -181,10 +287,37 @@ export function UserPageScreen({ navigation, route }: Props) {
             ) : null}
 
             <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
-              <Text style={styles.musicIcon}>♫</Text>
+              <Pressable
+                disabled={!page.hasMusic}
+                onPress={() => void toggleMusic()}
+                style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : colors.subtle }]}
+              >
+                <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
+              </Pressable>
               <View style={styles.musicCopy}>
                 <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
                 <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
+                {page.hasMusic ? (
+                  <>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            backgroundColor: palette.accent,
+                            width: ((musicStatus.duration > 0
+                              ? Math.min(100, musicStatus.currentTime / musicStatus.duration * 100)
+                              : 0) + "%") as `${number}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.musicTime}>
+                      {musicStatus.isBuffering ? "불러오는 중..." : formatTime(musicStatus.currentTime) + " / " + formatTime(musicStatus.duration)}
+                    </Text>
+                    {musicStatus.error ? <Text style={styles.musicError}>음원을 재생하지 못했습니다.</Text> : null}
+                  </>
+                ) : null}
               </View>
             </Card>
 
@@ -254,10 +387,16 @@ const styles = StyleSheet.create({
   themeDot: { width: 10, height: 10, borderRadius: 5 },
   themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
-  musicIcon: { color: colors.text, fontSize: 30, fontWeight: "900" },
+  musicControl: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  musicControlText: { color: colors.surface, fontSize: 17, fontWeight: "900", marginLeft: 2 },
   musicCopy: { flex: 1, gap: 3 },
   musicLabel: { fontSize: 10, fontWeight: "900" },
   musicTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  musicHelp: { color: colors.muted, fontSize: 11 },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.75)", overflow: "hidden", marginTop: 5 },
+  progressFill: { height: 4, borderRadius: 2 },
+  musicTime: { color: colors.muted, fontSize: 10 },
+  musicError: { color: colors.red, fontSize: 10 },
   introCard: { gap: 12 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
   guestbookComposer: { gap: 10 },

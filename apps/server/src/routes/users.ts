@@ -12,6 +12,8 @@ import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
 export const usersRouter = Router();
 const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxAvatarBytes = 2 * 1024 * 1024;
+const musicMimeTypes = ["audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"] as const;
+const maxMusicBytes = 6 * 1024 * 1024;
 const profileThemes = ["PURPLE", "PINK", "BLUE", "MINT", "SUNSET"] as const;
 
 function matchesAvatarMimeType(data: Buffer, mimeType: typeof avatarMimeTypes[number]) {
@@ -24,6 +26,24 @@ function matchesAvatarMimeType(data: Buffer, mimeType: typeof avatarMimeTypes[nu
   return data.length >= 12
     && data.subarray(0, 4).toString("ascii") === "RIFF"
     && data.subarray(8, 12).toString("ascii") === "WEBP";
+}
+
+function matchesMusicMimeType(data: Buffer, mimeType: typeof musicMimeTypes[number]) {
+  if (mimeType === "audio/mpeg") {
+    return data.length >= 3 && (
+      data.subarray(0, 3).toString("ascii") === "ID3"
+      || data[0] === 0xff && ((data[1] ?? 0) & 0xe0) === 0xe0
+    );
+  }
+  if (mimeType === "audio/mp4") {
+    return data.length >= 12 && data.subarray(4, 8).toString("ascii") === "ftyp";
+  }
+  if (mimeType === "audio/wav") {
+    return data.length >= 12
+      && data.subarray(0, 4).toString("ascii") === "RIFF"
+      && data.subarray(8, 12).toString("ascii") === "WAVE";
+  }
+  return data.length >= 4 && data.subarray(0, 4).toString("ascii") === "OggS";
 }
 
 usersRouter.get("/account-id/availability", async (request, response, next) => {
@@ -52,6 +72,45 @@ usersRouter.get("/:userId/avatar", async (request, response, next) => {
   } catch (error) { next(error); }
 });
 
+usersRouter.get("/:userId/page-music", async (request, response, next) => {
+  try {
+    const targetUserId = z.string().uuid().parse(request.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { profileMusicData: true, profileMusicMimeType: true },
+    });
+    if (!user?.profileMusicData || !user.profileMusicMimeType) {
+      throw new AppError(404, "PROFILE_MUSIC_NOT_FOUND", "Profile music was not found.");
+    }
+    const music = Buffer.from(user.profileMusicData);
+    response.setHeader("content-type", user.profileMusicMimeType);
+    response.setHeader("cross-origin-resource-policy", "cross-origin");
+    response.setHeader("cache-control", "public, max-age=31536000, immutable");
+    response.setHeader("accept-ranges", "bytes");
+    const range = request.headers.range;
+    if (range) {
+      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+      if (!match) {
+        response.status(416).setHeader("content-range", "bytes */" + music.length).send();
+        return;
+      }
+      const start = Number(match[1]);
+      const end = match[2] ? Math.min(Number(match[2]), music.length - 1) : music.length - 1;
+      if (start >= music.length || end < start) {
+        response.status(416).setHeader("content-range", "bytes */" + music.length).send();
+        return;
+      }
+      response.status(206);
+      response.setHeader("content-range", "bytes " + start + "-" + end + "/" + music.length);
+      response.setHeader("content-length", String(end - start + 1));
+      response.send(music.subarray(start, end + 1));
+      return;
+    }
+    response.setHeader("content-length", String(music.length));
+    response.send(music);
+  } catch (error) { next(error); }
+});
+
 usersRouter.use(requireAuth);
 
 function userId(request: AuthenticatedRequest) {
@@ -72,6 +131,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
       profileEmoji: true,
       profileTheme: true,
       profileMusicTitle: true,
+      profileMusicUpdatedAt: true,
       profileUpdatedAt: true,
       profileGuestbookEntries: {
         orderBy: { createdAt: "desc" },
@@ -109,6 +169,8 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     emoji: owner.profileEmoji,
     theme,
     musicTitle: owner.profileMusicTitle,
+    hasMusic: Boolean(owner.profileMusicUpdatedAt),
+    musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
     updatedAt: owner.profileUpdatedAt?.toISOString() ?? null,
     guestbook: owner.profileGuestbookEntries.map(toProfileGuestbookEntry),
     isOwner: ownerId === viewerId,
@@ -147,6 +209,55 @@ usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, ne
       },
     });
     response.json({ success: true, data: { page: await loadUserPage(ownerId, ownerId) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.put("/me/page-music", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = z.object({
+      fileBase64: z.string().min(1).max(8_500_000),
+      mimeType: z.enum(musicMimeTypes),
+      title: z.string().trim().min(1).max(100),
+    }).parse(request.body);
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.fileBase64)) {
+      throw new AppError(400, "INVALID_PROFILE_MUSIC_DATA", "Music file data is invalid.");
+    }
+    const profileMusicData = Buffer.from(input.fileBase64, "base64");
+    if (!profileMusicData.length || profileMusicData.length > maxMusicBytes) {
+      throw new AppError(413, "PROFILE_MUSIC_TOO_LARGE", "Profile music must be 6 MB or smaller.");
+    }
+    if (!matchesMusicMimeType(profileMusicData, input.mimeType)) {
+      throw new AppError(400, "PROFILE_MUSIC_TYPE_MISMATCH", "Music content does not match its file type.");
+    }
+    const ownerId = userId(request);
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: {
+        profileMusicData,
+        profileMusicMimeType: input.mimeType,
+        profileMusicTitle: input.title,
+        profileMusicUpdatedAt: new Date(),
+        profileUpdatedAt: new Date(),
+      },
+    });
+    response.json({ success: true, data: { page: await loadUserPage(ownerId, ownerId) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/me/page-music", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const ownerId = userId(request);
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: {
+        profileMusicData: null,
+        profileMusicMimeType: null,
+        profileMusicTitle: null,
+        profileMusicUpdatedAt: null,
+        profileUpdatedAt: new Date(),
+      },
+    });
+    response.status(204).send();
   } catch (error) { next(error); }
 });
 

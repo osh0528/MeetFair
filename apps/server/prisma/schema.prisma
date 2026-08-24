@@ -97,6 +97,9 @@ model User {
   profileEmoji    String               @default("🌟")
   profileTheme    String               @default("PURPLE")
   profileMusicTitle String?
+  profileMusicData Bytes?
+  profileMusicMimeType String?
+  profileMusicUpdatedAt DateTime?
   profileUpdatedAt DateTime?
   accountIdChanged Boolean             @default(false)
   homeAddress      String?
