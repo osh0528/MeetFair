@@ -13,6 +13,42 @@ import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
+type BottomNavItemProps = {
+  label: string;
+  icon: string;
+  onPress: () => void;
+  disabled?: boolean;
+  emphasized?: boolean;
+};
+
+function BottomNavItem({ label, icon, onPress, disabled, emphasized }: BottomNavItemProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.bottomNavItem,
+        pressed && !disabled && styles.bottomNavItemPressed,
+        disabled && styles.bottomNavItemDisabled,
+      ]}
+    >
+      <View style={[styles.bottomNavIcon, emphasized && styles.bottomNavIconEmphasized]}>
+        <Text style={[styles.bottomNavIconText, emphasized && styles.bottomNavIconTextEmphasized]}>{icon}</Text>
+      </View>
+      <Text
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        numberOfLines={1}
+        style={[styles.bottomNavLabel, emphasized && styles.bottomNavLabelEmphasized]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function HomeScreen({ navigation }: Props) {
   const { accessToken, user } = useSession();
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
@@ -113,12 +149,6 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
-        <View style={styles.actions}>
-          <Button label="새 모임" onPress={() => navigation.navigate("CreateMeeting")} />
-          <Button label="친구" onPress={() => navigation.navigate("Friends")} variant="secondary" />
-          <Button disabled={!user} label="내 미니홈피" onPress={() => user && navigation.navigate("UserPage", { userId: user.id })} variant="soft" />
-          <Button label="설정" onPress={() => navigation.navigate("Settings")} variant="secondary" />
-        </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
@@ -174,6 +204,22 @@ export function HomeScreen({ navigation }: Props) {
           </Card>
         ))}
       </ScrollView>
+      <View style={styles.bottomNav}>
+        <BottomNavItem
+          emphasized
+          icon="＋"
+          label="새 모임"
+          onPress={() => navigation.navigate("CreateMeeting")}
+        />
+        <BottomNavItem icon="♧" label="친구" onPress={() => navigation.navigate("Friends")} />
+        <BottomNavItem
+          disabled={!user}
+          icon="⌂"
+          label="내 미니홈피"
+          onPress={() => user && navigation.navigate("UserPage", { userId: user.id })}
+        />
+        <BottomNavItem icon="⚙" label="설정" onPress={() => navigation.navigate("Settings")} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -184,10 +230,48 @@ const styles = StyleSheet.create({
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
   brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
   link: { color: colors.primary, fontWeight: "900" },
-  content: { padding: 20, gap: 14, paddingBottom: 40 },
+  content: { padding: 20, gap: 14, paddingBottom: 28 },
   hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
   accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
-  actions: { gap: 9, marginBottom: 8 },
+  bottomNav: {
+    minHeight: 76,
+    paddingHorizontal: 6,
+    paddingTop: 8,
+    paddingBottom: 6,
+    flexDirection: "row",
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  bottomNavItem: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 5,
+    gap: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+  },
+  bottomNavItemPressed: { backgroundColor: colors.primarySoft },
+  bottomNavItemDisabled: { opacity: 0.45 },
+  bottomNavIcon: {
+    width: 34,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: colors.background,
+  },
+  bottomNavIconEmphasized: { backgroundColor: colors.primary },
+  bottomNavIconText: { color: colors.muted, fontSize: 18, fontWeight: "900", lineHeight: 20 },
+  bottomNavIconTextEmphasized: { color: colors.surface },
+  bottomNavLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textAlign: "center" },
+  bottomNavLabelEmphasized: { color: colors.primary },
   card: { gap: 9 },
   callCard: { gap: 9, borderColor: colors.red },
   callCopy: { flex: 1, gap: 4 },
