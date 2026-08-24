@@ -6,6 +6,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ...config,
   name: "MeetFair",
   slug: "meetfair",
+  scheme: "meetfair",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
@@ -42,6 +43,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       },
     ],
     "expo-status-bar",
+    "expo-web-browser",
     [
       "expo-build-properties",
       {

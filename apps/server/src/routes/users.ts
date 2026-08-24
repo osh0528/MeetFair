@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { accountIdSchema, nicknameSchema } from "../lib/users.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { toPublicUser } from "../lib/serializers.js";
+import { hashPassword, verifyPassword } from "../lib/auth.js";
 
 export const usersRouter = Router();
 
@@ -55,10 +56,32 @@ usersRouter.patch("/me", async (request: AuthenticatedRequest, response, next) =
   try {
     const input = z.object({
       nickname: nicknameSchema.optional(),
-    }).refine((value) => value.nickname !== undefined).parse(request.body);
+      email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()).optional(),
+      currentPassword: z.string().max(128).optional(),
+      newPassword: z.string().min(8).max(128).optional(),
+    }).refine(
+      (value) => value.nickname !== undefined || value.email !== undefined || value.newPassword !== undefined,
+      "At least one profile field is required.",
+    ).parse(request.body);
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: userId(request) } });
+    const changesSensitiveData = input.email !== undefined && input.email !== current.email
+      || input.newPassword !== undefined;
+    if (changesSensitiveData && current.passwordHash) {
+      if (!input.currentPassword || !(await verifyPassword(input.currentPassword, current.passwordHash))) {
+        throw new AppError(401, "CURRENT_PASSWORD_INVALID", "Current password is incorrect.");
+      }
+    }
+    if (input.email && input.email !== current.email) {
+      const duplicate = await prisma.user.findUnique({ where: { email: input.email } });
+      if (duplicate) throw new AppError(409, "EMAIL_ALREADY_USED", "This email is already registered.");
+    }
     const user = await prisma.user.update({
-      where: { id: userId(request) },
-      data: { nickname: input.nickname },
+      where: { id: current.id },
+      data: {
+        nickname: input.nickname,
+        email: input.email,
+        passwordHash: input.newPassword ? await hashPassword(input.newPassword) : undefined,
+      },
     });
     response.json({ success: true, data: { user: toPublicUser(user) } });
   } catch (error) { next(error); }

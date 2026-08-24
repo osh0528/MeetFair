@@ -28,6 +28,9 @@ const envSchema = z.object({
   LIVEKIT_API_KEY: optionalSecret,
   LIVEKIT_API_SECRET: optionalSecret,
   EXPO_PUSH_ACCESS_TOKEN: optionalSecret,
+  GOOGLE_CLIENT_IDS: z.string().default("").transform((value) =>
+    value.split(",").map((clientId) => clientId.trim()).filter(Boolean)
+  ),
   NAVER_MAP_CLIENT_ID: z.string().default(""),
   NAVER_MAP_CLIENT_SECRET: z.string().default(""),
   NAVER_SEARCH_CLIENT_ID: z.string().default(""),

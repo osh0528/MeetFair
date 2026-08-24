@@ -86,7 +86,8 @@ model User {
   id              String               @id @default(uuid())
   accountId       String               @unique
   email           String               @unique
-  passwordHash    String
+  passwordHash    String?
+  googleSubject   String?              @unique
   nickname        String
   accountIdChanged Boolean             @default(false)
   homeAddress      String?

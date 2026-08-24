@@ -16,6 +16,10 @@ interface SessionContextValue {
     accountId: string;
     nickname: string;
   }): Promise<void>;
+  googleLogin(idToken: string, registration?: {
+    accountId: string;
+    nickname: string;
+  }): Promise<void>;
   refreshUser(): Promise<void>;
   logout(): Promise<void>;
 }
@@ -65,6 +69,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const data = await apiRequest<{ user: PublicUser; accessToken: string }>("/auth/register", {
         method: "POST",
         body: JSON.stringify(input),
+      });
+      await saveAuth(data);
+    },
+    async googleLogin(idToken, registration) {
+      const data = await apiRequest<{ user: PublicUser; accessToken: string }>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ idToken, ...registration }),
       });
       await saveAuth(data);
     },

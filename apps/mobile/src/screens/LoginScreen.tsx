@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, LogoMark } from "../components/ui";
+import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -63,6 +64,15 @@ export function LoginScreen({ navigation }: Props) {
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button disabled={submitting || !email || password.length < 8} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
+        <GoogleAuthButton
+          label="Google로 로그인"
+          onError={(caught) => setError(caught.message)}
+          onIdToken={async (idToken) => {
+            setError("");
+            await session.googleLogin(idToken);
+            navigation.replace("Home");
+          }}
+        />
         <Button label="계정 만들기" onPress={() => navigation.navigate("Register")} variant="secondary" />
       </View>
     </SafeAreaView>

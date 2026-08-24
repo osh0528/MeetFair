@@ -24,6 +24,7 @@ export function SettingsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="설정" onBack={() => navigation.goBack()} />
       <View style={styles.content}>
+        <Button label="개인정보 관리" onPress={() => navigation.navigate("Profile")} variant="secondary" />
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
            <Switch value={location} onValueChange={(value) => { setLocation(value); void update({ shareExactLocationWithFriends: value }); }} />

@@ -16,6 +16,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { MeetingInvitationScreen } from "./src/screens/MeetingInvitationScreen";
 import { PublicMeetingRequestScreen } from "./src/screens/PublicMeetingRequestScreen";
 import { VideoCallScreen } from "./src/screens/VideoCallScreen";
+import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SessionProvider } from "./src/services/session";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   Friends: undefined;
   Notifications: undefined;
   Settings: undefined;
+  Profile: undefined;
   MeetingInvitation: { invitation: MeetingInvitationSummary };
   PublicMeetingRequest: { meetingId: string };
   VideoCall: { callId: string; meetingId: string };
@@ -77,6 +79,7 @@ export default function App() {
           <Stack.Screen name="Friends" component={FriendsScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="MeetingInvitation" component={MeetingInvitationScreen} />
           <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />

@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
+import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
@@ -94,6 +95,19 @@ export function RegisterScreen({ navigation, route }: Props) {
           disabled={submitting || checkingAccountId || available !== true || nickname.trim().length < 2 || !email || password.length < 8}
           label={submitting ? "가입 중..." : "가입하기"}
           onPress={submit}
+        />
+        <GoogleAuthButton
+          disabled={checkingAccountId || available !== true || nickname.trim().length < 2}
+          label="Google로 가입"
+          onError={(caught) => setError(caught.message)}
+          onIdToken={async (idToken) => {
+            setError("");
+            await session.googleLogin(idToken, {
+              accountId,
+              nickname: nickname.trim(),
+            });
+            navigation.replace("Home");
+          }}
         />
       </ScrollView>
     </SafeAreaView>
