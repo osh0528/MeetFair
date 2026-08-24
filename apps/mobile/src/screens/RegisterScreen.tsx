@@ -37,7 +37,7 @@ export function RegisterScreen({ navigation, route }: Props) {
     const timer = setTimeout(() => {
       setCheckingAccountId(true);
       void apiRequest<{ accountId: string; available: boolean }>(
-        `/users/account-id/${accountId}/availability`,
+        `/users/account-id/availability?accountId=${encodeURIComponent(accountId)}`,
       ).then((data) => {
         if (!cancelled) setAvailable(data.available);
       }).catch((caught) => {
