@@ -11,6 +11,7 @@ import { RecommendationsScreen } from "./src/screens/RecommendationsScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { TrackingScreen } from "./src/screens/TrackingScreen";
 import { FriendsScreen } from "./src/screens/FriendsScreen";
+import { FriendRequestsScreen } from "./src/screens/FriendRequestsScreen";
 import { NotificationsScreen } from "./src/screens/NotificationsScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { MeetingInvitationScreen } from "./src/screens/MeetingInvitationScreen";
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   Meeting: { meetingId: string };
   Tracking: { meetingId: string };
   Friends: undefined;
+  FriendRequests: undefined;
   Notifications: undefined;
   Settings: undefined;
   Profile: undefined;
@@ -79,6 +81,7 @@ export default function App() {
           <Stack.Screen name="Meeting" component={MeetingScreen} />
           <Stack.Screen name="Tracking" component={TrackingScreen} />
           <Stack.Screen name="Friends" component={FriendsScreen} />
+          <Stack.Screen name="FriendRequests" component={FriendRequestsScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />

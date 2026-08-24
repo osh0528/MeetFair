@@ -7,10 +7,24 @@ import { prisma } from "../lib/prisma.js";
 import { verifyAccessToken } from "../lib/auth.js";
 import { canStartSharing } from "../lib/share-window.js";
 import { distanceMeters, nextProximityCount, hasConsecutivelyArrived } from "../lib/geo.js";
+import { connectUser, disconnectUser } from "./presence.js";
 
 const meetingRoom = (meetingId: string) => `meeting:${meetingId}`;
 
-
+async function notifyFriendsOfPresence(
+  io: Server<ClientToServerEvents, ServerToClientEvents>,
+  userId: string,
+  online: boolean,
+) {
+  const friendships = await prisma.friendship.findMany({
+    where: { OR: [{ userAId: userId }, { userBId: userId }] },
+    select: { userAId: true, userBId: true },
+  });
+  for (const friendship of friendships) {
+    const friendId = friendship.userAId === userId ? friendship.userBId : friendship.userAId;
+    io.to(`user:${friendId}`).emit("friend:presence", { userId, online });
+  }
+}
 
 export function registerRealtimeHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
@@ -29,6 +43,14 @@ export function registerRealtimeHandlers(
   io.on("connection", (socket) => {
     const currentUserId = socket.data.userId as string;
     void socket.join(`user:${currentUserId}`);
+    if (connectUser(currentUserId)) {
+      void notifyFriendsOfPresence(io, currentUserId, true);
+    }
+    socket.on("disconnect", () => {
+      if (disconnectUser(currentUserId)) {
+        void notifyFriendsOfPresence(io, currentUserId, false);
+      }
+    });
 
     socket.on("meeting:join", async ({ meetingId }) => {
       const participant = await prisma.meetingParticipant.findUnique({

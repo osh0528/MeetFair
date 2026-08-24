@@ -5,12 +5,12 @@ interface AvatarProps {
   name: string;
   size?: number;
   backgroundColor?: string;
-  status?: "moving" | "waiting" | "arrived";
+  status?: "moving" | "waiting" | "arrived" | "online";
   imageUrl?: string;
 }
 
 export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, status, imageUrl }: AvatarProps) {
-  const statusStyle = status === "moving" ? styles.movingDot : status === "waiting" ? styles.waitingDot : styles.arrivedDot;
+  const statusStyle = status === "moving" || status === "online" ? styles.movingDot : status === "waiting" ? styles.waitingDot : styles.arrivedDot;
   return (
     <View style={{ width: size, height: size }}>
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor }]}>

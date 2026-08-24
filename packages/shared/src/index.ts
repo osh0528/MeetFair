@@ -257,6 +257,11 @@ export interface FriendRequestAcceptedPayload {
   request: FriendRequestSummary;
 }
 
+export interface FriendPresencePayload {
+  userId: string;
+  online: boolean;
+}
+
 export interface MeetingInvitationReceivedPayload {
   invitation: MeetingInvitationSummary;
 }
@@ -282,6 +287,7 @@ export interface ServerToClientEvents {
   "poke:received": (payload: PokeReceivedPayload) => void;
   "friend:request": (payload: FriendRequestReceivedPayload) => void;
   "friend:accepted": (payload: FriendRequestAcceptedPayload) => void;
+  "friend:presence": (payload: FriendPresencePayload) => void;
   "meeting:invitation": (payload: MeetingInvitationReceivedPayload) => void;
   "meeting:invitation-responded": (payload: MeetingInvitationRespondedPayload) => void;
   "meeting:call-incoming": (payload: MeetingCallIncomingPayload) => void;

@@ -14,6 +14,7 @@ import {
   toFriendSummary,
 } from "../lib/serializers.js";
 import { accountIdSchema } from "../lib/users.js";
+import { isUserOnline } from "../realtime/presence.js";
 
 export const friendsRouter = Router();
 friendsRouter.use(requireAuth);
@@ -71,6 +72,22 @@ friendsRouter.get("/", async (request: AuthenticatedRequest, response, next) => 
   } catch (error) {
     next(error);
   }
+});
+
+friendsRouter.get("/online", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const userId = currentUserId(request);
+    const friendships = await prisma.friendship.findMany({
+      where: { OR: [{ userAId: userId }, { userBId: userId }] },
+      select: { userAId: true, userBId: true },
+    });
+    const friendIds = friendships.map((friendship) =>
+      friendship.userAId === userId ? friendship.userBId : friendship.userAId);
+    response.json({
+      success: true,
+      data: { onlineUserIds: friendIds.filter(isUserOnline) },
+    });
+  } catch (error) { next(error); }
 });
 
 friendsRouter.post("/friend-requests", async (request: AuthenticatedRequest, response, next) => {
