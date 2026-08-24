@@ -32,7 +32,6 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [page, setPage] = useState<UserPageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [guestbookContent, setGuestbookContent] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -96,7 +95,6 @@ export function UserPageScreen({ navigation, route }: Props) {
         }),
       });
       applyPage(data.page);
-      setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "꾸미기 설정을 저장하지 못했습니다.");
@@ -296,11 +294,6 @@ export function UserPageScreen({ navigation, route }: Props) {
         title={page ? page.user.nickname + "의 미니홈피" : "미니홈피"}
         subtitle={page ? "@" + page.user.accountId : undefined}
         onBack={() => navigation.goBack()}
-        right={page?.isOwner ? (
-          <Pressable onPress={() => setEditing((current) => !current)} style={[styles.editButton, { backgroundColor: palette.soft }]}>
-            <Text style={[styles.editButtonText, { color: palette.accent }]}>{editing ? "닫기" : "꾸미기"}</Text>
-          </Pressable>
-        ) : undefined}
       />
       {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
       <ScrollView contentContainerStyle={styles.content}>
@@ -317,9 +310,9 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
-            {editing && page.isOwner ? (
+            {page.isOwner ? (
               <Card style={styles.editorCard}>
-                <SectionHeading title="내 공간 꾸미기" action="나만 수정 가능" />
+                <SectionHeading title="간편 설정" action="나만 수정 가능" />
                 <Text style={styles.label}>대표 이모지</Text>
                 <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
                 <Text style={styles.label}>상태 메시지</Text>
@@ -352,7 +345,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     </Pressable>
                   ))}
                 </View>
-                <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "꾸미기 저장"} onPress={() => void savePage()} />
+                <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
 
@@ -391,78 +384,86 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
-            <Card style={styles.introCard}>
-              <SectionHeading title="About me" />
-              <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
-            </Card>
-
-            <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
-            {page.isOwner ? (
-              <Card style={styles.photoComposer}>
-                <TextInput
-                  maxLength={150}
-                  onChangeText={setPhotoCaption}
-                  placeholder="사진 설명을 입력해 주세요. (선택)"
-                  placeholderTextColor={colors.subtle}
-                  style={styles.input}
-                  value={photoCaption}
-                />
-                <Button
-                  disabled={photoBusy || page.photos.length >= 30}
-                  label={photoBusy ? "사진 처리 중..." : page.photos.length >= 30 ? "사진첩이 가득 찼습니다" : "사진 선택해서 올리기"}
-                  onPress={() => void addPhoto()}
-                  variant="soft"
-                />
-                <Text style={styles.photoHelp}>최대 30장 · 업로드 시 크기를 자동으로 줄입니다.</Text>
-              </Card>
-            ) : null}
-            {page.photos.length ? (
-              <View style={styles.photoGrid}>
-                {page.photos.map((photo) => (
-                  <Pressable key={photo.id} onPress={() => setSelectedPhotoId(photo.id)} style={styles.photoTile}>
-                    <Image
-                      resizeMode="cover"
-                      source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
-                      style={styles.photoThumbnail}
-                    />
-                    {photo.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{photo.caption}</Text> : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
-
-            <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
-            <Card style={styles.guestbookComposer}>
-              <TextInput
-                maxLength={200}
-                multiline
-                onChangeText={setGuestbookContent}
-                placeholder="따뜻한 한마디를 남겨 주세요."
-                placeholderTextColor={colors.subtle}
-                style={[styles.input, styles.guestbookInput]}
-                textAlignVertical="top"
-                value={guestbookContent}
-              />
-              <Button disabled={busy || !guestbookContent.trim()} label="방명록 남기기" onPress={() => void writeGuestbook()} variant="soft" />
-            </Card>
-            {page.guestbook.map((entry) => (
-              <Card key={entry.id} style={styles.guestbookCard}>
-                <View style={styles.guestbookHeader}>
-                  <Avatar imageUrl={avatarUrl(entry.author.id, entry.author.avatarUpdatedAt)} name={entry.author.nickname} size={38} />
-                  <View style={styles.guestbookAuthor}>
-                    <Text style={styles.authorName}>{entry.author.nickname}</Text>
-                    <Text style={styles.date}>{new Date(entry.createdAt).toLocaleString("ko-KR")}</Text>
-                  </View>
-                  {page.isOwner || entry.author.id === user?.id ? (
-                    <Pressable disabled={busy} onPress={() => void deleteGuestbook(entry.id)}>
-                      <Text style={styles.deleteText}>삭제</Text>
-                    </Pressable>
-                  ) : null}
+            <View style={styles.pageColumns}>
+              <Card style={styles.aboutPhotoPanel}>
+                <View style={styles.introSection}>
+                  <SectionHeading title="About me" />
+                  <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
                 </View>
-                <Text style={styles.guestbookText}>{entry.content}</Text>
+
+                <View style={styles.panelSection}>
+                  <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
+                  {page.isOwner ? (
+                    <View style={styles.photoComposer}>
+                      <TextInput
+                        maxLength={150}
+                        onChangeText={setPhotoCaption}
+                        placeholder="사진 설명을 입력해 주세요. (선택)"
+                        placeholderTextColor={colors.subtle}
+                        style={styles.input}
+                        value={photoCaption}
+                      />
+                      <Button
+                        disabled={photoBusy || page.photos.length >= 30}
+                        label={photoBusy ? "사진 처리 중..." : page.photos.length >= 30 ? "사진첩이 가득 찼습니다" : "사진 선택해서 올리기"}
+                        onPress={() => void addPhoto()}
+                        variant="soft"
+                      />
+                      <Text style={styles.photoHelp}>최대 30장 · 업로드 시 크기를 자동으로 줄입니다.</Text>
+                    </View>
+                  ) : null}
+                  {page.photos.length ? (
+                    <View style={styles.photoGrid}>
+                      {page.photos.map((photo) => (
+                        <Pressable key={photo.id} onPress={() => setSelectedPhotoId(photo.id)} style={styles.photoTile}>
+                          <Image
+                            resizeMode="cover"
+                            source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
+                            style={styles.photoThumbnail}
+                          />
+                          {photo.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{photo.caption}</Text> : null}
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
+                </View>
               </Card>
-            ))}
-            {!page.guestbook.length ? <Text style={styles.empty}>첫 번째 방명록을 남겨 보세요.</Text> : null}
+
+              <Card style={styles.guestbookPanel}>
+                <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
+                <View style={styles.guestbookComposer}>
+                  <TextInput
+                    maxLength={200}
+                    multiline
+                    onChangeText={setGuestbookContent}
+                    placeholder="따뜻한 한마디를 남겨 주세요."
+                    placeholderTextColor={colors.subtle}
+                    style={[styles.input, styles.guestbookInput]}
+                    textAlignVertical="top"
+                    value={guestbookContent}
+                  />
+                  <Button disabled={busy || !guestbookContent.trim()} label="방명록 남기기" onPress={() => void writeGuestbook()} variant="soft" />
+                </View>
+                {page.guestbook.map((entry) => (
+                  <View key={entry.id} style={styles.guestbookCard}>
+                    <View style={styles.guestbookHeader}>
+                      <Avatar imageUrl={avatarUrl(entry.author.id, entry.author.avatarUpdatedAt)} name={entry.author.nickname} size={38} />
+                      <View style={styles.guestbookAuthor}>
+                        <Text style={styles.authorName}>{entry.author.nickname}</Text>
+                        <Text style={styles.date}>{new Date(entry.createdAt).toLocaleString("ko-KR")}</Text>
+                      </View>
+                      {page.isOwner || entry.author.id === user?.id ? (
+                        <Pressable disabled={busy} onPress={() => void deleteGuestbook(entry.id)}>
+                          <Text style={styles.deleteText}>삭제</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Text style={styles.guestbookText}>{entry.content}</Text>
+                  </View>
+                ))}
+                {!page.guestbook.length ? <Text style={styles.empty}>첫 번째 방명록을 남겨 보세요.</Text> : null}
+              </Card>
+            </View>
           </>
         ) : !loading ? <Button label="다시 시도" onPress={() => void load()} variant="secondary" /> : null}
       </ScrollView>
@@ -504,8 +505,6 @@ const styles = StyleSheet.create({
   loader: { marginTop: 40 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
-  editButton: { minWidth: 58, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
-  editButtonText: { fontSize: 12, fontWeight: "900" },
   heroCard: { alignItems: "center", gap: 6, overflow: "hidden" },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
   nickname: { marginTop: 8, color: colors.text, fontSize: 23, fontWeight: "900" },
@@ -531,9 +530,13 @@ const styles = StyleSheet.create({
   progressFill: { height: 4, borderRadius: 2 },
   musicTime: { color: colors.muted, fontSize: 10 },
   musicError: { color: colors.red, fontSize: 10 },
-  introCard: { gap: 12 },
+  pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
+  guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
+  introSection: { gap: 12 },
+  panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
-  photoComposer: { gap: 10 },
+  photoComposer: { gap: 10, padding: 12, borderRadius: 16, backgroundColor: colors.background },
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
@@ -549,10 +552,10 @@ const styles = StyleSheet.create({
   photoDetail: { width: "100%", height: "72%" },
   photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
   photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
-  guestbookComposer: { gap: 10 },
+  guestbookComposer: { gap: 10, paddingBottom: 14 },
   guestbookInput: { minHeight: 80 },
-  guestbookCard: { gap: 11 },
-  guestbookHeader: { flexDirection: "row", alignItems: "center", gap: 9 },
+  guestbookCard: { gap: 11, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
+  guestbookHeader: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 },
   guestbookAuthor: { flex: 1, gap: 2 },
   authorName: { color: colors.text, fontSize: 13, fontWeight: "900" },
   date: { color: colors.muted, fontSize: 10 },

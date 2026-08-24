@@ -71,8 +71,21 @@ export function CreateMeetingScreen({ navigation }: Props) {
         <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={title} />
         <TextInput autoCapitalize="none" onChangeText={setScheduledAt} placeholder="2026-08-22T14:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledAt} />
 
-        <SectionHeading title="공개 여부" />
-        <ChoiceRow values={["PRIVATE", "PUBLIC_FRIENDS"]} selected={visibility} labels={["비공개", "친구 피드 공개"]} onSelect={(value) => setVisibility(value as MeetingVisibility)} />
+        <SectionHeading title="모임 공개 범위" />
+        <View style={styles.visibilityRow}>
+          <VisibilityCard
+            description="친구 피드에 공개하고 참여 요청을 받아요."
+            onPress={() => setVisibility("PUBLIC_FRIENDS")}
+            selected={visibility === "PUBLIC_FRIENDS"}
+            title="공개 모임"
+          />
+          <VisibilityCard
+            description="초대한 친구만 모임을 확인할 수 있어요."
+            onPress={() => setVisibility("PRIVATE")}
+            selected={visibility === "PRIVATE"}
+            title="비공개 모임"
+          />
+        </View>
 
         <SectionHeading title="추천 이동 기준" />
         <ChoiceRow values={["DISTANCE", "CAR", "TRANSIT"]} selected={travelMetric} labels={["직선거리", "자동차", "대중교통"]} onSelect={(value) => setTravelMetric(value as TravelMetric)} />
@@ -106,6 +119,35 @@ function ChoiceRow({ values, labels, selected, onSelect }: { values: string[]; l
   return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index] ?? value} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
 }
 
+function VisibilityCard({
+  title,
+  description,
+  selected,
+  onPress,
+}: {
+  title: string;
+  description: string;
+  selected: boolean;
+  onPress(): void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      style={styles.visibilityOption}
+    >
+      <Card style={[styles.visibilityCard, selected && styles.visibilityCardSelected]}>
+        <View style={[styles.radio, selected && styles.radioSelected]}>
+          {selected ? <View style={styles.radioDot} /> : null}
+        </View>
+        <Text style={[styles.visibilityTitle, selected && styles.visibilityTitleSelected]}>{title}</Text>
+        <Text style={styles.visibilityDescription}>{description}</Text>
+      </Card>
+    </Pressable>
+  );
+}
+
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress(): void }) {
   return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>;
 }
@@ -115,6 +157,16 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 13, paddingBottom: 40 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  visibilityRow: { flexDirection: "row", gap: 10 },
+  visibilityOption: { flex: 1 },
+  visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
+  visibilityCardSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  radioSelected: { borderColor: colors.primary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  visibilityTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  visibilityTitleSelected: { color: colors.primary },
+  visibilityDescription: { color: colors.muted, fontSize: 11, lineHeight: 17 },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
