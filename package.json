@@ -18,6 +18,7 @@
     "dev:mobile": "npm run build:shared && npm run start -w @meetfair/mobile",
     "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w @meetfair/server",
-    "prisma:migrate": "npm run prisma:migrate -w @meetfair/server"
+    "prisma:migrate": "npm run prisma:migrate -w @meetfair/server",
+    "prisma:deploy": "npm run prisma:deploy -w @meetfair/server"
   }
 }

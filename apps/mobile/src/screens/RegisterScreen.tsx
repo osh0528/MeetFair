@@ -19,6 +19,8 @@ export function RegisterScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState("");
   const [address, setAddress] = useState<AddressSelection | null>(route.params?.selectedAddress ?? null);
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [checkingAccountId, setCheckingAccountId] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -28,13 +30,29 @@ export function RegisterScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     setAvailable(null);
+    setAvailabilityError("");
+    setCheckingAccountId(false);
     if (!/^[a-z0-9]{4,20}$/.test(accountId)) return;
+    let cancelled = false;
     const timer = setTimeout(() => {
+      setCheckingAccountId(true);
       void apiRequest<{ accountId: string; available: boolean }>(
         `/users/account-id/${accountId}/availability`,
-      ).then((data) => setAvailable(data.available)).catch(() => setAvailable(null));
+      ).then((data) => {
+        if (!cancelled) setAvailable(data.available);
+      }).catch((caught) => {
+        if (!cancelled) {
+          setAvailable(null);
+          setAvailabilityError(caught instanceof Error ? caught.message : "계정 ID를 확인하지 못했습니다.");
+        }
+      }).finally(() => {
+        if (!cancelled) setCheckingAccountId(false);
+      });
     }, 350);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [accountId]);
 
   async function submit() {
@@ -63,7 +81,9 @@ export function RegisterScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>친구가 찾을 수 있는 ID를 정하세요</Text>
         <Field label="계정 ID" value={accountId} onChangeText={(value) => setAccountId(value.toLowerCase().replace(/[^a-z0-9]/g, ""))} autoCapitalize="none" placeholder="영문·숫자 4~20자" />
-        {available !== null ? <Text style={[styles.hint, !available && styles.error]}>{available ? "사용 가능한 ID입니다." : "이미 사용 중인 ID입니다."}</Text> : null}
+        {checkingAccountId ? <Text style={styles.hint}>계정 ID 확인 중...</Text> : null}
+        {!checkingAccountId && available !== null ? <Text style={[styles.hint, !available && styles.error]}>{available ? "사용 가능한 ID입니다." : "이미 사용 중인 ID입니다."}</Text> : null}
+        {availabilityError ? <Text style={styles.error}>{availabilityError}</Text> : null}
         <Field label="닉네임" value={nickname} onChangeText={setNickname} placeholder="친구에게 보일 이름" />
         <Field label="이메일" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="meetfair@example.com" />
         <Field label="비밀번호" value={password} onChangeText={setPassword} secureTextEntry placeholder="8자 이상" />
@@ -71,7 +91,7 @@ export function RegisterScreen({ navigation, route }: Props) {
         <Text style={styles.hint}>선택 사항이며, 나중에 설정할 수 있습니다. 설정한 위치는 장소 추천 계산에만 사용됩니다.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button
-          disabled={submitting || available !== true || nickname.trim().length < 2 || !email || password.length < 8}
+          disabled={submitting || checkingAccountId || available !== true || nickname.trim().length < 2 || !email || password.length < 8}
           label={submitting ? "가입 중..." : "가입하기"}
           onPress={submit}
         />
