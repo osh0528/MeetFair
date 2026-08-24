@@ -1,5 +1,7 @@
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
+
+const buildDatabaseUrl = "postgresql://postgres:postgres@localhost:5432/meetfair";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -7,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // Prisma Client generation and typechecking do not connect to the database.
+    // Runtime configuration still requires DATABASE_URL in src/config/env.ts.
+    url: process.env.DATABASE_URL ?? buildDatabaseUrl,
   },
 });
