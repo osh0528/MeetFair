@@ -133,6 +133,21 @@ model User {
   callParticipants MeetingCallParticipant[]
   profileGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookOwner")
   authoredGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookAuthor")
+  profilePhotos   ProfilePhoto[]
+}
+
+model ProfilePhoto {
+  id        String   @id @default(uuid())
+  ownerId   String
+  imageData Bytes
+  mimeType  String
+  caption   String?
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
 }
 
 model ProfileGuestbookEntry {

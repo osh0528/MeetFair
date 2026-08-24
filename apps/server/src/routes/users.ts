@@ -7,11 +7,13 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { toProfileGuestbookEntry, toPublicUser, toUserSummary } from "../lib/serializers.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createNotification } from "../lib/notifications.js";
-import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
+import type { ProfilePhotoSummary, ProfileTheme, UserPageSummary } from "@meetfair/shared";
 
 export const usersRouter = Router();
 const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxAvatarBytes = 2 * 1024 * 1024;
+const maxPhotoBytes = 2 * 1024 * 1024;
+const maxProfilePhotos = 30;
 const musicMimeTypes = ["audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"] as const;
 const maxMusicBytes = 6 * 1024 * 1024;
 const profileThemes = ["PURPLE", "PINK", "BLUE", "MINT", "SUNSET"] as const;
@@ -44,6 +46,24 @@ function matchesMusicMimeType(data: Buffer, mimeType: typeof musicMimeTypes[numb
       && data.subarray(8, 12).toString("ascii") === "WAVE";
   }
   return data.length >= 4 && data.subarray(0, 4).toString("ascii") === "OggS";
+}
+
+function toProfilePhoto(photo: {
+  id: string;
+  ownerId: string;
+  caption: string | null;
+  width: number;
+  height: number;
+  createdAt: Date;
+}): ProfilePhotoSummary {
+  return {
+    id: photo.id,
+    ownerId: photo.ownerId,
+    caption: photo.caption,
+    width: photo.width,
+    height: photo.height,
+    createdAt: photo.createdAt.toISOString(),
+  };
 }
 
 usersRouter.get("/account-id/availability", async (request, response, next) => {
@@ -111,6 +131,23 @@ usersRouter.get("/:userId/page-music", async (request, response, next) => {
   } catch (error) { next(error); }
 });
 
+usersRouter.get("/:userId/page-photos/:photoId/image", async (request, response, next) => {
+  try {
+    const ownerId = z.string().uuid().parse(request.params.userId);
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const photo = await prisma.profilePhoto.findFirst({
+      where: { id: photoId, ownerId },
+      select: { imageData: true, mimeType: true },
+    });
+    if (!photo) throw new AppError(404, "PROFILE_PHOTO_NOT_FOUND", "Profile photo was not found.");
+    response.setHeader("content-type", photo.mimeType);
+    response.setHeader("cross-origin-resource-policy", "cross-origin");
+    response.setHeader("cache-control", "public, max-age=31536000, immutable");
+    response.setHeader("content-length", String(photo.imageData.byteLength));
+    response.send(Buffer.from(photo.imageData));
+  } catch (error) { next(error); }
+});
+
 usersRouter.use(requireAuth);
 
 function userId(request: AuthenticatedRequest) {
@@ -140,6 +177,18 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
           author: {
             select: { id: true, accountId: true, nickname: true, avatarUpdatedAt: true },
           },
+        },
+      },
+      profilePhotos: {
+        orderBy: { createdAt: "desc" },
+        take: maxProfilePhotos,
+        select: {
+          id: true,
+          ownerId: true,
+          caption: true,
+          width: true,
+          height: true,
+          createdAt: true,
         },
       },
     },
@@ -173,6 +222,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
     updatedAt: owner.profileUpdatedAt?.toISOString() ?? null,
     guestbook: owner.profileGuestbookEntries.map(toProfileGuestbookEntry),
+    photos: owner.profilePhotos.map(toProfilePhoto),
     isOwner: ownerId === viewerId,
   };
 }
@@ -256,6 +306,73 @@ usersRouter.delete("/me/page-music", async (request: AuthenticatedRequest, respo
         profileMusicUpdatedAt: null,
         profileUpdatedAt: new Date(),
       },
+    });
+    response.status(204).send();
+  } catch (error) { next(error); }
+});
+
+usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = z.object({
+      imageBase64: z.string().min(1).max(3_000_000),
+      mimeType: z.enum(avatarMimeTypes),
+      caption: z.string().trim().max(150).nullable().optional(),
+      width: z.number().int().min(1).max(10_000),
+      height: z.number().int().min(1).max(10_000),
+    }).parse(request.body);
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.imageBase64)) {
+      throw new AppError(400, "INVALID_PROFILE_PHOTO_DATA", "Photo data is invalid.");
+    }
+    const imageData = Buffer.from(input.imageBase64, "base64");
+    if (!imageData.length || imageData.length > maxPhotoBytes) {
+      throw new AppError(413, "PROFILE_PHOTO_TOO_LARGE", "Each profile photo must be 2 MB or smaller.");
+    }
+    if (!matchesAvatarMimeType(imageData, input.mimeType)) {
+      throw new AppError(400, "PROFILE_PHOTO_TYPE_MISMATCH", "Photo content does not match its file type.");
+    }
+    const ownerId = userId(request);
+    const photoCount = await prisma.profilePhoto.count({ where: { ownerId } });
+    if (photoCount >= maxProfilePhotos) {
+      throw new AppError(409, "PROFILE_PHOTO_LIMIT_REACHED", "A profile can contain up to 30 photos.");
+    }
+    const photo = await prisma.$transaction(async (tx) => {
+      const created = await tx.profilePhoto.create({
+        data: {
+          ownerId,
+          imageData,
+          mimeType: input.mimeType,
+          caption: input.caption === "" ? null : input.caption,
+          width: input.width,
+          height: input.height,
+        },
+        select: {
+          id: true,
+          ownerId: true,
+          caption: true,
+          width: true,
+          height: true,
+          createdAt: true,
+        },
+      });
+      await tx.user.update({
+        where: { id: ownerId },
+        data: { profileUpdatedAt: new Date() },
+      });
+      return created;
+    });
+    response.status(201).json({ success: true, data: { photo: toProfilePhoto(photo) } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/me/page-photos/:photoId", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const ownerId = userId(request);
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const result = await prisma.profilePhoto.deleteMany({ where: { id: photoId, ownerId } });
+    if (!result.count) throw new AppError(404, "PROFILE_PHOTO_NOT_FOUND", "Profile photo was not found.");
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: { profileUpdatedAt: new Date() },
     });
     response.status(204).send();
   } catch (error) { next(error); }

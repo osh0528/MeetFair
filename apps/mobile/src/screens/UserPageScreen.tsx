@@ -1,16 +1,19 @@
 import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { avatarUrl } from "../services/avatar";
 import { profileMusicUrl } from "../services/profileMusic";
+import { profilePhotoUrl } from "../services/profilePhoto";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -38,6 +41,9 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [theme, setTheme] = useState<ProfileTheme>("PURPLE");
   const [musicTitle, setMusicTitle] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoCaption, setPhotoCaption] = useState("");
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const musicSource = page?.hasMusic
     ? profileMusicUrl(page.user.id, page.musicUpdatedAt)
     : null;
@@ -218,6 +224,70 @@ export function UserPageScreen({ navigation, route }: Props) {
     return Math.floor(whole / 60) + ":" + String(whole % 60).padStart(2, "0");
   }
 
+  async function addPhoto() {
+    if (!page?.isOwner || photoBusy || page.photos.length >= 30) return;
+    setPhotoBusy(true);
+    setMessage("");
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) throw new Error("사진첩에 올리려면 사진 접근 권한이 필요합니다.");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+      if (result.canceled) return;
+      const image = result.assets[0];
+      if (!image?.uri || !image.width || !image.height) throw new Error("선택한 사진을 읽지 못했습니다.");
+      const resize = image.width >= image.height
+        ? { width: Math.min(1200, image.width) }
+        : { height: Math.min(1200, image.height) };
+      const edited = await manipulateAsync(
+        image.uri,
+        [{ resize }],
+        { base64: true, compress: 0.76, format: SaveFormat.JPEG },
+      );
+      if (!edited.base64) throw new Error("사진을 업로드용으로 변환하지 못했습니다.");
+      const data = await apiRequest<{ photo: UserPageSummary["photos"][number] }>("/users/me/page-photos", {
+        method: "POST",
+        body: JSON.stringify({
+          imageBase64: edited.base64,
+          mimeType: "image/jpeg",
+          caption: photoCaption.trim() || null,
+          width: edited.width,
+          height: edited.height,
+        }),
+      });
+      setPage((current) => current
+        ? { ...current, photos: [data.photo, ...current.photos] }
+        : current);
+      setPhotoCaption("");
+      setMessage("사진첩에 사진을 추가했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "사진을 추가하지 못했습니다.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function deletePhoto(photoId: string) {
+    if (!page?.isOwner || photoBusy) return;
+    setPhotoBusy(true);
+    setMessage("");
+    try {
+      await apiRequest("/users/me/page-photos/" + photoId, { method: "DELETE" });
+      setPage((current) => current
+        ? { ...current, photos: current.photos.filter((photo) => photo.id !== photoId) }
+        : current);
+      setSelectedPhotoId(null);
+      setMessage("사진첩에서 사진을 삭제했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "사진을 삭제하지 못했습니다.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   const palette = themes[page?.theme ?? theme];
 
   return (
@@ -326,6 +396,41 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
             </Card>
 
+            <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
+            {page.isOwner ? (
+              <Card style={styles.photoComposer}>
+                <TextInput
+                  maxLength={150}
+                  onChangeText={setPhotoCaption}
+                  placeholder="사진 설명을 입력해 주세요. (선택)"
+                  placeholderTextColor={colors.subtle}
+                  style={styles.input}
+                  value={photoCaption}
+                />
+                <Button
+                  disabled={photoBusy || page.photos.length >= 30}
+                  label={photoBusy ? "사진 처리 중..." : page.photos.length >= 30 ? "사진첩이 가득 찼습니다" : "사진 선택해서 올리기"}
+                  onPress={() => void addPhoto()}
+                  variant="soft"
+                />
+                <Text style={styles.photoHelp}>최대 30장 · 업로드 시 크기를 자동으로 줄입니다.</Text>
+              </Card>
+            ) : null}
+            {page.photos.length ? (
+              <View style={styles.photoGrid}>
+                {page.photos.map((photo) => (
+                  <Pressable key={photo.id} onPress={() => setSelectedPhotoId(photo.id)} style={styles.photoTile}>
+                    <Image
+                      resizeMode="cover"
+                      source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
+                      style={styles.photoThumbnail}
+                    />
+                    {photo.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{photo.caption}</Text> : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
+
             <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
             <Card style={styles.guestbookComposer}>
               <TextInput
@@ -361,6 +466,35 @@ export function UserPageScreen({ navigation, route }: Props) {
           </>
         ) : !loading ? <Button label="다시 시도" onPress={() => void load()} variant="secondary" /> : null}
       </ScrollView>
+      <Modal animationType="fade" onRequestClose={() => setSelectedPhotoId(null)} transparent visible={selectedPhotoId !== null}>
+        <View style={styles.photoModalBackdrop}>
+          {page && selectedPhotoId ? (() => {
+            const photo = page.photos.find((item) => item.id === selectedPhotoId);
+            if (!photo) return null;
+            return (
+              <SafeAreaView style={styles.photoModalContent}>
+                <View style={styles.photoModalHeader}>
+                  <Pressable onPress={() => setSelectedPhotoId(null)} style={styles.photoModalButton}>
+                    <Text style={styles.photoModalButtonText}>닫기</Text>
+                  </Pressable>
+                  {page.isOwner ? (
+                    <Pressable disabled={photoBusy} onPress={() => void deletePhoto(photo.id)} style={[styles.photoModalButton, styles.photoDeleteButton]}>
+                      <Text style={styles.photoDeleteText}>{photoBusy ? "처리 중" : "삭제"}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Image
+                  resizeMode="contain"
+                  source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
+                  style={styles.photoDetail}
+                />
+                {photo.caption ? <Text style={styles.photoDetailCaption}>{photo.caption}</Text> : null}
+                <Text style={styles.photoDetailDate}>{new Date(photo.createdAt).toLocaleString("ko-KR")}</Text>
+              </SafeAreaView>
+            );
+          })() : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -399,6 +533,22 @@ const styles = StyleSheet.create({
   musicError: { color: colors.red, fontSize: 10 },
   introCard: { gap: 12 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
+  photoComposer: { gap: 10 },
+  photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
+  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
+  photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
+  photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
+  photoModalContent: { flex: 1, padding: 18, justifyContent: "center", gap: 14 },
+  photoModalHeader: { position: "absolute", top: 16, left: 18, right: 18, zIndex: 2, flexDirection: "row", justifyContent: "space-between" },
+  photoModalButton: { minWidth: 60, height: 42, borderRadius: 14, paddingHorizontal: 14, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
+  photoModalButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
+  photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
+  photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
+  photoDetail: { width: "100%", height: "72%" },
+  photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
+  photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
   guestbookComposer: { gap: 10 },
   guestbookInput: { minHeight: 80 },
   guestbookCard: { gap: 11 },

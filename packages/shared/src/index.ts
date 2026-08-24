@@ -81,6 +81,15 @@ export interface ProfileGuestbookEntrySummary {
   createdAt: string;
 }
 
+export interface ProfilePhotoSummary {
+  id: string;
+  ownerId: string;
+  caption: string | null;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
 export interface UserPageSummary {
   user: UserSummary;
   statusMessage: string | null;
@@ -92,6 +101,7 @@ export interface UserPageSummary {
   musicUpdatedAt: string | null;
   updatedAt: string | null;
   guestbook: ProfileGuestbookEntrySummary[];
+  photos: ProfilePhotoSummary[];
   isOwner: boolean;
 }
 
