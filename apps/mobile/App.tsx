@@ -35,7 +35,7 @@ export type RootStackParamList = {
   Settings: undefined;
   MeetingInvitation: { invitation: MeetingInvitationSummary };
   PublicMeetingRequest: { meetingId: string };
-  VideoCall: { callId: string };
+  VideoCall: { callId: string; meetingId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

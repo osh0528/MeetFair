@@ -30,25 +30,43 @@ function ParticipantGrid() {
 }
 
 export function VideoCallScreen({ navigation, route }: Props) {
-  const callId = route.params.callId;
+  const { callId, meetingId } = route.params;
   const [credentials, setCredentials] = useState<CallToken | null>(null);
   const [message, setMessage] = useState("통화 연결 준비 중...");
+  const [connecting, setConnecting] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
+  async function connect() {
+    setConnecting(true);
+    setMessage("통화 연결 준비 중...");
+    try {
       const [camera, microphone] = await Promise.all([
         Camera.requestCameraPermissionsAsync(),
         Camera.requestMicrophonePermissionsAsync(),
       ]);
       if (!camera.granted || !microphone.granted) throw new Error("카메라와 마이크 권한이 모두 필요합니다.");
+      await apiRequest(`/meetings/${meetingId}/permissions`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          cameraPermissionGranted: true,
+          microphonePermissionGranted: true,
+        }),
+      });
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       await AudioSession.startAudioSession();
       setCredentials(token);
       setMessage("");
-    })().catch((error) => setMessage(error instanceof Error ? error.message : "통화에 연결하지 못했습니다."));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "통화에 연결하지 못했습니다.");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  useEffect(() => {
+    void connect();
     return () => { void AudioSession.stopAudioSession(); };
-  }, [callId]);
+  }, [callId, meetingId]);
 
   async function leave() {
     await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "leave" }) }).catch(() => undefined);
@@ -57,7 +75,16 @@ export function VideoCallScreen({ navigation, route }: Props) {
   }
 
   if (!credentials) {
-    return <SafeAreaView style={styles.safeArea}><ScreenHeader title="지각 확인 통화" onBack={() => navigation.goBack()} /><View style={styles.center}><Text style={styles.waiting}>{message}</Text></View></SafeAreaView>;
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScreenHeader title="지각 확인 통화" onBack={() => void leave()} />
+        <View style={styles.center}>
+          <Text style={styles.waiting}>{message}</Text>
+          {!connecting ? <Button label="다시 연결" onPress={() => void connect()} /> : null}
+          <Button label="통화 나가기" onPress={() => void leave()} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
