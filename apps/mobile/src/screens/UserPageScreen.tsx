@@ -20,11 +20,11 @@ import { colors } from "../theme/colors";
 type Props = NativeStackScreenProps<RootStackParamList, "UserPage">;
 
 const themes: Record<ProfileTheme, { label: string; background: string; accent: string; soft: string }> = {
-  PURPLE: { label: "보라", background: "#F1EEFF", accent: "#6657E8", soft: "#E4DFFF" },
-  PINK: { label: "분홍", background: "#FFF0F5", accent: "#D85B88", soft: "#FFDCE8" },
-  BLUE: { label: "파랑", background: "#EAF4FF", accent: "#397FD8", soft: "#D4E9FF" },
-  MINT: { label: "민트", background: "#E8F8F2", accent: "#168866", soft: "#D2F1E5" },
-  SUNSET: { label: "노을", background: "#FFF2E5", accent: "#D96F31", soft: "#FFE1C4" },
+  PURPLE: { label: "오프화이트", background: "#F6F6F4", accent: "#333333", soft: "#EAEAE8" },
+  PINK: { label: "웜그레이", background: "#F3F2F0", accent: "#5F5B57", soft: "#E7E4E1" },
+  BLUE: { label: "쿨그레이", background: "#F1F3F4", accent: "#4F5961", soft: "#E1E5E8" },
+  MINT: { label: "실버", background: "#F2F2F2", accent: "#666666", soft: "#E3E3E3" },
+  SUNSET: { label: "차콜", background: "#E7E7E7", accent: "#2B2B2B", soft: "#D5D5D5" },
 };
 
 export function UserPageScreen({ navigation, route }: Props) {

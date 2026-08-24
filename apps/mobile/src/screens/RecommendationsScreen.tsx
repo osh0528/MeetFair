@@ -130,7 +130,7 @@ export function RecommendationsScreen({ navigation }: Props) {
                           <Avatar
                             name={name}
                             size={28}
-                            backgroundColor={["#DCD7FF", "#D9F3EE", "#FFE7CC", "#DCEAFF"][index]}
+                            backgroundColor={["#DDDDDD", "#E5E5E5", "#D3D3D3", "#EAEAEA"][index]}
                           />
                           <Text style={styles.commuteTime}>{place.times[index]}</Text>
                         </View>
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   personTwo: { left: 70, top: 33 },
   personThree: { right: 28, top: 25 },
   personFour: { right: 54, bottom: 22 },
-  mapPinOuter: { position: "absolute", alignSelf: "center", top: 60, width: 58, height: 58, borderRadius: 29, backgroundColor: "rgba(102,87,232,0.18)", alignItems: "center", justifyContent: "center" },
+  mapPinOuter: { position: "absolute", alignSelf: "center", top: 60, width: 58, height: 58, borderRadius: 29, backgroundColor: "rgba(48,48,48,0.16)", alignItems: "center", justifyContent: "center" },
   mapPin: { width: 40, height: 40, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   mapPinText: { color: colors.surface, fontSize: 16, fontWeight: "900" },
   mapLegend: { position: "absolute", alignSelf: "center", bottom: 10, backgroundColor: colors.surface, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },

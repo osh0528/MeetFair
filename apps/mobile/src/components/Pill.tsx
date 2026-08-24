@@ -17,7 +17,7 @@ const styles = StyleSheet.create({
   greenPill: { backgroundColor: colors.mint },
   greenText: { color: colors.green },
   amberPill: { backgroundColor: colors.amberSoft },
-  amberText: { color: "#A96B00" },
+  amberText: { color: "#626262" },
   redPill: { backgroundColor: colors.redSoft },
   redText: { color: colors.red },
   grayPill: { backgroundColor: colors.background },
