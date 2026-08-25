@@ -10,7 +10,7 @@ import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
-import { apiRequest } from "../services/api";
+import { apiRequest, createClientRequestId } from "../services/api";
 import { avatarUrl } from "../services/avatar";
 import { profileMusicUrl } from "../services/profileMusic";
 import { profilePhotoUrl } from "../services/profilePhoto";
@@ -53,6 +53,8 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [pokeBusy, setPokeBusy] = useState(false);
+  const [pokeCooldown, setPokeCooldown] = useState(0);
   const musicSource = page?.hasMusic
     ? profileMusicUrl(page.user.id, page.musicUpdatedAt)
     : null;
@@ -94,6 +96,35 @@ export function UserPageScreen({ navigation, route }: Props) {
     musicPlayer.play();
     return () => musicPlayer.pause();
   }, [musicPlayer, musicSource]));
+
+  useEffect(() => {
+    if (!pokeCooldown) return;
+    const timer = setInterval(() => setPokeCooldown((current) => (current > 1 ? current - 1 : 0)), 1000);
+    return () => clearInterval(timer);
+  }, [pokeCooldown]);
+
+  async function handlePoke() {
+    if (!page || page.isOwner || pokeBusy || pokeCooldown) return;
+    setPokeBusy(true);
+    setMessage("");
+    try {
+      await apiRequest("/pokes", {
+        method: "POST",
+        body: JSON.stringify({ targetUserId: page.user.id, clientRequestId: createClientRequestId() }),
+      });
+      setMessage("찌르기 알림을 보냈습니다.");
+      setPokeCooldown(60);
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "찌르기를 보내지 못했습니다.";
+      if (msg.includes("POKE_COOLDOWN") || msg.includes("Please wait")) {
+        const match = msg.match(/(\d+)s/);
+        setPokeCooldown(match ? Number(match[1]) : 60);
+      }
+      setMessage(msg);
+    } finally {
+      setPokeBusy(false);
+    }
+  }
 
   async function savePage() {
     if (!emoji.trim() || busy) return;
@@ -331,6 +362,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
               </View>
             </Card>
+            {!page.isOwner ? (
+              <Button
+                disabled={pokeBusy || !!pokeCooldown}
+                label={pokeCooldown ? `${pokeCooldown}초 후 가능` : pokeBusy ? "찌르기 중..." : "찌르기"}
+                onPress={() => void handlePoke()}
+                variant="soft"
+              />
+            ) : null}
 
             {page.isOwner ? (
               <Card style={styles.editorCard}>

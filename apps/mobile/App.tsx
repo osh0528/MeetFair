@@ -71,7 +71,6 @@ export default function App() {
   return (
     <ThemeProvider>
       <SessionProvider>
-        <PokeNotificationBridge />
         <SafeAreaProvider>
           <AppNavigator />
         </SafeAreaProvider>
@@ -99,6 +98,7 @@ function AppNavigator() {
       onStateChange={updateCurrentRoute}
     >
       <StatusBar style="dark" />
+      <PokeNotificationBridge />
       <View style={styles.appShell}>
         <Stack.Navigator
           initialRouteName="Login"

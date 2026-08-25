@@ -1,9 +1,12 @@
 import * as Notifications from "expo-notifications";
-import { useEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { isPokeSoundEnabled } from "../services/poke-sound";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
+import type { RootStackParamList } from "../../App";
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
@@ -54,20 +57,37 @@ function playWebPokeAlert() {
 
 export function PokeNotificationBridge() {
   const { accessToken } = useSession();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const seenPokeIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { meetingId?: string | null };
+      if (data?.meetingId) {
+        navigation.navigate("Tracking", { meetingId: data.meetingId as string });
+      } else {
+        navigation.navigate("Notifications");
+      }
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   useEffect(() => {
     if (!accessToken) return;
     const socket = createMeetingSocket(accessToken);
     socket.on("poke:received", async (poke) => {
-      if (!await isPokeSoundEnabled()) return;
+      if (seenPokeIds.current.has(poke.pokeId)) return;
+      seenPokeIds.current.add(poke.pokeId);
+      setTimeout(() => seenPokeIds.current.delete(poke.pokeId), 5 * 60_000);
+      const soundEnabled = await isPokeSoundEnabled();
+      if (!soundEnabled) return;
       if (Platform.OS === "web") {
         playWebPokeAlert();
         return;
       }
       const permission = await Notifications.getPermissionsAsync();
-      const granted = permission.granted
-        ? permission
-        : await Notifications.requestPermissionsAsync();
+      const granted = permission.granted ? permission : await Notifications.requestPermissionsAsync();
       if (!granted.granted) return;
       await Notifications.scheduleNotificationAsync({
         content: {

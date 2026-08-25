@@ -59,6 +59,7 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [busyAction, setBusyAction] = useState("");
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
+  const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
 
   async function load() {
     const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
@@ -87,6 +88,27 @@ export function MeetingScreen({ navigation, route }: Props) {
         if (allowed) await load();
       }).catch((error) => setMessage(error instanceof Error ? error.message : "모임을 불러오지 못했습니다."));
   }, [meetingId]);
+
+  useEffect(() => {
+    if (!Object.keys(pokeCooldowns).length) return;
+    const timer = setInterval(() => {
+      setPokeCooldowns((current) => {
+        const next: Record<string, number> = {};
+        let changed = false;
+        for (const [id, remaining] of Object.entries(current)) {
+          const updated = remaining - 1;
+          if (updated > 0) {
+            next[id] = updated;
+            changed = true;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [pokeCooldowns]);
 
   if (locked) {
     return (
@@ -127,11 +149,26 @@ export function MeetingScreen({ navigation, route }: Props) {
     await load();
   }
   async function poke(targetId: string) {
-    await apiRequest(`/meetings/${meetingId}/pokes`, {
-      method: "POST",
-      body: JSON.stringify({ targetId, clientRequestId: createClientRequestId() }),
-    });
-    setMessage("찌르기 알림을 보냈습니다.");
+    if (pokeCooldowns[targetId]) return;
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}/pokes`, {
+        method: "POST",
+        body: JSON.stringify({ targetId, clientRequestId: createClientRequestId() }),
+      });
+      setMessage("찌르기 알림을 보냈습니다.");
+      setPokeCooldowns((current) => ({ ...current, [targetId]: 120 }));
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "찌르기를 보내지 못했습니다.";
+      if (msg.includes("POKE_COOLDOWN") || msg.includes("Please wait")) {
+        const match = msg.match(/(\d+)s/);
+        const seconds = match ? Number(match[1]) : 120;
+        setPokeCooldowns((current) => ({ ...current, [targetId]: seconds }));
+        setMessage(`잠시 후 다시 찌를 수 있습니다. (${seconds}초)`);
+      } else {
+        setMessage(msg);
+      }
+    }
   }
   async function respondJoin(requestId: string, action: "accept" | "reject") {
     await apiRequest(`/meetings/${meetingId}/join-requests/${requestId}`, {
@@ -272,7 +309,7 @@ export function MeetingScreen({ navigation, route }: Props) {
               <View style={styles.row}>
                 <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
                 <View style={styles.compactActions}>
-                  {late && me?.arrivedAt && participant.userId !== user?.id ? <Button label="찌르기" onPress={() => poke(participant.userId)} variant="soft" /> : null}
+                  {late && me?.arrivedAt && participant.userId !== user?.id ? <Button disabled={!!pokeCooldowns[participant.userId]} label={pokeCooldowns[participant.userId] ? `${pokeCooldowns[participant.userId]}초` : "찌르기"} onPress={() => void poke(participant.userId)} variant="soft" /> : null}
                   {isHost && participant.userId !== user?.id && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
                     <Button disabled={busyAction === participant.userId} label={busyAction === participant.userId ? "처리 중..." : "내보내기"} onPress={() => removeParticipant(participant.userId, participant.user.nickname)} variant="secondary" />
                   ) : null}

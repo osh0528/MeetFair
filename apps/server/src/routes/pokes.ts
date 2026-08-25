@@ -6,6 +6,7 @@ import { createNotification, isQuietTime } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitPoke } from "../realtime/events.js";
+import { CASUAL_COOLDOWN_MS, checkCooldown, cooldownKey, setCooldown } from "../lib/poke-cooldown.js";
 
 export const pokesRouter = Router();
 pokesRouter.use(requireAuth);
@@ -33,12 +34,17 @@ async function handleCasualPoke(senderId: string, targetId: string, clientReques
   if (!allowedByFriend) {
     throw new AppError(403, "POKE_BLOCKED", "This friend has blocked pokes from you.");
   }
+  const cooldownRemaining = checkCooldown(cooldownKey({ senderId, targetId, type: "CASUAL" }), CASUAL_COOLDOWN_MS);
+  if (cooldownRemaining != null) {
+    throw new AppError(429, "POKE_COOLDOWN", `Please wait ${Math.ceil(cooldownRemaining / 1000)}s before poking again.`);
+  }
   const sender = await prisma.user.findUniqueOrThrow({ where: { id: senderId }, select: { nickname: true } });
   const poke = await prisma.poke.upsert({
     where: { senderId_clientRequestId: { senderId, clientRequestId } },
     update: {},
     create: { senderId, targetId, type: "CASUAL", clientRequestId },
   });
+  setCooldown(cooldownKey({ senderId, targetId, type: "CASUAL" }));
   emitPoke(targetId, {
     pokeId: poke.id,
     meetingId: null,

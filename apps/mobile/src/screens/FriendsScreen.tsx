@@ -25,6 +25,28 @@ export function FriendsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [recommendationBusyId, setRecommendationBusyId] = useState("");
+  const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!Object.keys(pokeCooldowns).length) return;
+    const timer = setInterval(() => {
+      setPokeCooldowns((current) => {
+        const next: Record<string, number> = {};
+        let changed = false;
+        for (const [id, remaining] of Object.entries(current)) {
+          const updated = remaining - 1;
+          if (updated > 0) {
+            next[id] = updated;
+            changed = true;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [pokeCooldowns]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,7 +134,7 @@ export function FriendsScreen({ navigation }: Props) {
     setBusyFriendId(friend.userId);
     setMessage("");
     try {
-      await apiRequest("/friends/" + friend.friendshipId + "/poke-permission", {
+      await apiRequest("/pokes/friends/" + friend.userId + "/permission", {
         method: "PATCH",
         body: JSON.stringify({ allowed }),
       });
@@ -121,6 +143,32 @@ export function FriendsScreen({ navigation }: Props) {
         : item));
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "찌르기 설정을 변경하지 못했습니다.");
+    } finally {
+      setBusyFriendId("");
+    }
+  }
+
+  async function handlePoke(friend: FriendSummary) {
+    if (pokeCooldowns[friend.userId] || busyFriendId === friend.userId) return;
+    setBusyFriendId(friend.userId);
+    setMessage("");
+    try {
+      await apiRequest("/pokes", {
+        method: "POST",
+        body: JSON.stringify({ targetUserId: friend.userId, clientRequestId: createClientRequestId() }),
+      });
+      setMessage("찌르기 알림을 보냈습니다.");
+      setPokeCooldowns((current) => ({ ...current, [friend.userId]: 60 }));
+    } catch (caught) {
+      const msg = caught instanceof Error ? caught.message : "찌르기를 보내지 못했습니다.";
+      if (msg.includes("POKE_COOLDOWN") || msg.includes("Please wait")) {
+        const match = msg.match(/(\d+)s/);
+        const seconds = match ? Number(match[1]) : 60;
+        setPokeCooldowns((current) => ({ ...current, [friend.userId]: seconds }));
+        setMessage(`잠시 후 다시 찌를 수 있습니다. (${seconds}초)`);
+      } else {
+        setMessage(msg);
+      }
     } finally {
       setBusyFriendId("");
     }
@@ -194,7 +242,7 @@ export function FriendsScreen({ navigation }: Props) {
               <Text style={styles.meta}>이 친구의 찌르기 허용</Text>
               <Switch disabled={busyFriendId === friend.userId} value={friend.allowsPokesFromFriend} onValueChange={(allowed) => void updatePokePermission(friend, allowed)} />
             </View>
-            <Button disabled={busyFriendId === friend.userId} label="찌르기" onPress={() => apiRequest("/pokes", { method: "POST", body: JSON.stringify({ targetUserId: friend.userId, clientRequestId: createClientRequestId() }) })} variant="soft" />
+            <Button disabled={busyFriendId === friend.userId || !!pokeCooldowns[friend.userId]} label={pokeCooldowns[friend.userId] ? `${pokeCooldowns[friend.userId]}초 후 가능` : "찌르기"} onPress={() => void handlePoke(friend)} variant="soft" />
             <Button label="디엠 보내기" onPress={() => navigation.navigate("DirectMessages", { friendId: friend.userId })} variant="secondary" />
           </Card>
         ))}
