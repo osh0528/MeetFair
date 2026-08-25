@@ -202,14 +202,19 @@ directMessagesRouter.post("/:conversationId/messages", async (request, response,
     emitDirectMessageReceived(recipientId, { message: summary });
     const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
     const preview = content.slice(0, 80);
-    await createNotification({
-      userId: recipientId,
-      type: "DIRECT_MESSAGE",
-      title: `${sender?.nickname ?? "알 수 없음"}님의 새 메시지`,
-      body: preview,
-      data: { conversationId, messageId: result.id },
-      push: true,
-    });
+    try {
+      await createNotification({
+        userId: recipientId,
+        type: "DIRECT_MESSAGE",
+        title: `${sender?.nickname ?? "알 수 없음"}님의 새 메시지`,
+        body: preview,
+        data: { conversationId, messageId: result.id, senderId: userId },
+        push: true,
+      });
+    } catch (notificationError) {
+      // 알림/푸시 실패가 이미 저장된 디엠 전송까지 실패시키지 않도록 합니다.
+      console.error("Direct message notification failed", notificationError);
+    }
     response.status(201).json({ success: true, data: { message: summary } });
   } catch (error) {
     next(error);

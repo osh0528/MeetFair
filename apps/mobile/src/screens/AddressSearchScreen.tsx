@@ -4,17 +4,21 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
+import { apiRequest } from "../services/api";
+import { useSession } from "../services/session";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { colors } from "../theme/colors";
 import type { AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddressSearch">;
 
-export function AddressSearchScreen({ navigation }: Props) {
+export function AddressSearchScreen({ navigation, route }: Props) {
+  const session = useSession();
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [requestId, setRequestId] = useState(0);
   const [selection, setSelection] = useState<AddressSelection | null>(null);
+  const [message, setMessage] = useState("");
 
   const handleResolved = useCallback((nextSelection: AddressSelection) => {
     setSelection(nextSelection);
@@ -29,7 +33,22 @@ export function AddressSearchScreen({ navigation }: Props) {
 
   const handleSelect = () => {
     if (!selection) return;
+    if (route.params?.returnTo === "Profile") {
+      void saveHomeAddress();
+      return;
+    }
     navigation.navigate("Register", { selectedAddress: selection });
+  };
+
+  const saveHomeAddress = async () => {
+    if (!selection) return;
+    try {
+      await apiRequest("/users/me/home", { method: "PUT", body: JSON.stringify(selection) });
+      await session.refreshUser();
+      navigation.goBack();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "집 주소를 저장하지 못했습니다.");
+    }
   };
 
   return (
@@ -74,6 +93,7 @@ export function AddressSearchScreen({ navigation }: Props) {
 
       <View style={styles.sheet}>
         <View style={styles.handle} />
+        {message ? <Text style={styles.message}>{message}</Text> : null}
         {selection ? (
           <>
             <Text style={styles.sheetEyebrow}>선택한 주소</Text>
@@ -138,4 +158,5 @@ const styles = StyleSheet.create({
   exampleRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 7 },
   exampleChip: { borderRadius: 999, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, paddingVertical: 8 },
   exampleText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
+  message: { color: colors.red, fontSize: 12, fontWeight: "700", marginBottom: 8 },
 });

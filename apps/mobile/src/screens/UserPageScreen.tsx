@@ -6,7 +6,7 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -37,6 +37,8 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
 };
 
 export function UserPageScreen({ navigation, route }: Props) {
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompactLayout = windowWidth < 768;
   const { user } = useSession();
   const { mode } = useAppTheme();
   const [page, setPage] = useState<UserPageSummary | null>(null);
@@ -52,6 +54,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [musicBusy, setMusicBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
+  const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [pokeBusy, setPokeBusy] = useState(false);
@@ -143,7 +146,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         }),
       });
       applyPage(data.page);
-      if (Platform.OS !== "web") setEditing(false);
+      if (isCompactLayout) setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "꾸미기 설정을 저장하지 못했습니다.");
@@ -353,6 +356,27 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
+  async function togglePhotoLike(photoId: string, likedByMe: boolean) {
+    if (likingPhotoId) return;
+    setLikingPhotoId(photoId);
+    try {
+      const result = await apiRequest<{ likedByMe: boolean; likesCount: number }>(
+        "/users/page-photos/" + photoId + "/like",
+        { method: likedByMe ? "DELETE" : "POST" },
+      );
+      setPage((current) => current ? {
+        ...current,
+        photos: current.photos.map((photo) => photo.id === photoId
+          ? { ...photo, likedByMe: result.likedByMe, likesCount: result.likesCount }
+          : photo),
+      } : current);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "사진 좋아요를 변경하지 못했습니다.");
+    } finally {
+      setLikingPhotoId(null);
+    }
+  }
+
   const palette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
   const photoGroups = page ? Object.values(page.photos.reduce<Record<string, UserPageSummary["photos"]>>((groups, photo) => {
     const key = photo.groupId ?? photo.id;
@@ -420,7 +444,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
                   </View>
                 </View>
-                {Platform.OS !== "web" ? <View style={styles.heroMusic}>{musicPlayerCard}</View> : null}
+                <View style={styles.heroMusic}>{musicPlayerCard}</View>
               </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
@@ -435,7 +459,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               />
             ) : null}
 
-            {page.isOwner && Platform.OS === "web" ? (
+            {page.isOwner && !isCompactLayout ? (
               <Card style={styles.editorCard}>
                 <SectionHeading title="간편 설정" action="나만 수정 가능" />
                 <Text style={styles.label}>대표 이모지</Text>
@@ -476,11 +500,10 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
-            {page.isOwner && Platform.OS !== "web" ? (
+            {page.isOwner && isCompactLayout ? (
               <Button label="홈피 편집" onPress={() => setEditing(true)} variant="soft" />
             ) : null}
 
-            {Platform.OS === "web" ? musicPlayerCard : null}
             {page && false ? <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
               <Pressable
                 disabled={!page!.hasMusic}
@@ -515,7 +538,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 ) : null}
               </View>
             </Card> : null}
-            <View style={[styles.pageColumns, Platform.OS !== "web" && styles.pageColumnsMobile]}>
+            <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
               <Card style={styles.aboutPhotoPanel}>
                 <View style={styles.introSection}>
                   <SectionHeading title="About me" />
@@ -564,6 +587,19 @@ export function UserPageScreen({ navigation, route }: Props) {
                           ) : null}
                           </View>
                           {representative.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{representative.caption}</Text> : null}
+                          <Pressable
+                            accessibilityLabel={representative.likedByMe ? "사진 좋아요 취소" : "사진 좋아요"}
+                            disabled={likingPhotoId === representative.id}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              void togglePhotoLike(representative.id, representative.likedByMe);
+                            }}
+                            style={styles.photoLikeButton}
+                          >
+                            <Text style={[styles.photoLikeText, representative.likedByMe && styles.photoLikeTextActive]}>
+                              {representative.likedByMe ? "♥" : "♡"} {representative.likesCount}
+                            </Text>
+                          </Pressable>
                         </Pressable>
                         );
                       })}
@@ -735,6 +771,9 @@ const styles = StyleSheet.create({
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.42)", alignItems: "center", justifyContent: "center" },
   photoGroupCount: { color: colors.surface, fontSize: 24, fontWeight: "900" },
   photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
+  photoLikeButton: { paddingHorizontal: 9, paddingBottom: 9 },
+  photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
+  photoLikeTextActive: { color: colors.red },
   photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
   photoModalContent: { flex: 1, padding: 18, justifyContent: "center", gap: 14 },
   photoModalHeader: { position: "absolute", top: 16, left: 18, right: 18, zIndex: 2, flexDirection: "row", justifyContent: "space-between" },

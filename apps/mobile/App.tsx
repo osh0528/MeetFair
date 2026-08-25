@@ -34,7 +34,7 @@ import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
 export type RootStackParamList = {
   Login: undefined;
   Register: { selectedAddress?: AddressSelection } | undefined;
-  AddressSearch: undefined;
+  AddressSearch: { returnTo?: "Register" | "Profile" } | undefined;
   Home: undefined;
   CreateMeeting: undefined;
   Recommendations: undefined;

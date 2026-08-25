@@ -134,6 +134,7 @@ model User {
   profileGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookOwner")
   authoredGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookAuthor")
   profilePhotos   ProfilePhoto[]
+  profilePhotoLikes ProfilePhotoLike[]
   conversationsA  Conversation[]       @relation("ConversationUserA")
   conversationsB  Conversation[]       @relation("ConversationUserB")
   directMessages  DirectMessage[]      @relation("DirectMessageSender")
@@ -150,9 +151,22 @@ model ProfilePhoto {
   height    Int
   createdAt DateTime @default(now())
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  likes     ProfilePhotoLike[]
 
   @@index([ownerId, createdAt])
   @@index([ownerId, groupId, createdAt])
+}
+
+model ProfilePhotoLike {
+  id        String       @id @default(uuid())
+  photoId   String
+  userId    String
+  createdAt DateTime     @default(now())
+  photo     ProfilePhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([photoId, userId])
+  @@index([userId, createdAt])
 }
 
 model ProfileGuestbookEntry {

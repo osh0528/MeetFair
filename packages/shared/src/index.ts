@@ -104,6 +104,8 @@ export interface ProfilePhotoSummary {
   width: number;
   height: number;
   createdAt: string;
+  likesCount: number;
+  likedByMe: boolean;
 }
 
 export interface UserPageSummary {

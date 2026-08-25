@@ -57,6 +57,8 @@ function toProfilePhoto(photo: {
   width: number;
   height: number;
   createdAt: Date;
+  likesCount?: number;
+  likedByMe?: boolean;
 }): ProfilePhotoSummary {
   return {
     id: photo.id,
@@ -66,6 +68,8 @@ function toProfilePhoto(photo: {
     width: photo.width,
     height: photo.height,
     createdAt: photo.createdAt.toISOString(),
+    likesCount: photo.likesCount ?? 0,
+    likedByMe: photo.likedByMe ?? false,
   };
 }
 
@@ -243,6 +247,8 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
           width: true,
           height: true,
           createdAt: true,
+          _count: { select: { likes: true } },
+          likes: { where: { userId: viewerId }, select: { userId: true } },
         },
       },
     },
@@ -262,7 +268,11 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
     updatedAt: owner.profileUpdatedAt?.toISOString() ?? null,
     guestbook: owner.profileGuestbookEntries.map(toProfileGuestbookEntry),
-    photos: owner.profilePhotos.map(toProfilePhoto),
+    photos: owner.profilePhotos.map((photo) => toProfilePhoto({
+      ...photo,
+      likesCount: photo._count.likes,
+      likedByMe: photo.likes.length > 0,
+    })),
     isOwner: ownerId === viewerId,
   };
 }
@@ -418,6 +428,30 @@ usersRouter.delete("/me/page-photos/:photoId", async (request: AuthenticatedRequ
       data: { profileUpdatedAt: new Date() },
     });
     response.status(204).send();
+  } catch (error) { next(error); }
+});
+
+usersRouter.post("/page-photos/:photoId/like", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const viewerId = userId(request);
+    await prisma.profilePhotoLike.upsert({
+      where: { photoId_userId: { photoId, userId: viewerId } },
+      create: { photoId, userId: viewerId },
+      update: {},
+    });
+    const likesCount = await prisma.profilePhotoLike.count({ where: { photoId } });
+    response.json({ success: true, data: { likedByMe: true, likesCount } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/page-photos/:photoId/like", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const viewerId = userId(request);
+    await prisma.profilePhotoLike.deleteMany({ where: { photoId, userId: viewerId } });
+    const likesCount = await prisma.profilePhotoLike.count({ where: { photoId } });
+    response.json({ success: true, data: { likedByMe: false, likesCount } });
   } catch (error) { next(error); }
 });
 

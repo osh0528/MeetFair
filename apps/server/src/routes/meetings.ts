@@ -367,6 +367,7 @@ meetingsRouter.patch("/:meetingId/cancel", async (request: AuthenticatedRequest,
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
     const host = await hostFor(meetingId, userId(request));
+    const hostUser = await prisma.user.findUnique({ where: { id: host.meeting.hostId }, select: { nickname: true } });
     if (host.meeting.status === "COMPLETED" || host.meeting.status === "CANCELLED") {
       throw new AppError(409, "MEETING_CLOSED", "This meeting is already closed.");
     }
@@ -386,8 +387,8 @@ meetingsRouter.patch("/:meetingId/cancel", async (request: AuthenticatedRequest,
         userId: member.userId,
         type: "MEETING_CANCELLED",
         title: "모임이 취소됐어요",
-        body: `"${meeting.title}" 모임이 방장에 의해 취소됐습니다.`,
-        data: { meetingId },
+        body: `"${meeting.title}" 모임을 ${hostUser?.nickname ?? "방장"}님이 취소했습니다.`,
+        data: { meetingId, actorId: host.meeting.hostId },
       });
     }
     emitMeetingUpdated(meetingId, { meetingId, reason: "STATUS" });
@@ -414,7 +415,7 @@ meetingsRouter.delete("/:meetingId/invitations/:invitationId", async (request: A
     await hostFor(meetingId, userId(request));
     const invitation = await prisma.meetingInvitation.findFirst({
       where: { id: invitationId, meetingId, status: "PENDING" },
-      include: { meeting: { select: { title: true } } },
+      include: { meeting: { select: { title: true, hostId: true, host: { select: { nickname: true } } } } },
     });
     if (!invitation) throw new AppError(404, "PENDING_INVITATION_NOT_FOUND", "Pending invitation was not found.");
     await prisma.meetingInvitation.delete({ where: { id: invitationId } });
@@ -422,8 +423,8 @@ meetingsRouter.delete("/:meetingId/invitations/:invitationId", async (request: A
       userId: invitation.invitedUserId,
       type: "MEETING_INVITATION_CANCELLED",
       title: "모임 초대가 취소됐어요",
-      body: `"${invitation.meeting.title}" 모임 초대가 취소됐습니다.`,
-      data: { meetingId },
+      body: `"${invitation.meeting.title}" 모임 초대를 ${invitation.meeting.host.nickname}님이 취소했습니다.`,
+      data: { meetingId, actorId: invitation.meeting.hostId },
     });
     emitMeetingUpdated(meetingId, { meetingId, reason: "MEMBERS" });
     response.status(204).send();
@@ -443,6 +444,7 @@ meetingsRouter.delete("/:meetingId/participants/:participantUserId", async (requ
       include: { user: { select: { nickname: true } } },
     });
     if (!participant) throw new AppError(404, "PARTICIPANT_NOT_FOUND", "Participant was not found.");
+    const hostUser = await prisma.user.findUnique({ where: { id: host.meeting.hostId }, select: { nickname: true } });
     await prisma.$transaction([
       prisma.meetingParticipant.delete({ where: { id: participant.id } }),
       prisma.meetingInvitation.deleteMany({ where: { meetingId, invitedUserId: participantUserId } }),
@@ -451,8 +453,8 @@ meetingsRouter.delete("/:meetingId/participants/:participantUserId", async (requ
       userId: participantUserId,
       type: "MEETING_PARTICIPANT_REMOVED",
       title: "모임 참여가 취소됐어요",
-      body: `"${host.meeting.title}" 모임에서 제외됐습니다.`,
-      data: { meetingId },
+      body: `${hostUser?.nickname ?? "방장"}님이 "${host.meeting.title}" 모임에서 제외했습니다.`,
+      data: { meetingId, actorId: host.meeting.hostId },
     });
     emitMeetingUpdated(meetingId, { meetingId, reason: "MEMBERS" });
     response.status(204).send();

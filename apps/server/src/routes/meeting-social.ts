@@ -131,6 +131,7 @@ meetingSocialRouter.patch("/:meetingId/join-requests/:requestId", async (request
     if (!meeting || meeting.hostId !== userId(request)) {
       throw new AppError(403, "HOST_ONLY", "Only the host can respond.");
     }
+    const host = await prisma.user.findUnique({ where: { id: meeting.hostId }, select: { nickname: true } });
     const joinRequest = await prisma.meetingJoinRequest.findFirst({
       where: { id: requestId, meetingId, status: "PENDING" },
     });
@@ -159,8 +160,10 @@ meetingSocialRouter.patch("/:meetingId/join-requests/:requestId", async (request
       userId: joinRequest.requesterId,
       type: "MEETING_JOIN_RESPONDED",
       title: action === "accept" ? "모임 참가 승인" : "모임 참가 거절",
-      body: action === "accept" ? "공개 모임 참가가 승인됐습니다." : "공개 모임 참가가 거절됐습니다.",
-      data: { meetingId, action },
+      body: action === "accept"
+        ? `${host?.nickname ?? "모임 방장"}님이 공개 모임 참가를 승인했습니다.`
+        : `${host?.nickname ?? "모임 방장"}님이 공개 모임 참가를 거절했습니다.`,
+      data: { meetingId, action, actorId: meeting.hostId },
     });
     emitMeetingUpdated(meetingId, { meetingId, reason: "MEMBERS" });
     response.status(204).send();
