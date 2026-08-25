@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { colors } from "../theme/colors";
 
 type ButtonVariant = "primary" | "secondary" | "soft";
@@ -9,9 +9,10 @@ interface ButtonProps {
   variant?: ButtonVariant;
   leftLabel?: string;
   disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function Button({ label, onPress, variant = "primary", leftLabel, disabled = false }: ButtonProps) {
+export function Button({ label, onPress, variant = "primary", leftLabel, disabled = false, style }: ButtonProps) {
   const backgroundStyle = variant === "primary" ? styles.primaryButton : variant === "soft" ? styles.softButton : styles.secondaryButton;
   const textStyle = variant === "primary" ? styles.primaryButtonText : variant === "soft" ? styles.softButtonText : styles.secondaryButtonText;
 
@@ -21,7 +22,7 @@ export function Button({ label, onPress, variant = "primary", leftLabel, disable
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, backgroundStyle, pressed && !disabled && styles.pressed, disabled && styles.disabled]}
+      style={({ pressed }) => [styles.button, backgroundStyle, style, pressed && !disabled && styles.pressed, disabled && styles.disabled]}
     >
       {leftLabel ? (
         <View style={[styles.buttonIcon, variant !== "primary" && styles.buttonIconLight]}>

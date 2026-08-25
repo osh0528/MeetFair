@@ -136,9 +136,11 @@ export function FriendsScreen({ navigation }: Props) {
             <Text style={styles.addText}>{submitting ? "전송 중" : "요청"}</Text>
           </Pressable>
         </View>
-        <Button label="친구 요청 확인" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" />
-        <Button label="개인 디엠 보기" onPress={() => navigation.navigate("DirectMessages")} variant="soft" />
-        <Button label="미니홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" />
+        <View style={styles.quickActions}>
+          <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
+          <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
+          <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
+        </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -207,6 +209,8 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: "row", gap: 8 },
   input: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
   addButton: { paddingHorizontal: 18, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  quickActions: { flexDirection: "row", gap: 8 },
+  quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6 },
   addText: { color: colors.surface, fontWeight: "900" },
   message: { color: colors.primary, fontSize: 12 },
   onlineRow: { gap: 16, paddingVertical: 4, paddingRight: 20 },
