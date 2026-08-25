@@ -185,9 +185,9 @@ export function FriendsScreen({ navigation }: Props) {
           </Pressable>
         </View>
         <View style={styles.quickActions}>
-          <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
-          <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
           <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
+          <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
+          <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
         </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}

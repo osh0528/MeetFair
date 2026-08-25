@@ -52,18 +52,24 @@ function matchesMusicMimeType(data: Buffer, mimeType: typeof musicMimeTypes[numb
 function toProfilePhoto(photo: {
   id: string;
   ownerId: string;
+  groupId: string | null;
   caption: string | null;
   width: number;
   height: number;
   createdAt: Date;
+  likesCount?: number;
+  likedByMe?: boolean;
 }): ProfilePhotoSummary {
   return {
     id: photo.id,
     ownerId: photo.ownerId,
+    groupId: photo.groupId,
     caption: photo.caption,
     width: photo.width,
     height: photo.height,
     createdAt: photo.createdAt.toISOString(),
+    likesCount: photo.likesCount ?? 0,
+    likedByMe: photo.likedByMe ?? false,
   };
 }
 
@@ -236,10 +242,13 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
         select: {
           id: true,
           ownerId: true,
+          groupId: true,
           caption: true,
           width: true,
           height: true,
           createdAt: true,
+          _count: { select: { likes: true } },
+          likes: { where: { userId: viewerId }, select: { userId: true } },
         },
       },
     },
@@ -259,7 +268,11 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
     updatedAt: owner.profileUpdatedAt?.toISOString() ?? null,
     guestbook: owner.profileGuestbookEntries.map(toProfileGuestbookEntry),
-    photos: owner.profilePhotos.map(toProfilePhoto),
+    photos: owner.profilePhotos.map((photo) => toProfilePhoto({
+      ...photo,
+      likesCount: photo._count.likes,
+      likedByMe: photo.likes.length > 0,
+    })),
     isOwner: ownerId === viewerId,
   };
 }
@@ -353,6 +366,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
     const input = z.object({
       imageBase64: z.string().min(1).max(3_000_000),
       mimeType: z.enum(avatarMimeTypes),
+      groupId: z.string().uuid().nullable().optional(),
       caption: z.string().trim().max(150).nullable().optional(),
       width: z.number().int().min(1).max(10_000),
       height: z.number().int().min(1).max(10_000),
@@ -376,6 +390,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
       const created = await tx.profilePhoto.create({
         data: {
           ownerId,
+          groupId: input.groupId ?? null,
           imageData,
           mimeType: input.mimeType,
           caption: input.caption === "" ? null : input.caption,
@@ -385,6 +400,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
         select: {
           id: true,
           ownerId: true,
+          groupId: true,
           caption: true,
           width: true,
           height: true,
@@ -412,6 +428,30 @@ usersRouter.delete("/me/page-photos/:photoId", async (request: AuthenticatedRequ
       data: { profileUpdatedAt: new Date() },
     });
     response.status(204).send();
+  } catch (error) { next(error); }
+});
+
+usersRouter.post("/page-photos/:photoId/like", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const viewerId = userId(request);
+    await prisma.profilePhotoLike.upsert({
+      where: { photoId_userId: { photoId, userId: viewerId } },
+      create: { photoId, userId: viewerId },
+      update: {},
+    });
+    const likesCount = await prisma.profilePhotoLike.count({ where: { photoId } });
+    response.json({ success: true, data: { likedByMe: true, likesCount } });
+  } catch (error) { next(error); }
+});
+
+usersRouter.delete("/page-photos/:photoId/like", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const photoId = z.string().uuid().parse(request.params.photoId);
+    const viewerId = userId(request);
+    await prisma.profilePhotoLike.deleteMany({ where: { photoId, userId: viewerId } });
+    const likesCount = await prisma.profilePhotoLike.count({ where: { photoId } });
+    response.json({ success: true, data: { likedByMe: false, likesCount } });
   } catch (error) { next(error); }
 });
 

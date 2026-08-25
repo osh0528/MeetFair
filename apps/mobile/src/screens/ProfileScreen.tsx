@@ -1,7 +1,8 @@
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -24,6 +25,7 @@ export function ProfileScreen({ navigation }: Props) {
   const session = useSession();
   const [nickname, setNickname] = useState(session.user?.nickname ?? "");
   const [email, setEmail] = useState(session.user?.email ?? "");
+  const [homeAddress, setHomeAddress] = useState(session.user?.homeAddress ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +39,25 @@ export function ProfileScreen({ navigation }: Props) {
   const [cropZoom, setCropZoom] = useState(1);
   const [cropOffsetX, setCropOffsetX] = useState(0);
   const [cropOffsetY, setCropOffsetY] = useState(0);
+
+  useFocusEffect(() => {
+    void session.refreshUser();
+  });
+
+  useEffect(() => {
+    setHomeAddress(session.user?.homeAddress ?? "");
+  }, [session.user?.homeAddress]);
+
+  async function removeHomeAddress() {
+    try {
+      await apiRequest("/users/me/home", { method: "DELETE" });
+      await session.refreshUser();
+      setHomeAddress("");
+      setMessage("집 주소를 삭제했습니다.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "집 주소를 삭제하지 못했습니다.");
+    }
+  }
 
   async function save() {
     setSubmitting(true);
@@ -225,6 +246,13 @@ export function ProfileScreen({ navigation }: Props) {
           />
         </Card>
         <Card style={styles.form}>
+          <Text style={styles.sectionTitle}>집 주소</Text>
+          <Text style={styles.note}>장소 추천에 사용되며 다른 사용자에게 공개되지 않습니다.</Text>
+          <Text style={styles.address}>{homeAddress || "설정된 집 주소가 없습니다."}</Text>
+          <Button label={homeAddress ? "집 주소 변경" : "집 주소 설정"} onPress={() => navigation.navigate("AddressSearch", { returnTo: "Profile" })} variant="soft" />
+          {homeAddress ? <Button label="집 주소 삭제" onPress={() => void removeHomeAddress()} variant="secondary" /> : null}
+        </Card>
+        <Card style={styles.form}>
           <Text style={styles.sectionTitle}>비밀번호 변경</Text>
           <Text style={styles.note}>
             일반 계정은 현재 비밀번호가 필요합니다. Google 전용 계정은 현재 비밀번호 없이 새 비밀번호를 설정할 수 있습니다.
@@ -361,6 +389,7 @@ const styles = StyleSheet.create({
   },
   readOnly: { backgroundColor: colors.background, color: colors.muted },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+  address: { color: colors.text, fontSize: 13, lineHeight: 20, fontWeight: "700" },
   success: { color: colors.green, fontSize: 13, fontWeight: "700" },
   error: { color: colors.red, fontSize: 13 },
   dangerCard: { gap: 10, borderColor: colors.red },

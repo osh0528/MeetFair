@@ -99,10 +99,13 @@ export interface ProfileGuestbookEntrySummary {
 export interface ProfilePhotoSummary {
   id: string;
   ownerId: string;
+  groupId: string | null;
   caption: string | null;
   width: number;
   height: number;
   createdAt: string;
+  likesCount: number;
+  likedByMe: boolean;
 }
 
 export interface UserPageSummary {

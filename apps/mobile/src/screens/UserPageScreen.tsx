@@ -6,7 +6,7 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -37,6 +37,8 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
 };
 
 export function UserPageScreen({ navigation, route }: Props) {
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompactLayout = windowWidth < 768;
   const { user } = useSession();
   const { mode } = useAppTheme();
   const [page, setPage] = useState<UserPageSummary | null>(null);
@@ -52,6 +54,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [musicBusy, setMusicBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
+  const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [pokeBusy, setPokeBusy] = useState(false);
@@ -143,7 +146,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         }),
       });
       applyPage(data.page);
-      if (Platform.OS !== "web") setEditing(false);
+      if (isCompactLayout) setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "꾸미기 설정을 저장하지 못했습니다.");
@@ -289,6 +292,7 @@ export function UserPageScreen({ navigation, route }: Props) {
       });
       if (result.canceled) return;
       const uploadedPhotos: UserPageSummary["photos"] = [];
+      const groupId = createClientRequestId();
       let failedCount = 0;
       for (const image of result.assets.slice(0, Math.max(1, 30 - page.photos.length))) {
         if (!image.uri || !image.width || !image.height) continue;
@@ -310,6 +314,7 @@ export function UserPageScreen({ navigation, route }: Props) {
             body: JSON.stringify({
               imageBase64: edited.base64,
               mimeType: "image/jpeg",
+              groupId,
               caption: photoCaption.trim() || null,
               width: edited.width,
               height: edited.height,
@@ -351,7 +356,71 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
+  async function togglePhotoLike(photoId: string, likedByMe: boolean) {
+    if (likingPhotoId) return;
+    setLikingPhotoId(photoId);
+    try {
+      const result = await apiRequest<{ likedByMe: boolean; likesCount: number }>(
+        "/users/page-photos/" + photoId + "/like",
+        { method: likedByMe ? "DELETE" : "POST" },
+      );
+      setPage((current) => current ? {
+        ...current,
+        photos: current.photos.map((photo) => photo.id === photoId
+          ? { ...photo, likedByMe: result.likedByMe, likesCount: result.likesCount }
+          : photo),
+      } : current);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "사진 좋아요를 변경하지 못했습니다.");
+    } finally {
+      setLikingPhotoId(null);
+    }
+  }
+
   const palette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
+  const photoGroups = page ? Object.values(page.photos.reduce<Record<string, UserPageSummary["photos"]>>((groups, photo) => {
+    const key = photo.groupId ?? photo.id;
+    groups[key] ??= [];
+    groups[key].push(photo);
+    return groups;
+  }, {})) : [];
+
+  const musicPlayerCard = page ? (
+    <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
+      <Pressable
+        disabled={!page.hasMusic}
+        onPress={() => void toggleMusic()}
+        style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : colors.subtle }]}
+      >
+        <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
+      </Pressable>
+      <View style={styles.musicCopy}>
+        <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
+        <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
+        {page.hasMusic ? (
+          <>
+            <View style={[styles.progressTrack, { backgroundColor: mode === "DARK" ? "#525252" : "#D1D1D1" }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: palette.accent,
+                    width: ((musicStatus.duration > 0
+                      ? Math.max(2, Math.min(100, musicStatus.currentTime / musicStatus.duration * 100))
+                      : 0) + "%") as `${number}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.musicTime}>
+              {musicStatus.isBuffering ? "불러오는 중..." : formatTime(musicStatus.currentTime) + " / " + formatTime(musicStatus.duration)}
+            </Text>
+            {musicStatus.error ? <Text style={styles.musicError}>음원을 재생하지 못했습니다.</Text> : null}
+          </>
+        ) : null}
+      </View>
+    </Card>
+  ) : null;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }]}>
@@ -367,9 +436,16 @@ export function UserPageScreen({ navigation, route }: Props) {
           <>
             <Card style={[styles.heroCard, { borderColor: palette.soft }]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
-              <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={92} />
-              <Text style={styles.nickname}>{page.user.nickname}</Text>
-              <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
+              <View style={styles.heroRow}>
+                <View style={styles.profileIdentity}>
+                  <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={92} />
+                  <View style={styles.profileText}>
+                    <Text style={styles.nickname}>{page.user.nickname}</Text>
+                    <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
+                  </View>
+                </View>
+                <View style={styles.heroMusic}>{musicPlayerCard}</View>
+              </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
               </View>
@@ -383,7 +459,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               />
             ) : null}
 
-            {page.isOwner && Platform.OS === "web" ? (
+            {page.isOwner && !isCompactLayout ? (
               <Card style={styles.editorCard}>
                 <SectionHeading title="간편 설정" action="나만 수정 가능" />
                 <Text style={styles.label}>대표 이모지</Text>
@@ -424,22 +500,22 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
-            {page.isOwner && Platform.OS !== "web" ? (
+            {page.isOwner && isCompactLayout ? (
               <Button label="홈피 편집" onPress={() => setEditing(true)} variant="soft" />
             ) : null}
 
-            <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
+            {page && false ? <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
               <Pressable
-                disabled={!page.hasMusic}
+                disabled={!page!.hasMusic}
                 onPress={() => void toggleMusic()}
-                style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : colors.subtle }]}
+                style={[styles.musicControl, { backgroundColor: page!.hasMusic ? palette.accent : colors.subtle }]}
               >
                 <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
               </Pressable>
               <View style={styles.musicCopy}>
                 <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
-                <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
-                {page.hasMusic ? (
+                <Text style={styles.musicTitle}>{page?.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
+                {page!.hasMusic ? (
                   <>
                     <View style={[styles.progressTrack, { backgroundColor: mode === "DARK" ? "#525252" : "#D1D1D1" }]}>
                       <View
@@ -461,9 +537,8 @@ export function UserPageScreen({ navigation, route }: Props) {
                   </>
                 ) : null}
               </View>
-            </Card>
-
-            <View style={[styles.pageColumns, Platform.OS !== "web" && styles.pageColumnsMobile]}>
+            </Card> : null}
+            <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
               <Card style={styles.aboutPhotoPanel}>
                 <View style={styles.introSection}>
                   <SectionHeading title="About me" />
@@ -493,16 +568,41 @@ export function UserPageScreen({ navigation, route }: Props) {
                   ) : null}
                   {page.photos.length ? (
                     <View style={styles.photoGrid}>
-                      {page.photos.map((photo) => (
-                        <Pressable key={photo.id} onPress={() => setSelectedPhotoId(photo.id)} style={styles.photoTile}>
+                      {photoGroups.map((group) => {
+                        const representative = group[0];
+                        if (!representative) return null;
+                        const extraCount = group.length - 1;
+                        return (
+                        <Pressable key={representative.id} onPress={() => setSelectedPhotoId(representative.id)} style={styles.photoTile}>
+                          <View style={styles.photoImageWrap}>
                           <Image
                             resizeMode="cover"
-                            source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
+                            source={{ uri: profilePhotoUrl(page.user.id, representative.id) }}
                             style={styles.photoThumbnail}
                           />
-                          {photo.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{photo.caption}</Text> : null}
+                          {extraCount > 0 ? (
+                            <View style={styles.photoGroupOverlay}>
+                              <Text style={styles.photoGroupCount}>+{extraCount}</Text>
+                            </View>
+                          ) : null}
+                          </View>
+                          {representative.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{representative.caption}</Text> : null}
+                          <Pressable
+                            accessibilityLabel={representative.likedByMe ? "사진 좋아요 취소" : "사진 좋아요"}
+                            disabled={likingPhotoId === representative.id}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              void togglePhotoLike(representative.id, representative.likedByMe);
+                            }}
+                            style={styles.photoLikeButton}
+                          >
+                            <Text style={[styles.photoLikeText, representative.likedByMe && styles.photoLikeTextActive]}>
+                              {representative.likedByMe ? "♥" : "♡"} {representative.likesCount}
+                            </Text>
+                          </Pressable>
                         </Pressable>
-                      ))}
+                        );
+                      })}
                     </View>
                   ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
                 </View>
@@ -583,6 +683,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           {page && selectedPhotoId ? (() => {
             const photo = page.photos.find((item) => item.id === selectedPhotoId);
             if (!photo) return null;
+            const selectedGroup = page.photos.filter((item) => photo.groupId ? item.groupId === photo.groupId : item.id === photo.id);
             return (
               <SafeAreaView style={styles.photoModalContent}>
                 <View style={styles.photoModalHeader}>
@@ -595,12 +696,18 @@ export function UserPageScreen({ navigation, route }: Props) {
                     </Pressable>
                   ) : null}
                 </View>
-                <Image
-                  resizeMode="contain"
-                  source={{ uri: profilePhotoUrl(page.user.id, photo.id) }}
-                  style={styles.photoDetail}
-                />
-                {photo.caption ? <Text style={styles.photoDetailCaption}>{photo.caption}</Text> : null}
+                <ScrollView contentContainerStyle={styles.photoGroupDetail} horizontal pagingEnabled style={styles.photoDetailScroller}>
+                  {selectedGroup.map((groupPhoto) => (
+                    <View key={groupPhoto.id} style={[styles.photoDetailPage, { width: Math.max(1, windowWidth - 36) }]}>
+                      <Image
+                        resizeMode="contain"
+                        source={{ uri: profilePhotoUrl(page.user.id, groupPhoto.id) }}
+                        style={styles.photoDetail}
+                      />
+                      {groupPhoto.caption ? <Text style={styles.photoDetailCaption}>{groupPhoto.caption}</Text> : null}
+                    </View>
+                  ))}
+                </ScrollView>
                 <Text style={styles.photoDetailDate}>{new Date(photo.createdAt).toLocaleString("ko-KR")}</Text>
               </SafeAreaView>
             );
@@ -619,9 +726,12 @@ const styles = StyleSheet.create({
   editModalHeader: { paddingHorizontal: 4 },
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
-  heroCard: { alignItems: "center", gap: 6, overflow: "hidden" },
+  heroCard: { gap: 12, overflow: "hidden" },
+  heroRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  profileText: { flex: 1, minWidth: 0 },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
-  nickname: { marginTop: 8, color: colors.text, fontSize: 23, fontWeight: "900" },
+  nickname: { color: colors.text, fontSize: 23, fontWeight: "900" },
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 14 },
   statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
@@ -633,6 +743,7 @@ const styles = StyleSheet.create({
   themeChoice: { minWidth: 66, padding: 9, borderRadius: 13, borderWidth: 2, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
   themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  heroMusic: { flex: 1, minWidth: 0 },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   musicControl: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   musicControlText: { color: colors.surface, fontSize: 17, fontWeight: "900", marginLeft: 2 },
@@ -655,8 +766,14 @@ const styles = StyleSheet.create({
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  photoImageWrap: { position: "relative" },
   photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
+  photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.42)", alignItems: "center", justifyContent: "center" },
+  photoGroupCount: { color: colors.surface, fontSize: 24, fontWeight: "900" },
   photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
+  photoLikeButton: { paddingHorizontal: 9, paddingBottom: 9 },
+  photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
+  photoLikeTextActive: { color: colors.red },
   photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
   photoModalContent: { flex: 1, padding: 18, justifyContent: "center", gap: 14 },
   photoModalHeader: { position: "absolute", top: 16, left: 18, right: 18, zIndex: 2, flexDirection: "row", justifyContent: "space-between" },
@@ -664,7 +781,10 @@ const styles = StyleSheet.create({
   photoModalButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
   photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
   photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
-  photoDetail: { width: "100%", height: "72%" },
+  photoDetailScroller: { flex: 1, width: "100%" },
+  photoDetail: { width: "100%", flex: 1, minHeight: 0 },
+  photoGroupDetail: { flexGrow: 1, alignItems: "center" },
+  photoDetailPage: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
   photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
   guestbookComposer: { gap: 10, paddingBottom: 14 },
