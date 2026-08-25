@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
-import { Card, ScreenHeader } from "../components/ui";
+import { Avatar, Card, ScreenHeader } from "../components/ui";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
@@ -43,6 +43,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [content, setContent] = useState("");
+  const [conversationQuery, setConversationQuery] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [initializing, setInitializing] = useState(Boolean(initialFriendUserId));
@@ -256,6 +257,13 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
     }
   }
 
+  const filteredConversations = conversations.filter((conversation) => {
+    const query = conversationQuery.trim().toLowerCase();
+    if (!query) return true;
+    return conversation.friend.nickname.toLowerCase().includes(query)
+      || conversation.friend.accountId.toLowerCase().includes(query);
+  });
+
   if (initializing) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -272,6 +280,15 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader title={currentConv?.friend.nickname ?? "대화"} onBack={handleBack} />
+        {currentConv ? (
+          <View style={styles.threadHeader}>
+            <Avatar name={currentConv.friend.nickname} size={42} />
+            <View style={styles.threadHeaderCopy}>
+              <Text style={styles.threadHeaderName}>{currentConv.friend.nickname}</Text>
+              <Text style={styles.threadHeaderAccount}>@{currentConv.friend.accountId}</Text>
+            </View>
+          </View>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {messagesLoading && !messages.length ? (
           <View style={styles.center}>
@@ -341,6 +358,16 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="다이렉트 메시지" onBack={handleBack} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.searchBox}>
+        <TextInput
+          autoCapitalize="none"
+          onChangeText={setConversationQuery}
+          placeholder="친구 이름 또는 ID 검색"
+          placeholderTextColor={colors.subtle}
+          style={styles.searchInput}
+          value={conversationQuery}
+        />
+      </View>
       {conversationsLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -349,9 +376,13 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
         <View style={styles.center}>
           <Text style={styles.meta}>친구와 대화를 시작해보세요.</Text>
         </View>
+      ) : filteredConversations.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.meta}>검색 결과가 없습니다.</Text>
+        </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={filteredConversations}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
@@ -400,6 +431,12 @@ const styles = StyleSheet.create({
   badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   badgeText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
   threadContainer: { flex: 1 },
+  threadHeader: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  threadHeaderCopy: { gap: 2 },
+  threadHeaderName: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  threadHeaderAccount: { color: colors.subtle, fontSize: 11 },
+  searchBox: { marginHorizontal: 16, marginTop: 8, marginBottom: 4 },
+  searchInput: { height: 46, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 },
   messagesContent: { padding: 16, gap: 8 },
   bubbleRow: { flexDirection: "row", marginVertical: 4 },
   bubbleRowMe: { justifyContent: "flex-end" },
