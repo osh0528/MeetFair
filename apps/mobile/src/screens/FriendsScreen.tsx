@@ -111,6 +111,7 @@ export function FriendsScreen({ navigation }: Props) {
           </Pressable>
         </View>
         <Button label="친구 요청 확인" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" />
+        <Button label="개인 디엠 보기" onPress={() => navigation.navigate("DirectMessages")} variant="soft" />
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -142,6 +143,7 @@ export function FriendsScreen({ navigation }: Props) {
               <Switch disabled={busyFriendId === friend.userId} value={friend.allowsPokesFromFriend} onValueChange={(allowed) => void updatePokePermission(friend, allowed)} />
             </View>
             <Button disabled={busyFriendId === friend.userId} label="찌르기" onPress={() => apiRequest("/pokes", { method: "POST", body: JSON.stringify({ targetUserId: friend.userId, clientRequestId: createClientRequestId() }) })} variant="soft" />
+            <Button label="디엠 보내기" onPress={() => navigation.navigate("DirectMessages", { friendId: friend.userId })} variant="secondary" />
           </Card>
         ))}
       </ScrollView>

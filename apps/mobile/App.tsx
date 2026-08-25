@@ -28,6 +28,7 @@ import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
 import { ThemeProvider } from "./src/services/theme";
+import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -47,6 +48,7 @@ export type RootStackParamList = {
   MeetingInvitation: { invitation: MeetingInvitationSummary };
   PublicMeetingRequest: { meetingId: string };
   VideoCall: { callId: string; meetingId: string };
+  DirectMessages: { friendId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -121,6 +123,7 @@ function AppNavigator() {
           <Stack.Screen name="MeetingInvitation" component={MeetingInvitationScreen} />
           <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
+          <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} />
         </Stack.Navigator>
         {user && !bottomNavHidden ? (
           <AppBottomNavigation
