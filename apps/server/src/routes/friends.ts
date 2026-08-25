@@ -15,6 +15,7 @@ import {
 } from "../lib/serializers.js";
 import { accountIdSchema } from "../lib/users.js";
 import { isUserOnline } from "../realtime/presence.js";
+import { distanceMeters } from "../lib/geo.js";
 
 export const friendsRouter = Router();
 friendsRouter.use(requireAuth);
@@ -93,6 +94,10 @@ friendsRouter.get("/online", async (request: AuthenticatedRequest, response, nex
 friendsRouter.get("/recommendations", async (request: AuthenticatedRequest, response, next) => {
   try {
     const userId = currentUserId(request);
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { homeLatitude: true, homeLongitude: true },
+    });
     const directFriendships = await prisma.friendship.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       select: {
@@ -104,41 +109,58 @@ friendsRouter.get("/recommendations", async (request: AuthenticatedRequest, resp
     });
     const directIds = new Set(directFriendships.map((friendship) =>
       friendship.userAId === userId ? friendship.userBId : friendship.userAId));
-    if (!directIds.size) {
-      response.json({ success: true, data: { recommendations: [] } });
-      return;
-    }
-    const secondDegreeFriendships = await prisma.friendship.findMany({
-      where: { OR: [{ userAId: { in: [...directIds] } }, { userBId: { in: [...directIds] } }] },
-      select: {
-        userAId: true,
-        userBId: true,
-        userA: { select: { nickname: true } },
-        userB: { select: { nickname: true } },
-      },
-    });
     const mutuals = new Map<string, string[]>();
-    for (const friendship of secondDegreeFriendships) {
-      const directId = directIds.has(friendship.userAId) ? friendship.userAId : directIds.has(friendship.userBId) ? friendship.userBId : null;
-      const candidateId = directId === friendship.userAId ? friendship.userBId : friendship.userAId;
-      if (!directId || candidateId === userId || directIds.has(candidateId)) continue;
-      const mutual = directFriendships.find((item) => item.userAId === directId || item.userBId === directId);
-      const names = mutuals.get(candidateId) ?? [];
-      if (mutual) names.push(mutual.userAId === directId ? mutual.userA.nickname : mutual.userB.nickname);
-      mutuals.set(candidateId, names);
+    if (directIds.size) {
+      const secondDegreeFriendships = await prisma.friendship.findMany({
+        where: { OR: [{ userAId: { in: [...directIds] } }, { userBId: { in: [...directIds] } }] },
+        select: {
+          userAId: true,
+          userBId: true,
+          userA: { select: { nickname: true } },
+          userB: { select: { nickname: true } },
+        },
+      });
+      for (const friendship of secondDegreeFriendships) {
+        const directId = directIds.has(friendship.userAId) ? friendship.userAId : directIds.has(friendship.userBId) ? friendship.userBId : null;
+        const candidateId = directId === friendship.userAId ? friendship.userBId : friendship.userAId;
+        if (!directId || candidateId === userId || directIds.has(candidateId)) continue;
+        const mutual = directFriendships.find((item) => item.userAId === directId || item.userBId === directId);
+        const names = mutuals.get(candidateId) ?? [];
+        if (mutual) names.push(mutual.userAId === directId ? mutual.userA.nickname : mutual.userB.nickname);
+        mutuals.set(candidateId, names);
+      }
     }
+    const nearbyIds = new Set<string>();
+    if (currentUser?.homeLatitude != null && currentUser.homeLongitude != null) {
+      const nearbyCandidates = await prisma.user.findMany({
+        where: {
+          id: { not: userId, notIn: [...directIds] },
+          homeLatitude: { not: null },
+          homeLongitude: { not: null },
+        },
+        select: { id: true, homeLatitude: true, homeLongitude: true },
+        take: 500,
+      });
+      for (const candidate of nearbyCandidates) {
+        if (candidate.homeLatitude == null || candidate.homeLongitude == null) continue;
+        const distance = distanceMeters(currentUser.homeLatitude, currentUser.homeLongitude, candidate.homeLatitude, candidate.homeLongitude);
+        const stableSample = [...(userId + candidate.id)].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 10, 0);
+        if (distance <= 5000 && stableSample < 2) nearbyIds.add(candidate.id);
+      }
+    }
+    const recommendationIds = new Set([...mutuals.keys(), ...nearbyIds]);
     const pendingRequests = await prisma.friendRequest.findMany({
       where: {
         status: "PENDING",
         OR: [
-          { requesterId: userId, recipientId: { in: [...mutuals.keys()] } },
-          { recipientId: userId, requesterId: { in: [...mutuals.keys()] } },
+          { requesterId: userId, recipientId: { in: [...recommendationIds] } },
+          { recipientId: userId, requesterId: { in: [...recommendationIds] } },
         ],
       },
       select: { requesterId: true, recipientId: true },
     });
     const pendingIds = new Set(pendingRequests.map((item) => item.requesterId === userId ? item.recipientId : item.requesterId));
-    const candidateIds = [...mutuals.keys()].filter((id) => !pendingIds.has(id));
+    const candidateIds = [...recommendationIds].filter((id) => !pendingIds.has(id));
     const candidates = candidateIds.length
       ? await prisma.user.findMany({
         where: { id: { in: candidateIds } },
@@ -160,6 +182,7 @@ friendsRouter.get("/recommendations", async (request: AuthenticatedRequest, resp
               avatarUpdatedAt: candidate.avatarUpdatedAt?.toISOString() ?? null,
               mutualFriendCount: names.length,
               mutualFriendNames: names.slice(0, 3),
+              recommendationReason: nearbyIds.has(id) && !names.length ? "NEARBY" : "MUTUAL_FRIEND",
             } : null;
           })
           .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))

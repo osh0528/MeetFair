@@ -78,15 +78,7 @@ export interface FriendRecommendation {
   avatarUpdatedAt?: string | null;
   mutualFriendCount: number;
   mutualFriendNames: string[];
-}
-
-export interface FriendRecommendation {
-  userId: string;
-  accountId: string;
-  nickname: string;
-  avatarUpdatedAt?: string | null;
-  mutualFriendCount: number;
-  mutualFriendNames: string[];
+  recommendationReason?: "MUTUAL_FRIEND" | "NEARBY";
 }
 
 export interface PublicProfileSearchResult extends UserSummary {

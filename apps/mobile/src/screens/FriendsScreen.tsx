@@ -153,7 +153,11 @@ export function FriendsScreen({ navigation }: Props) {
                   </Pressable>
                   <Text numberOfLines={1} style={styles.recommendationName}>{recommendation.nickname}</Text>
                   <Text numberOfLines={1} style={styles.recommendationMeta}>@{recommendation.accountId}</Text>
-                  <Text numberOfLines={1} style={styles.recommendationMutual}>공통 친구 {recommendation.mutualFriendCount}명</Text>
+                  <Text numberOfLines={1} style={styles.recommendationMutual}>
+                    {recommendation.recommendationReason === "NEARBY"
+                      ? "근처에 있어요"
+                      : "공통 친구 " + recommendation.mutualFriendCount + "명"}
+                  </Text>
                   <Button disabled={recommendationBusyId === recommendation.userId} label={recommendationBusyId === recommendation.userId ? "전송 중" : "친구 추가"} onPress={() => void sendRecommendationRequest(recommendation)} variant="soft" />
                 </Card>
               ))}
