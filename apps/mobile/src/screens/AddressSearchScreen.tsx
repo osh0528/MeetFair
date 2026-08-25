@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
@@ -8,7 +8,7 @@ import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { colors } from "../theme/colors";
-import type { AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddressSearch">;
 
@@ -17,11 +17,22 @@ export function AddressSearchScreen({ navigation, route }: Props) {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [requestId, setRequestId] = useState(0);
-  const [selection, setSelection] = useState<AddressSelection | null>(null);
+  const [candidates, setCandidates] = useState<AddressCandidate[]>([]);
+  const [selection, setSelection] = useState<AddressCandidate | null>(null);
+  const [focusTarget, setFocusTarget] = useState<AddressSelection | null>(null);
   const [message, setMessage] = useState("");
 
-  const handleResolved = useCallback((nextSelection: AddressSelection) => {
-    setSelection(nextSelection);
+  const handleResults = useCallback((items: AddressCandidate[]) => {
+    const first = items[0];
+    setCandidates(items);
+    setSelection(null);
+    if (items.length === 1 && first) setSelection(first);
+    setFocusTarget(first ?? null);
+  }, []);
+
+  const handlePick = useCallback((candidate: AddressCandidate) => {
+    setSelection(candidate);
+    setFocusTarget(candidate);
   }, []);
 
   const handleSearch = () => {
@@ -66,7 +77,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
             autoFocus
             onChangeText={setInput}
             onSubmitEditing={handleSearch}
-            placeholder="도로명 또는 지번 주소를 검색하세요"
+            placeholder="주소 또는 장소 이름을 검색하세요"
             placeholderTextColor={colors.subtle}
             returnKeyType="search"
             style={styles.searchInput}
@@ -85,7 +96,8 @@ export function AddressSearchScreen({ navigation, route }: Props) {
 
       <View style={styles.mapArea}>
         <KakaoAddressMap
-          onResolved={handleResolved}
+          focusTarget={focusTarget}
+          onResults={handleResults}
           query={query}
           requestId={requestId}
         />
@@ -94,25 +106,12 @@ export function AddressSearchScreen({ navigation, route }: Props) {
       <View style={styles.sheet}>
         <View style={styles.handle} />
         {message ? <Text style={styles.message}>{message}</Text> : null}
-        {selection ? (
-          <>
-            <Text style={styles.sheetEyebrow}>선택한 주소</Text>
-            <View style={styles.resultRow}>
-              <View style={styles.resultIcon}><Text style={styles.resultIconText}>⌖</Text></View>
-              <View style={styles.resultCopy}>
-                <Text style={styles.resultAddress}>{selection.address}</Text>
-                <Text style={styles.resultCoordinate}>
-                  위도 {selection.latitude.toFixed(5)} · 경도 {selection.longitude.toFixed(5)}
-                </Text>
-              </View>
-            </View>
-            <Button label="이 주소를 집으로 설정" onPress={handleSelect} />
-          </>
-        ) : (
+        {candidates.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>집 근처 주소를 검색해주세요</Text>
             <Text style={styles.emptyText}>
               상세 동·호수는 입력하지 않아도 돼요. 약속 장소 추천에는 좌표만 사용합니다.
+              지도를 직접 눌러서 위치를 고를 수도 있어요.
             </Text>
             <View style={styles.exampleRow}>
               {["서울시청", "성수역", "서울대입구역"].map((example) => (
@@ -126,6 +125,46 @@ export function AddressSearchScreen({ navigation, route }: Props) {
               ))}
             </View>
           </View>
+        ) : candidates.length === 1 ? (
+          <>
+            <Text style={styles.sheetEyebrow}>선택한 주소</Text>
+            <View style={styles.resultRow}>
+              <View style={styles.resultIcon}><Text style={styles.resultIconText}>⌖</Text></View>
+              <View style={styles.resultCopy}>
+                <Text style={styles.resultAddress}>{selection?.address ?? ""}</Text>
+                <Text style={styles.resultCoordinate}>
+                  위도 {selection?.latitude.toFixed(5)} · 경도 {selection?.longitude.toFixed(5)}
+                </Text>
+              </View>
+            </View>
+            <Button label="이 주소를 집으로 설정" onPress={handleSelect} />
+          </>
+        ) : (
+          <>
+            <Text style={styles.sheetEyebrow}>
+              검색 결과 {candidates.length}개 · 원하는 장소를 선택하세요
+            </Text>
+            <ScrollView style={styles.candidateList} contentContainerStyle={styles.candidateListContent}>
+              {candidates.map((candidate) => {
+                const picked = selection === candidate;
+                return (
+                  <Pressable
+                    key={`${candidate.latitude}-${candidate.longitude}-${candidate.title}`}
+                    onPress={() => handlePick(candidate)}
+                    style={[styles.candidateRow, picked && styles.candidateRowPicked]}
+                  >
+                    <Text numberOfLines={1} style={styles.candidateTitle}>{candidate.title}</Text>
+                    <Text numberOfLines={1} style={styles.candidateAddress}>{candidate.address}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {selection ? (
+              <View style={styles.confirmWrap}>
+                <Button label={`"${selection.title ?? selection.address}"로 설정`} onPress={handleSelect} />
+              </View>
+            ) : null}
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -152,6 +191,13 @@ const styles = StyleSheet.create({
   resultCopy: { flex: 1, marginLeft: 11 },
   resultAddress: { color: colors.text, fontSize: 14, fontWeight: "900" },
   resultCoordinate: { color: colors.muted, fontSize: 10, marginTop: 4 },
+  candidateList: { maxHeight: 172 },
+  candidateListContent: { gap: 8, paddingBottom: 4 },
+  candidateRow: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: 14, paddingVertical: 10 },
+  candidateRowPicked: { borderColor: colors.charcoal, backgroundColor: colors.primarySoft },
+  candidateTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  candidateAddress: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  confirmWrap: { marginTop: 12 },
   emptyState: { gap: 7 },
   emptyTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   emptyText: { color: colors.muted, fontSize: 11, lineHeight: 17 },

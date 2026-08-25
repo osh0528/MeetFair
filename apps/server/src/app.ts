@@ -14,6 +14,8 @@ import { pokesRouter } from "./routes/pokes.js";
 import { meetingSocialRouter } from "./routes/meeting-social.js";
 import { meetingCallsRouter } from "./routes/meeting-calls.js";
 import { directMessagesRouter } from "./routes/direct-messages.js";
+import { blocksRouter, reportsRouter } from "./routes/safety.js";
+import { favoritePlacesRouter } from "./routes/favorite-places.js";
 
 export function createApp() {
   const app = express();
@@ -37,6 +39,9 @@ export function createApp() {
   app.use("/api/meetings", meetingsRouter);
   app.use("/api/recommendations", recommendationsRouter);
   app.use("/api/users", usersRouter);
+  app.use("/api/users/me/favorite-places", favoritePlacesRouter);
+  app.use("/api/blocks", blocksRouter);
+  app.use("/api/reports", reportsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/pokes", pokesRouter);
   app.use("/api/direct-messages", directMessagesRouter);

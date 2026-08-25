@@ -42,13 +42,26 @@ CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "passwordHash" TEXT NOT NULL,
+    "passwordHash" TEXT,
+    "googleSubject" TEXT,
     "nickname" TEXT NOT NULL,
+    "avatarData" BYTEA,
+    "avatarMimeType" TEXT,
+    "avatarUpdatedAt" TIMESTAMP(3),
+    "profileStatus" TEXT,
+    "profileBio" TEXT,
+    "profileEmoji" TEXT NOT NULL DEFAULT '🌟',
+    "profileTheme" TEXT NOT NULL DEFAULT 'PURPLE',
+    "profileMusicTitle" TEXT,
+    "profileMusicData" BYTEA,
+    "profileMusicMimeType" TEXT,
+    "profileMusicUpdatedAt" TIMESTAMP(3),
+    "profileUpdatedAt" TIMESTAMP(3),
     "accountIdChanged" BOOLEAN NOT NULL DEFAULT false,
     "homeAddress" TEXT,
     "homeLatitude" DOUBLE PRECISION,
     "homeLongitude" DOUBLE PRECISION,
-    "shareLocationWithFriends" BOOLEAN NOT NULL DEFAULT false,
+    "shareExactLocationWithFriends" BOOLEAN NOT NULL DEFAULT false,
     "currentLatitude" DOUBLE PRECISION,
     "currentLongitude" DOUBLE PRECISION,
     "currentAccuracy" DOUBLE PRECISION,
@@ -60,6 +73,31 @@ CREATE TABLE "User" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfilePhoto" (
+    "id" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "imageData" BYTEA NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "caption" TEXT,
+    "width" INTEGER NOT NULL,
+    "height" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProfilePhoto_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileGuestbookEntry" (
+    "id" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProfileGuestbookEntry_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -229,8 +267,34 @@ CREATE TABLE "Poke" (
     "clientRequestId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "readAt" TIMESTAMP(3),
+    "summarizedAt" TIMESTAMP(3),
 
     CONSTRAINT "Poke_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Conversation" (
+    "id" TEXT NOT NULL,
+    "userAId" TEXT NOT NULL,
+    "userBId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Conversation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DirectMessage" (
+    "id" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "senderId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "clientMessageId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "readAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "DirectMessage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -272,11 +336,59 @@ CREATE TABLE "MeetingCallParticipant" (
     CONSTRAINT "MeetingCallParticipant_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Block" (
+    "id" TEXT NOT NULL,
+    "blockerId" TEXT NOT NULL,
+    "blockedId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Block_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "UserReport" (
+    "id" TEXT NOT NULL,
+    "reporterId" TEXT NOT NULL,
+    "targetType" TEXT NOT NULL,
+    "targetId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FavoritePlace" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "address" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION NOT NULL,
+    "longitude" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FavoritePlace_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_accountId_key" ON "User"("accountId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_googleSubject_key" ON "User"("googleSubject");
+
+-- CreateIndex
+CREATE INDEX "ProfilePhoto_ownerId_createdAt_idx" ON "ProfilePhoto"("ownerId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ProfileGuestbookEntry_ownerId_createdAt_idx" ON "ProfileGuestbookEntry"("ownerId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ProfileGuestbookEntry_authorId_idx" ON "ProfileGuestbookEntry"("authorId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DeviceToken_expoPushToken_key" ON "DeviceToken"("expoPushToken");
@@ -372,7 +484,25 @@ CREATE INDEX "Poke_senderId_idx" ON "Poke"("senderId");
 CREATE UNIQUE INDEX "Poke_senderId_clientRequestId_key" ON "Poke"("senderId", "clientRequestId");
 
 -- CreateIndex
+CREATE INDEX "Conversation_userBId_idx" ON "Conversation"("userBId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Conversation_userAId_userBId_key" ON "Conversation"("userAId", "userBId");
+
+-- CreateIndex
+CREATE INDEX "DirectMessage_conversationId_createdAt_idx" ON "DirectMessage"("conversationId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "DirectMessage_senderId_idx" ON "DirectMessage"("senderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DirectMessage_conversationId_clientMessageId_key" ON "DirectMessage"("conversationId", "clientMessageId");
+
+-- CreateIndex
 CREATE INDEX "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MeetingCall_meetingId_key" ON "MeetingCall"("meetingId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MeetingCall_roomName_key" ON "MeetingCall"("roomName");
@@ -385,6 +515,30 @@ CREATE INDEX "MeetingCallParticipant_userId_status_idx" ON "MeetingCallParticipa
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MeetingCallParticipant_callId_userId_key" ON "MeetingCallParticipant"("callId", "userId");
+
+-- CreateIndex
+CREATE INDEX "Block_blockedId_idx" ON "Block"("blockedId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Block_blockerId_blockedId_key" ON "Block"("blockerId", "blockedId");
+
+-- CreateIndex
+CREATE INDEX "UserReport_status_createdAt_idx" ON "UserReport"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "UserReport_reporterId_idx" ON "UserReport"("reporterId");
+
+-- CreateIndex
+CREATE INDEX "FavoritePlace_userId_createdAt_idx" ON "FavoritePlace"("userId", "createdAt");
+
+-- AddForeignKey
+ALTER TABLE "ProfilePhoto" ADD CONSTRAINT "ProfilePhoto_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileGuestbookEntry" ADD CONSTRAINT "ProfileGuestbookEntry_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileGuestbookEntry" ADD CONSTRAINT "ProfileGuestbookEntry_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DeviceToken" ADD CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -459,6 +613,18 @@ ALTER TABLE "Poke" ADD CONSTRAINT "Poke_senderId_fkey" FOREIGN KEY ("senderId") 
 ALTER TABLE "Poke" ADD CONSTRAINT "Poke_targetId_fkey" FOREIGN KEY ("targetId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Conversation" ADD CONSTRAINT "Conversation_userAId_fkey" FOREIGN KEY ("userAId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Conversation" ADD CONSTRAINT "Conversation_userBId_fkey" FOREIGN KEY ("userBId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DirectMessage" ADD CONSTRAINT "DirectMessage_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DirectMessage" ADD CONSTRAINT "DirectMessage_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -469,3 +635,15 @@ ALTER TABLE "MeetingCallParticipant" ADD CONSTRAINT "MeetingCallParticipant_call
 
 -- AddForeignKey
 ALTER TABLE "MeetingCallParticipant" ADD CONSTRAINT "MeetingCallParticipant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Block" ADD CONSTRAINT "Block_blockerId_fkey" FOREIGN KEY ("blockerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Block" ADD CONSTRAINT "Block_blockedId_fkey" FOREIGN KEY ("blockedId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserReport" ADD CONSTRAINT "UserReport_reporterId_fkey" FOREIGN KEY ("reporterId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FavoritePlace" ADD CONSTRAINT "FavoritePlace_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

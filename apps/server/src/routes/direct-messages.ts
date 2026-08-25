@@ -174,6 +174,10 @@ directMessagesRouter.post("/:conversationId/messages", async (request, response,
     if (conversation.userAId !== userId && conversation.userBId !== userId)
       throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant of this conversation.");
     const recipientId = conversation.userAId === userId ? conversation.userBId : conversation.userAId;
+    const blockBetween = await prisma.block.findFirst({
+      where: { OR: [{ blockerId: userId, blockedId: recipientId }, { blockerId: recipientId, blockedId: userId }] },
+    });
+    if (blockBetween) throw new AppError(403, "BLOCKED", "You cannot message this user.");
     if (clientMessageId) {
       const existing = await prisma.directMessage.findFirst({
         where: { conversationId, clientMessageId },

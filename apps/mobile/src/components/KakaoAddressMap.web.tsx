@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection } from "../types/location";
 
 export interface KakaoAddressMapProps {
   query: string;
   requestId: number;
-  onResolved: (selection: AddressSelection) => void;
+  focusTarget: AddressSelection | null;
+  onResults: (candidates: AddressCandidate[]) => void;
 }
 
 declare global {
@@ -15,6 +16,18 @@ declare global {
     kakao?: any;
     meetfairKakaoMapsLoader?: Promise<void>;
   }
+}
+
+function dedupeCandidates(items: AddressCandidate[]): AddressCandidate[] {
+  const seen = new Set<string>();
+  const unique: AddressCandidate[] = [];
+  for (const item of items) {
+    const key = `${item.latitude.toFixed(6)}|${item.longitude.toFixed(6)}|${item.address}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique.slice(0, 5);
 }
 
 function loadKakaoMaps(appKey: string): Promise<void> {
@@ -39,12 +52,32 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget, onResults }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
+
+  const emitResults = useCallback((items: AddressCandidate[]) => {
+    const candidates = dedupeCandidates(items);
+    const first = candidates[0];
+    if (!first) {
+      setMessage("검색 결과가 없습니다. 주소 또는 장소 이름으로 다시 검색해주세요.");
+      onResults([]);
+      return;
+    }
+    const kakao = window.kakao;
+    if (!kakao?.maps) {
+      onResults(candidates);
+      return;
+    }
+    const position = new kakao.maps.LatLng(first.latitude, first.longitude);
+    mapRef.current?.setCenter(position);
+    markerRef.current?.setPosition(position);
+    setMessage("");
+    onResults(candidates);
+  }, [onResults]);
 
   useEffect(() => {
     if (!appConfig.kakaoMapJsKey) {
@@ -75,29 +108,76 @@ export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMa
     if (!ready || !query.trim() || !window.kakao?.maps?.services) return;
     setMessage("주소를 검색하고 있어요.");
 
-    const geocoder = new window.kakao.maps.services.Geocoder();
-    geocoder.addressSearch(
+    const kakao = window.kakao;
+    const places = new kakao.maps.services.Places();
+    const geocoder = new kakao.maps.services.Geocoder();
+
+    // 장소 이름(키워드) 검색을 우선 시도하고, 실패하면 주소 검색으로 폴백한다.
+    places.keywordSearch(
       query.trim(),
       (results: any[], status: string) => {
-        if (status !== window.kakao.maps.services.Status.OK || !results?.length) {
-          setMessage("검색 결과가 없습니다. 도로명 주소로 다시 검색해주세요.");
+        if (status === kakao.maps.services.Status.OK && results?.length) {
+          emitResults(
+            results.map((place) => ({
+              title: place.place_name,
+              address: place.road_address_name || place.address_name || place.place_name,
+              latitude: Number(place.y),
+              longitude: Number(place.x),
+            })),
+          );
           return;
         }
-
-        const first = results[0];
-        const selection: AddressSelection = {
-          address: first.road_address?.address_name || first.address_name,
-          latitude: Number(first.y),
-          longitude: Number(first.x),
-        };
-        const position = new window.kakao.maps.LatLng(selection.latitude, selection.longitude);
-        mapRef.current?.setCenter(position);
-        markerRef.current?.setPosition(position);
-        setMessage("");
-        onResolved(selection);
+        geocoder.addressSearch(
+          query.trim(),
+          (addressResults: any[], addressStatus: string) => {
+            const found = addressStatus === kakao.maps.services.Status.OK && addressResults?.length;
+            emitResults(
+              found
+                ? addressResults.map((item) => ({
+                    title: item.address_name,
+                    address: item.road_address?.address_name || item.address_name,
+                    latitude: Number(item.y),
+                    longitude: Number(item.x),
+                  }))
+                : [],
+            );
+          },
+        );
       },
     );
-  }, [onResolved, query, ready, requestId]);
+  }, [emitResults, query, ready, requestId]);
+
+  useEffect(() => {
+    if (!ready || !window.kakao?.maps) return;
+    const kakao = window.kakao;
+    const geocoder = new kakao.maps.services.Geocoder();
+
+    const listener = kakao.maps.event.addListener(mapRef.current, "click", (mouseEvent: any) => {
+      const latitude = mouseEvent.latLng.getLat() as number;
+      const longitude = mouseEvent.latLng.getLng() as number;
+      markerRef.current?.setPosition(new kakao.maps.LatLng(latitude, longitude));
+      geocoder.coord2Address(longitude, latitude, (results: any[], status: string) => {
+        const first = results?.[0];
+        const name =
+          status === kakao.maps.services.Status.OK && first
+            ? first.road_address?.address_name || first.address?.address_name || ""
+            : "";
+        const label = name || "지도에서 선택한 위치";
+        emitResults([{ title: label, address: label, latitude, longitude }]);
+      });
+    });
+
+    return () => {
+      if (mapRef.current) kakao.maps.event.removeListener(mapRef.current, "click", listener);
+    };
+  }, [ready, emitResults]);
+
+  useEffect(() => {
+    if (!focusTarget || !window.kakao?.maps) return;
+    const position = new window.kakao.maps.LatLng(focusTarget.latitude, focusTarget.longitude);
+    mapRef.current?.setCenter(position);
+    markerRef.current?.setPosition(position);
+  }, [focusTarget]);
 
   return (
     <View style={styles.wrapper}>

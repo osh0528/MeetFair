@@ -166,9 +166,14 @@ usersRouter.get("/search", async (request: AuthenticatedRequest, response, next)
   try {
     const currentUserId = userId(request);
     const query = z.string().trim().min(1).max(30).parse(request.query.q);
+    const blockRows = await prisma.block.findMany({
+      where: { OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    const hiddenUserIds = [...new Set(blockRows.flatMap((row) => (row.blockerId === currentUserId ? [row.blockedId] : [row.blockerId])))];
     const users = await prisma.user.findMany({
       where: {
-        id: { not: currentUserId },
+        id: { notIn: [currentUserId, ...hiddenUserIds] },
         OR: [
           { accountId: { contains: query.toLowerCase(), mode: "insensitive" } },
           { nickname: { contains: query, mode: "insensitive" } },
@@ -254,6 +259,13 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     },
   });
   if (!owner) throw new AppError(404, "USER_NOT_FOUND", "User was not found.");
+  if (ownerId !== viewerId) {
+    const block = await prisma.block.findFirst({
+      where: { OR: [{ blockerId: ownerId, blockedId: viewerId }, { blockerId: viewerId, blockedId: ownerId }] },
+      select: { id: true },
+    });
+    if (block) throw new AppError(404, "USER_NOT_FOUND", "User was not found.");
+  }
   const theme = profileThemes.includes(owner.profileTheme as typeof profileThemes[number])
     ? owner.profileTheme as ProfileTheme
     : "PURPLE";
@@ -460,6 +472,13 @@ usersRouter.post("/:userId/guestbook", async (request: AuthenticatedRequest, res
     const ownerId = z.string().uuid().parse(request.params.userId);
     const authorId = userId(request);
     const { content } = z.object({ content: z.string().trim().min(1).max(200) }).parse(request.body);
+    if (authorId !== ownerId) {
+      const block = await prisma.block.findFirst({
+        where: { OR: [{ blockerId: authorId, blockedId: ownerId }, { blockerId: ownerId, blockedId: authorId }] },
+        select: { id: true },
+      });
+      if (block) throw new AppError(403, "BLOCKED", "You cannot write on this page.");
+    }
     const page = await loadUserPage(ownerId, authorId);
     const entry = await prisma.profileGuestbookEntry.create({
       data: { ownerId, authorId, content },
