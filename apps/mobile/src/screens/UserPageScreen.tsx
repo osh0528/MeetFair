@@ -359,11 +359,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                       onPress={() => setTheme(item)}
                       style={[
                         styles.themeChoice,
-                        { backgroundColor: themes[item].background, borderColor: theme === item ? themes[item].accent : colors.border },
+                        {
+                          backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background,
+                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border,
+                        },
                       ]}
                     >
-                      <View style={[styles.themeDot, { backgroundColor: themes[item].accent }]} />
-                      <Text style={styles.themeLabel}>{themes[item].label}</Text>
+                      <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
+                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                     </Pressable>
                   ))}
                 </View>
