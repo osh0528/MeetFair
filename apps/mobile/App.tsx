@@ -27,6 +27,7 @@ import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
+import { ThemeProvider } from "./src/services/theme";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -64,12 +65,14 @@ const navigationTheme = {
 
 export default function App() {
   return (
-    <SessionProvider>
-      <PokeNotificationBridge />
-      <SafeAreaProvider>
-        <AppNavigator />
-      </SafeAreaProvider>
-    </SessionProvider>
+    <ThemeProvider>
+      <SessionProvider>
+        <PokeNotificationBridge />
+        <SafeAreaProvider>
+          <AppNavigator />
+        </SafeAreaProvider>
+      </SessionProvider>
+    </ThemeProvider>
   );
 }
 

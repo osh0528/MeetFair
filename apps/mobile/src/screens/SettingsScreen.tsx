@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Switch, Text, TextInput } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
@@ -8,11 +8,13 @@ import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { isPokeSoundEnabled, setPokeSoundEnabled } from "../services/poke-sound";
 import { colors } from "../theme/colors";
+import { useAppTheme } from "../services/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export function SettingsScreen({ navigation }: Props) {
   const session = useSession();
+  const { mode, setMode } = useAppTheme();
   const [location, setLocation] = useState(Boolean(session.user?.shareExactLocationWithFriends));
   const [pokes, setPokes] = useState(Boolean(session.user?.casualPokesEnabled));
   const [sound, setSound] = useState(true);
@@ -65,6 +67,24 @@ export function SettingsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="설정" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Card style={styles.themeCard}>
+          <Text style={styles.title}>화면 테마</Text>
+          <View style={styles.themeOptions}>
+            {(["LIGHT", "DARK"] as const).map((item) => (
+              <Pressable
+                key={item}
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === item }}
+                onPress={() => void setMode(item)}
+                style={[styles.themeOption, mode === item && styles.themeOptionSelected]}
+              >
+                <Text style={[styles.themeOptionText, mode === item && styles.themeOptionTextSelected]}>
+                  {item === "LIGHT" ? "화이트 모드" : "다크 모드"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
         <Button label="개인정보 관리" onPress={() => navigation.navigate("Profile")} variant="secondary" />
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
@@ -96,6 +116,21 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12 },
   card: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  themeCard: { gap: 12 },
+  themeOptions: { flexDirection: "row", gap: 8 },
+  themeOption: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+  themeOptionSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  themeOptionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
+  themeOptionTextSelected: { color: colors.surface },
   formCard: { gap: 9 },
   input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, color: colors.text },
   title: { flex: 1, color: colors.text, fontWeight: "900", paddingRight: 10 },
