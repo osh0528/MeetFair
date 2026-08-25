@@ -79,6 +79,12 @@ export function UserPageScreen({ navigation, route }: Props) {
     void load();
   }, [load]));
 
+  useFocusEffect(useCallback(() => {
+    if (!musicSource) return;
+    musicPlayer.play();
+    return () => musicPlayer.pause();
+  }, [musicPlayer, musicSource]));
+
   async function savePage() {
     if (!emoji.trim() || busy) return;
     setBusy(true);
