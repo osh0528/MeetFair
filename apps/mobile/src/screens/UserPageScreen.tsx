@@ -248,35 +248,41 @@ export function UserPageScreen({ navigation, route }: Props) {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: Math.max(1, 30 - page.photos.length),
         quality: 1,
       });
       if (result.canceled) return;
-      const image = result.assets[0];
-      if (!image?.uri || !image.width || !image.height) throw new Error("선택한 사진을 읽지 못했습니다.");
-      const resize = image.width >= image.height
-        ? { width: Math.min(1200, image.width) }
-        : { height: Math.min(1200, image.height) };
-      const edited = await manipulateAsync(
-        image.uri,
-        [{ resize }],
-        { base64: true, compress: 0.76, format: SaveFormat.JPEG },
-      );
-      if (!edited.base64) throw new Error("사진을 업로드용으로 변환하지 못했습니다.");
-      const data = await apiRequest<{ photo: UserPageSummary["photos"][number] }>("/users/me/page-photos", {
-        method: "POST",
-        body: JSON.stringify({
-          imageBase64: edited.base64,
-          mimeType: "image/jpeg",
-          caption: photoCaption.trim() || null,
-          width: edited.width,
-          height: edited.height,
-        }),
-      });
+      const uploadedPhotos: UserPageSummary["photos"] = [];
+      for (const image of result.assets) {
+        if (!image.uri || !image.width || !image.height) continue;
+        const resize = image.width >= image.height
+          ? { width: Math.min(1200, image.width) }
+          : { height: Math.min(1200, image.height) };
+        const edited = await manipulateAsync(
+          image.uri,
+          [{ resize }],
+          { base64: true, compress: 0.76, format: SaveFormat.JPEG },
+        );
+        if (!edited.base64) continue;
+        const data = await apiRequest<{ photo: UserPageSummary["photos"][number] }>("/users/me/page-photos", {
+          method: "POST",
+          body: JSON.stringify({
+            imageBase64: edited.base64,
+            mimeType: "image/jpeg",
+            caption: photoCaption.trim() || null,
+            width: edited.width,
+            height: edited.height,
+          }),
+        });
+        uploadedPhotos.push(data.photo);
+      }
+      if (!uploadedPhotos.length) throw new Error("선택한 사진을 업로드하지 못했습니다.");
       setPage((current) => current
-        ? { ...current, photos: [data.photo, ...current.photos] }
+        ? { ...current, photos: [...uploadedPhotos, ...current.photos] }
         : current);
       setPhotoCaption("");
-      setMessage("사진첩에 사진을 추가했습니다.");
+      setMessage("사진첩에 " + uploadedPhotos.length + "장의 사진을 추가했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "사진을 추가하지 못했습니다.");
     } finally {
@@ -421,7 +427,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                       />
                       <Button
                         disabled={photoBusy || page.photos.length >= 30}
-                        label={photoBusy ? "사진 처리 중..." : page.photos.length >= 30 ? "사진첩이 가득 찼습니다" : "사진 선택해서 올리기"}
+                        label={photoBusy ? "사진 처리 중..." : page.photos.length >= 30 ? "사진첩이 가득 찼습니다" : "사진 여러 장 선택해서 올리기"}
                         onPress={() => void addPhoto()}
                         variant="soft"
                       />
