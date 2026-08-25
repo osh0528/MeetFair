@@ -585,6 +585,27 @@ meetingsRouter.post("/:meetingId/recommendations", async (request: Authenticated
   } catch (error) { next(error); }
 });
 
+meetingsRouter.post("/:meetingId/place-candidates", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const viewerId = userId(request);
+    const participant = await participantFor(meetingId, viewerId);
+    if (participant.meeting.status !== "PLANNING") throw new AppError(409, "MEETING_NOT_PLANNING", "Places can only be added while planning.");
+    const input = z.object({
+      name: z.string().trim().min(1).max(120),
+      address: z.string().trim().min(1).max(255),
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      category: z.string().trim().min(1).max(50).default("직접 추천"),
+    }).parse(request.body);
+    const candidate = await prisma.placeCandidate.create({
+      data: { ...input, meetingId, createdById: viewerId },
+      include: { votes: { select: { userId: true } } },
+    });
+    response.status(201).json({ success: true, data: { candidate } });
+  } catch (error) { next(error); }
+});
+
 meetingsRouter.post("/:meetingId/votes", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);

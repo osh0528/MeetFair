@@ -1,4 +1,4 @@
-import type { FriendRecommendation, FriendSummary } from "@meetfair/shared";
+import type { FriendRecommendation, FriendSummary, PublicProfileSearchResult } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
@@ -17,6 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Friends">;
 export function FriendsScreen({ navigation }: Props) {
   const { accessToken } = useSession();
   const [accountId, setAccountId] = useState("");
+  const [accountSuggestions, setAccountSuggestions] = useState<PublicProfileSearchResult[]>([]);
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [recommendations, setRecommendations] = useState<FriendRecommendation[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
@@ -26,6 +27,20 @@ export function FriendsScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [recommendationBusyId, setRecommendationBusyId] = useState("");
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const query = accountId.trim();
+    if (!query) {
+      setAccountSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void apiRequest<{ users: PublicProfileSearchResult[] }>("/users/search?q=" + encodeURIComponent(query))
+        .then((data) => setAccountSuggestions(data.users))
+        .catch(() => setAccountSuggestions([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [accountId]);
 
   useEffect(() => {
     if (!Object.keys(pokeCooldowns).length) return;
@@ -179,11 +194,25 @@ export function FriendsScreen({ navigation }: Props) {
       <ScreenHeader title="친구" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.addRow}>
-          <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 검색" placeholderTextColor={colors.subtle} style={styles.input} value={accountId} />
+          <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 또는 닉네임 검색" placeholderTextColor={colors.subtle} style={styles.input} value={accountId} />
           <Pressable disabled={submitting || !accountId.trim()} onPress={sendRequest} style={[styles.addButton, (submitting || !accountId.trim()) && styles.disabled]}>
             <Text style={styles.addText}>{submitting ? "전송 중" : "요청"}</Text>
           </Pressable>
         </View>
+        {accountSuggestions.length ? (
+          <View style={styles.suggestionList}>
+            {accountSuggestions.map((suggestion) => (
+              <Pressable key={suggestion.id} onPress={() => setAccountId(suggestion.accountId)} style={styles.suggestionRow}>
+                <Avatar imageUrl={avatarUrl(suggestion.id, suggestion.avatarUpdatedAt)} name={suggestion.nickname} size={34} />
+                <View style={styles.suggestionCopy}>
+                  <Text style={styles.suggestionName}>{suggestion.nickname}</Text>
+                  <Text style={styles.suggestionId}>@{suggestion.accountId}</Text>
+                </View>
+                <Text style={styles.suggestionAction}>선택</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <View style={styles.quickActions}>
           <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
           <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
@@ -191,6 +220,18 @@ export function FriendsScreen({ navigation }: Props) {
         </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
+
+        <SectionHeading title="온라인 친구" action={onlineFriends.length + "명"} />
+        {onlineFriends.length ? (
+          <ScrollView contentContainerStyle={styles.onlineRow} horizontal showsHorizontalScrollIndicator={false}>
+            {onlineFriends.map((friend) => (
+              <Pressable key={friend.userId} onPress={() => navigation.navigate("UserPage", { userId: friend.userId })} style={styles.onlineFriend}>
+                <Avatar imageUrl={avatarUrl(friend.userId, friend.avatarUpdatedAt)} name={friend.nickname} size={58} status="online" />
+                <Text numberOfLines={1} style={styles.onlineName}>{friend.nickname}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : !loading ? <Text style={styles.empty}>현재 온라인인 친구가 없습니다.</Text> : null}
 
         {recommendations.length ? (
           <>
@@ -214,18 +255,6 @@ export function FriendsScreen({ navigation }: Props) {
             </ScrollView>
           </>
         ) : null}
-
-        <SectionHeading title="온라인 친구" action={onlineFriends.length + "명"} />
-        {onlineFriends.length ? (
-          <ScrollView contentContainerStyle={styles.onlineRow} horizontal showsHorizontalScrollIndicator={false}>
-            {onlineFriends.map((friend) => (
-              <Pressable key={friend.userId} onPress={() => navigation.navigate("UserPage", { userId: friend.userId })} style={styles.onlineFriend}>
-                <Avatar imageUrl={avatarUrl(friend.userId, friend.avatarUpdatedAt)} name={friend.nickname} size={58} status="online" />
-                <Text numberOfLines={1} style={styles.onlineName}>{friend.nickname}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : !loading ? <Text style={styles.empty}>현재 온라인인 친구가 없습니다.</Text> : null}
 
         <SectionHeading title="전체 친구" action={friends.length + "명"} />
         {friends.map((friend) => (
@@ -266,6 +295,12 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: "row", gap: 8 },
   quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6 },
   addText: { color: colors.surface, fontWeight: "900" },
+  suggestionList: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
+  suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionCopy: { flex: 1, gap: 2 },
+  suggestionName: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  suggestionId: { color: colors.muted, fontSize: 11 },
+  suggestionAction: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   message: { color: colors.primary, fontSize: 12 },
   onlineRow: { gap: 16, paddingVertical: 4, paddingRight: 20 },
   recommendationRow: { gap: 10, paddingRight: 20 },

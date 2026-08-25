@@ -26,11 +26,12 @@ export interface KakaoAddressMapProps {
   query: string;
   requestId: number;
   onResolved: (selection: AddressSelection) => void;
+  interactive?: boolean;
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
 
-function buildMapHtml(appKey: string): string {
+function buildMapHtml(appKey: string, interactive: boolean): string {
   const head =
     "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\" />" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />" +
@@ -38,6 +39,18 @@ function buildMapHtml(appKey: string): string {
     "<script src=\"https://dapi.kakao.com/v2/maps/sdk.js?appkey=" +
     encodeURIComponent(appKey) +
     "&autoload=false&libraries=services\"></script></head><body><div id=\"map\"></div><script>";
+  const clickHandler = interactive ? `
+    kakao.maps.event.addListener(map, "click", function (mouseEvent) {
+      var latlng = mouseEvent.latLng;
+      marker.setPosition(latlng);
+      geocoder.coord2Address(latlng.getLng(), latlng.getLat(), function (result, status) {
+        var address = status === kakao.maps.services.Status.OK && result && result[0]
+          ? ((result[0].road_address && result[0].road_address.address_name) || result[0].address.address_name)
+          : "지도에서 선택한 위치";
+        post({ type: "resolved", address: address, latitude: latlng.getLat(), longitude: latlng.getLng() });
+      });
+    });
+  ` : "";
   const body = `
 (function () {
   var map = null;
@@ -57,6 +70,7 @@ function buildMapHtml(appKey: string): string {
     marker = new kakao.maps.Marker({ position: center });
     marker.setMap(map);
     geocoder = new kakao.maps.services.Geocoder();
+    ${clickHandler}
     post({ type: "ready" });
   }
 
@@ -93,7 +107,7 @@ function buildMapHtml(appKey: string): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, onResolved, interactive = false }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -165,7 +179,7 @@ export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMa
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
-        source={{ html: buildMapHtml(appConfig.kakaoMapJsKey), baseUrl: "https://localhost" }}
+        source={{ html: buildMapHtml(appConfig.kakaoMapJsKey, interactive), baseUrl: "https://localhost" }}
         javaScriptEnabled
         domStorageEnabled
         onMessage={handleMessage}

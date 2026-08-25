@@ -8,6 +8,7 @@ export interface KakaoAddressMapProps {
   query: string;
   requestId: number;
   onResolved: (selection: AddressSelection) => void;
+  interactive?: boolean;
 }
 
 declare global {
@@ -39,7 +40,7 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, onResolved, interactive = false }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -60,6 +61,20 @@ export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMa
         const center = new window.kakao.maps.LatLng(37.56661, 126.97839);
         mapRef.current = new window.kakao.maps.Map(element, { center, level: 3 });
         markerRef.current = new window.kakao.maps.Marker({ map: mapRef.current, position: center });
+        if (interactive) {
+          window.kakao.maps.event.addListener(mapRef.current, "click", (mouseEvent: any) => {
+            const latlng = mouseEvent.latLng;
+            markerRef.current?.setPosition(latlng);
+            const geocoder = new window.kakao.maps.services.Geocoder();
+            geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (results: any[], status: string) => {
+              const first = results?.[0];
+              const address = status === window.kakao.maps.services.Status.OK && first
+                ? first.road_address?.address_name || first.address?.address_name
+                : "지도에서 선택한 위치";
+              onResolved({ address, latitude: latlng.getLat(), longitude: latlng.getLng() });
+            });
+          });
+        }
         setReady(true);
       })
       .catch((error: unknown) => {
@@ -69,7 +84,7 @@ export function KakaoAddressMap({ query, requestId, onResolved }: KakaoAddressMa
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [interactive, onResolved]);
 
   useEffect(() => {
     if (!ready || !query.trim() || !window.kakao?.maps?.services) return;

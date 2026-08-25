@@ -6,9 +6,11 @@ import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
+import type { AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
 interface MeetingDetail {
@@ -60,6 +62,10 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
+  const [showPlacePicker, setShowPlacePicker] = useState(false);
+  const [pickedPlace, setPickedPlace] = useState<AddressSelection | null>(null);
+  const [placeName, setPlaceName] = useState("");
+  const [placeCategory, setPlaceCategory] = useState("직접 추천");
 
   async function load() {
     const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
@@ -141,8 +147,40 @@ export function MeetingScreen({ navigation, route }: Props) {
   const availableFriends = friends.filter((friend) => !unavailableUserIds.has(friend.userId));
 
   async function vote(placeCandidateId: string) {
-    await apiRequest(`/meetings/${meetingId}/votes`, { method: "POST", body: JSON.stringify({ placeCandidateId }) });
-    await load();
+    try {
+      await apiRequest(`/meetings/${meetingId}/votes`, { method: "POST", body: JSON.stringify({ placeCandidateId }) });
+      await load();
+      setMessage("투표했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "투표하지 못했습니다.");
+    }
+  }
+  async function addPlaceCandidate() {
+    if (!pickedPlace || !placeName.trim()) {
+      setMessage("장소 이름과 지도 위치를 모두 선택해 주세요.");
+      return;
+    }
+    setBusyAction("place");
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}/place-candidates`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: placeName.trim(),
+          category: placeCategory.trim() || "직접 추천",
+          ...pickedPlace,
+        }),
+      });
+      setPlaceName("");
+      setPickedPlace(null);
+      setShowPlacePicker(false);
+      setMessage("직접 추천한 장소를 추가했습니다.");
+      await load();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "장소 후보를 추가하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
   }
   async function arrive() {
     await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
@@ -297,6 +335,17 @@ export function MeetingScreen({ navigation, route }: Props) {
                 </Card>
               </Pressable>
             ))}
+            <Button label="지도에서 장소 직접 추천" onPress={() => setShowPlacePicker((current) => !current)} variant="soft" />
+            {showPlacePicker ? (
+              <Card style={styles.placePickerCard}>
+                <Text style={styles.cardTitle}>지도를 눌러 장소를 선택하세요</Text>
+                <TextInput onChangeText={setPlaceName} placeholder="장소 이름" placeholderTextColor={colors.subtle} style={styles.input} value={placeName} />
+                <TextInput onChangeText={setPlaceCategory} placeholder="장소 종류 (선택)" placeholderTextColor={colors.subtle} style={styles.input} value={placeCategory} />
+                <View style={styles.placeMap}><KakaoAddressMap interactive onResolved={setPickedPlace} query="" requestId={0} /></View>
+                <Text style={styles.meta}>{pickedPlace ? `선택 위치: ${pickedPlace.address}` : "지도를 눌러 위치를 선택하세요."}</Text>
+                <Button disabled={busyAction === "place" || !pickedPlace || !placeName.trim()} label={busyAction === "place" ? "추가 중..." : "이 장소를 후보로 추가"} onPress={() => void addPlaceCandidate()} />
+              </Card>
+            ) : null}
             {!meeting.placeCandidates.length ? <Button label="추천 후보 보기" onPress={() => navigation.navigate("Recommendations")} variant="soft" /> : null}
           </>
         )}
@@ -399,6 +448,8 @@ const styles = StyleSheet.create({
   locked: { padding: 20, gap: 14 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
+  placePickerCard: { gap: 10 },
+  placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
   selectedCard: { borderColor: colors.primary },
   cardTitle: { color: colors.text, fontWeight: "900" },
   input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
