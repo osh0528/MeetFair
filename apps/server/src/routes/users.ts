@@ -52,6 +52,7 @@ function matchesMusicMimeType(data: Buffer, mimeType: typeof musicMimeTypes[numb
 function toProfilePhoto(photo: {
   id: string;
   ownerId: string;
+  groupId: string | null;
   caption: string | null;
   width: number;
   height: number;
@@ -60,6 +61,7 @@ function toProfilePhoto(photo: {
   return {
     id: photo.id,
     ownerId: photo.ownerId,
+    groupId: photo.groupId,
     caption: photo.caption,
     width: photo.width,
     height: photo.height,
@@ -236,6 +238,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
         select: {
           id: true,
           ownerId: true,
+          groupId: true,
           caption: true,
           width: true,
           height: true,
@@ -353,6 +356,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
     const input = z.object({
       imageBase64: z.string().min(1).max(3_000_000),
       mimeType: z.enum(avatarMimeTypes),
+      groupId: z.string().uuid().nullable().optional(),
       caption: z.string().trim().max(150).nullable().optional(),
       width: z.number().int().min(1).max(10_000),
       height: z.number().int().min(1).max(10_000),
@@ -376,6 +380,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
       const created = await tx.profilePhoto.create({
         data: {
           ownerId,
+          groupId: input.groupId ?? null,
           imageData,
           mimeType: input.mimeType,
           caption: input.caption === "" ? null : input.caption,
@@ -385,6 +390,7 @@ usersRouter.post("/me/page-photos", async (request: AuthenticatedRequest, respon
         select: {
           id: true,
           ownerId: true,
+          groupId: true,
           caption: true,
           width: true,
           height: true,

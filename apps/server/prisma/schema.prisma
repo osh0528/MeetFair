@@ -142,6 +142,7 @@ model User {
 model ProfilePhoto {
   id        String   @id @default(uuid())
   ownerId   String
+  groupId   String?
   imageData Bytes
   mimeType  String
   caption   String?
@@ -151,6 +152,7 @@ model ProfilePhoto {
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([ownerId, createdAt])
+  @@index([ownerId, groupId, createdAt])
 }
 
 model ProfileGuestbookEntry {
