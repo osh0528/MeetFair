@@ -8,6 +8,7 @@ import { toProfileGuestbookEntry, toPublicUser, toUserSummary } from "../lib/ser
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createNotification } from "../lib/notifications.js";
 import type { ProfilePhotoSummary, ProfileTheme, UserPageSummary } from "@meetfair/shared";
+import { isUserOnline } from "../realtime/presence.js";
 
 export const usersRouter = Router();
 const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -155,6 +156,41 @@ function userId(request: AuthenticatedRequest) {
   return request.userId;
 }
 
+usersRouter.get("/search", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const currentUserId = userId(request);
+    const query = z.string().trim().min(1).max(30).parse(request.query.q);
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        OR: [
+          { accountId: { contains: query.toLowerCase(), mode: "insensitive" } },
+          { nickname: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      orderBy: [{ nickname: "asc" }, { accountId: "asc" }],
+      take: 20,
+      select: {
+        id: true,
+        accountId: true,
+        nickname: true,
+        avatarUpdatedAt: true,
+        profileBio: true,
+      },
+    });
+    response.json({
+      success: true,
+      data: {
+        users: users.map((user) => ({
+          ...toUserSummary(user),
+          profileBio: user.profileBio,
+          online: isUserOnline(user.id),
+        })),
+      },
+    });
+  } catch (error) { next(error); }
+});
+
 async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPageSummary> {
   const owner = await prisma.user.findUnique({
     where: { id: ownerId },
@@ -194,20 +230,6 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     },
   });
   if (!owner) throw new AppError(404, "USER_NOT_FOUND", "User was not found.");
-  if (ownerId !== viewerId) {
-    const friendship = await prisma.friendship.findFirst({
-      where: {
-        OR: [
-          { userAId: viewerId, userBId: ownerId },
-          { userAId: ownerId, userBId: viewerId },
-        ],
-      },
-      select: { id: true },
-    });
-    if (!friendship) {
-      throw new AppError(403, "PROFILE_PAGE_FORBIDDEN", "Only friends can view this profile page.");
-    }
-  }
   const theme = profileThemes.includes(owner.profileTheme as typeof profileThemes[number])
     ? owner.profileTheme as ProfileTheme
     : "PURPLE";

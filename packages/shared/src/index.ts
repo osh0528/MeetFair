@@ -71,6 +71,11 @@ export interface FriendSummary {
   avatarUpdatedAt?: string | null;
 }
 
+export interface PublicProfileSearchResult extends UserSummary {
+  profileBio: string | null;
+  online: boolean;
+}
+
 export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
 
 export interface ProfileGuestbookEntrySummary {
