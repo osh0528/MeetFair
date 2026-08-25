@@ -15,6 +15,7 @@ import { avatarUrl } from "../services/avatar";
 import { profileMusicUrl } from "../services/profileMusic";
 import { profilePhotoUrl } from "../services/profilePhoto";
 import { useSession } from "../services/session";
+import { useAppTheme } from "../services/theme";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "UserPage">;
@@ -27,8 +28,17 @@ const themes: Record<ProfileTheme, { label: string; background: string; accent: 
   SUNSET: { label: "차콜", background: "#E7E7E7", accent: "#2B2B2B", soft: "#D5D5D5" },
 };
 
+const darkThemes: Record<ProfileTheme, { label: string; background: string; accent: string; soft: string }> = {
+  PURPLE: { label: "오프화이트", background: "#171717", accent: "#E3E3E3", soft: "#2A2A2A" },
+  PINK: { label: "웜그레이", background: "#1A1918", accent: "#D9D4D0", soft: "#302D2A" },
+  BLUE: { label: "쿨그레이", background: "#171A1C", accent: "#CBD5DB", soft: "#293035" },
+  MINT: { label: "실버", background: "#181818", accent: "#D7D7D7", soft: "#2D2D2D" },
+  SUNSET: { label: "차콜", background: "#202020", accent: "#F0F0F0", soft: "#363636" },
+};
+
 export function UserPageScreen({ navigation, route }: Props) {
   const { user } = useSession();
+  const { mode } = useAppTheme();
   const [page, setPage] = useState<UserPageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -292,7 +302,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
-  const palette = themes[page?.theme ?? theme];
+  const palette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }]}>
