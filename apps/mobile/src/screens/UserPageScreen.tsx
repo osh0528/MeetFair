@@ -387,14 +387,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
                 {page.hasMusic ? (
                   <>
-                    <View style={styles.progressTrack}>
+                    <View style={[styles.progressTrack, { backgroundColor: mode === "DARK" ? "#525252" : "#D1D1D1" }]}>
                       <View
                         style={[
                           styles.progressFill,
                           {
                             backgroundColor: palette.accent,
                             width: ((musicStatus.duration > 0
-                              ? Math.min(100, musicStatus.currentTime / musicStatus.duration * 100)
+                              ? Math.max(2, Math.min(100, musicStatus.currentTime / musicStatus.duration * 100))
                               : 0) + "%") as `${number}%`,
                           },
                         ]}
