@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection } from "../types/location";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
 // props 타입이 never로 붕괴되는 업스트림 타입 버그가 있다.
@@ -25,7 +25,9 @@ const WebView = RNCWebView as unknown as React.ForwardRefExoticComponent<
 export interface KakaoAddressMapProps {
   query: string;
   requestId: number;
-  onResolved: (selection: AddressSelection) => void;
+  focusTarget?: AddressSelection | null;
+  onResults?: (candidates: AddressCandidate[]) => void;
+  onResolved?: (selection: AddressSelection) => void;
   interactive?: boolean;
 }
 
@@ -39,7 +41,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
     "<script src=\"https://dapi.kakao.com/v2/maps/sdk.js?appkey=" +
     encodeURIComponent(appKey) +
     "&autoload=false&libraries=services\"></script></head><body><div id=\"map\"></div><script>";
-  const clickHandler = interactive ? `
+  const clickHandler = `
     kakao.maps.event.addListener(map, "click", function (mouseEvent) {
       var latlng = mouseEvent.latLng;
       marker.setPosition(latlng);
@@ -47,20 +49,46 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
         var address = status === kakao.maps.services.Status.OK && result && result[0]
           ? ((result[0].road_address && result[0].road_address.address_name) || result[0].address.address_name)
           : "지도에서 선택한 위치";
-        post({ type: "resolved", address: address, latitude: latlng.getLat(), longitude: latlng.getLng() });
+        post({ type: "results", items: [{ title: address, address: address, latitude: latlng.getLat(), longitude: latlng.getLng() }] });
+        ${interactive ? 'post({ type: "resolved", address: address, latitude: latlng.getLat(), longitude: latlng.getLng() });' : ""}
       });
     });
-  ` : "";
+  `;
   const body = `
 (function () {
   var map = null;
   var marker = null;
   var geocoder = null;
+  var places = null;
 
   function post(payload) {
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify(payload));
     }
+  }
+
+  function focusAt(lat, lng) {
+    var position = new kakao.maps.LatLng(lat, lng);
+    map.setCenter(position);
+    marker.setPosition(position);
+  }
+
+  function respond(items) {
+    var seen = {};
+    var candidates = [];
+    items.forEach(function (item) {
+      if (typeof item.latitude !== "number" || typeof item.longitude !== "number") return;
+      var key = item.latitude.toFixed(6) + "|" + item.longitude.toFixed(6) + "|" + item.address;
+      if (seen[key]) return;
+      seen[key] = true;
+      candidates.push(item);
+    });
+    if (!candidates.length) {
+      post({ type: "not-found" });
+      return;
+    }
+    focusAt(candidates[0].latitude, candidates[0].longitude);
+    post({ type: "results", items: candidates.slice(0, 5) });
   }
 
   function init() {
@@ -70,30 +98,63 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
     marker = new kakao.maps.Marker({ position: center });
     marker.setMap(map);
     geocoder = new kakao.maps.services.Geocoder();
-    ${clickHandler}
+    places = new kakao.maps.services.Places();
+    kakao.maps.event.addListener(map, "click", function (mouseEvent) {
+      var lat = mouseEvent.latLng.getLat();
+      var lng = mouseEvent.latLng.getLng();
+      marker.setPosition(mouseEvent.latLng);
+      geocoder.coord2Address(lng, lat, function (results, status) {
+        var name = "";
+        if (status === kakao.maps.services.Status.OK && results && results.length) {
+          name = (results[0].road_address && results[0].road_address.address_name)
+            || (results[0].address && results[0].address.address_name)
+            || "";
+        }
+        var label = name || "지도에서 선택한 위치";
+        post({
+          type: "results",
+          items: [{ title: label, address: label, latitude: lat, longitude: lng }]
+        });
+        ${interactive ? 'post({ type: "resolved", address: label, latitude: lat, longitude: lng });' : ""}
+      });
+    });
     post({ type: "ready" });
   }
 
   window.meetfairSearch = function (query) {
-    if (!geocoder) return;
-    geocoder.addressSearch(query, function (results, status) {
-      if (status !== kakao.maps.services.Status.OK || !results || !results.length) {
-        post({ type: "not-found" });
+    if (!places || !geocoder) return;
+    places.keywordSearch(query, function (results, status) {
+      if (status === kakao.maps.services.Status.OK && results && results.length) {
+        respond(results.map(function (place) {
+          return {
+            title: place.place_name,
+            address: place.road_address_name || place.address_name || place.place_name,
+            latitude: Number(place.y),
+            longitude: Number(place.x)
+          };
+        }));
         return;
       }
-      var first = results[0];
-      var lat = Number(first.y);
-      var lng = Number(first.x);
-      var position = new kakao.maps.LatLng(lat, lng);
-      map.setCenter(position);
-      marker.setPosition(position);
-      post({
-        type: "resolved",
-        address: (first.road_address && first.road_address.address_name) || first.address_name,
-        latitude: lat,
-        longitude: lng
+      geocoder.addressSearch(query, function (addrResults, addrStatus) {
+        if (addrStatus !== kakao.maps.services.Status.OK || !addrResults || !addrResults.length) {
+          post({ type: "not-found" });
+          return;
+        }
+        respond(addrResults.map(function (item) {
+          return {
+            title: item.address_name,
+            address: (item.road_address && item.road_address.address_name) || item.address_name,
+            latitude: Number(item.y),
+            longitude: Number(item.x)
+          };
+        }));
       });
     });
+  };
+
+  window.meetfairFocus = function (lat, lng) {
+    if (!map || !marker) return;
+    focusAt(Number(lat), Number(lng));
   };
 
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
@@ -107,7 +168,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, onResolved, interactive = false }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -128,9 +189,22 @@ export function KakaoAddressMap({ query, requestId, onResolved, interactive = fa
     }
   }, [query, requestId, runSearch]);
 
+  useEffect(() => {
+    if (!readyRef.current || !focusTarget) return;
+    webViewRef.current?.injectJavaScript(
+      `window.meetfairFocus(${focusTarget.latitude}, ${focusTarget.longitude}); true;`,
+    );
+  }, [focusTarget]);
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      let data: { type?: string; address?: string; latitude?: number; longitude?: number };
+      let data: {
+        type?: string;
+        items?: AddressCandidate[];
+        address?: string;
+        latitude?: number;
+        longitude?: number;
+      };
       try {
         data = JSON.parse(event.nativeEvent.data);
       } catch (error) {
@@ -147,23 +221,29 @@ export function KakaoAddressMap({ query, requestId, onResolved, interactive = fa
         return;
       }
       if (data.type === "not-found") {
-        setMessage("검색 결과가 없습니다. 도로명 주소로 다시 검색해주세요.");
+        setMessage("검색 결과가 없습니다. 주소 또는 장소 이름으로 다시 검색해주세요.");
+        onResults?.([]);
         return;
       }
       if (data.type === "load-failed") {
         setMessage("카카오 지도를 불러오지 못했습니다. 키와 도메인 등록을 확인해주세요.");
         return;
       }
-      if (data.type === "resolved" && typeof data.latitude === "number" && typeof data.longitude === "number") {
+      if (data.type === "results" && Array.isArray(data.items)) {
         setMessage("");
-        onResolved({
-          address: data.address ?? "",
-          latitude: data.latitude,
-          longitude: data.longitude,
-        });
+        onResults?.(data.items);
+        return;
+      }
+      if (
+        data.type === "resolved"
+        && typeof data.address === "string"
+        && typeof data.latitude === "number"
+        && typeof data.longitude === "number"
+      ) {
+        onResolved?.({ address: data.address, latitude: data.latitude, longitude: data.longitude });
       }
     },
-    [onResolved, runSearch],
+    [onResolved, onResults, runSearch],
   );
 
   if (!appConfig.kakaoMapJsKey) {

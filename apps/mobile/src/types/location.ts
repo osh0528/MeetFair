@@ -3,3 +3,7 @@ export interface AddressSelection {
   latitude: number;
   longitude: number;
 }
+
+export interface AddressCandidate extends AddressSelection {
+  title: string;
+}

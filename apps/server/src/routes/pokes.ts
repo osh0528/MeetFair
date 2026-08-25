@@ -23,6 +23,10 @@ async function handleCasualPoke(senderId: string, targetId: string, clientReques
     : { userAId: targetId, userBId: senderId };
   const friendship = await prisma.friendship.findUnique({ where: { userAId_userBId: pair } });
   if (!friendship) throw new AppError(403, "NOT_FRIENDS", "Only friends can send casual pokes.");
+  const blockBetween = await prisma.block.findFirst({
+    where: { OR: [{ blockerId: senderId, blockedId: targetId }, { blockerId: targetId, blockedId: senderId }] },
+  });
+  if (blockBetween) throw new AppError(403, "BLOCKED", "You cannot poke this user.");
   const target = await prisma.user.findUnique({ where: { id: targetId } });
   if (!target) throw new AppError(404, "USER_NOT_FOUND", "Target user was not found.");
   const allowedByFriend = senderId === friendship.userAId
