@@ -696,9 +696,9 @@ export function UserPageScreen({ navigation, route }: Props) {
                     </Pressable>
                   ) : null}
                 </View>
-                <ScrollView contentContainerStyle={styles.photoGroupDetail} horizontal pagingEnabled>
+                <ScrollView contentContainerStyle={styles.photoGroupDetail} horizontal pagingEnabled style={styles.photoDetailScroller}>
                   {selectedGroup.map((groupPhoto) => (
-                    <View key={groupPhoto.id} style={styles.photoDetailPage}>
+                    <View key={groupPhoto.id} style={[styles.photoDetailPage, { width: Math.max(1, windowWidth - 36) }]}>
                       <Image
                         resizeMode="contain"
                         source={{ uri: profilePhotoUrl(page.user.id, groupPhoto.id) }}
@@ -781,9 +781,10 @@ const styles = StyleSheet.create({
   photoModalButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
   photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
   photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
-  photoDetail: { width: "100%", height: "72%" },
-  photoGroupDetail: { alignItems: "center" },
-  photoDetailPage: { width: 340, alignItems: "center", justifyContent: "center", gap: 14 },
+  photoDetailScroller: { flex: 1, width: "100%" },
+  photoDetail: { width: "100%", flex: 1, minHeight: 0 },
+  photoGroupDetail: { flexGrow: 1, alignItems: "center" },
+  photoDetailPage: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
   photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
   guestbookComposer: { gap: 10, paddingBottom: 14 },
