@@ -1,6 +1,8 @@
-import { DefaultTheme, NavigationContainer } from "@react-navigation/native";
+import { DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddressSearchScreen } from "./src/screens/AddressSearchScreen";
 import { CreateMeetingScreen } from "./src/screens/CreateMeetingScreen";
@@ -19,8 +21,9 @@ import { PublicMeetingRequestScreen } from "./src/screens/PublicMeetingRequestSc
 import { VideoCallScreen } from "./src/screens/VideoCallScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { UserPageScreen } from "./src/screens/UserPageScreen";
-import { SessionProvider } from "./src/services/session";
+import { SessionProvider, useSession } from "./src/services/session";
 import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge";
+import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
@@ -62,10 +65,34 @@ const navigationTheme = {
 export default function App() {
   return (
     <SessionProvider>
-    <PokeNotificationBridge />
-    <SafeAreaProvider>
-      <NavigationContainer theme={navigationTheme}>
-        <StatusBar style="dark" />
+      <PokeNotificationBridge />
+      <SafeAreaProvider>
+        <AppNavigator />
+      </SafeAreaProvider>
+    </SessionProvider>
+  );
+}
+
+function AppNavigator() {
+  const { user } = useSession();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [currentRoute, setCurrentRoute] = useState<keyof RootStackParamList>("Login");
+  const bottomNavHidden = currentRoute === "Login" || currentRoute === "Register" || currentRoute === "VideoCall";
+
+  function updateCurrentRoute() {
+    const routeName = navigationRef.getCurrentRoute()?.name;
+    if (routeName) setCurrentRoute(routeName);
+  }
+
+  return (
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      onReady={updateCurrentRoute}
+      onStateChange={updateCurrentRoute}
+    >
+      <StatusBar style="dark" />
+      <View style={styles.appShell}>
         <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
@@ -92,8 +119,20 @@ export default function App() {
           <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
         </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
-    </SessionProvider>
+        {user && !bottomNavHidden ? (
+          <AppBottomNavigation
+            currentRoute={currentRoute}
+            onCreateMeeting={() => navigationRef.navigate("CreateMeeting")}
+            onFriends={() => navigationRef.navigate("Friends")}
+            onSettings={() => navigationRef.navigate("Settings")}
+            onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
+          />
+        ) : null}
+      </View>
+    </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  appShell: { flex: 1 },
+});
