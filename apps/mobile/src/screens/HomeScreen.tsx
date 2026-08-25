@@ -1,8 +1,8 @@
 import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
@@ -21,6 +21,16 @@ export function HomeScreen({ navigation }: Props) {
   const [calls, setCalls] = useState<MeetingCallSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const openedCallIds = useRef(new Set<string>());
+
+  const openCall = useCallback((call: MeetingCallSummary) => {
+    if (openedCallIds.current.has(call.id)) return;
+    openedCallIds.current.add(call.id);
+    navigation.navigate("VideoCall", {
+      callId: call.id,
+      meetingId: call.meetingId,
+    });
+  }, [navigation]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -48,28 +58,16 @@ export function HomeScreen({ navigation }: Props) {
   }, [load]));
 
   useEffect(() => {
+    const incomingCall = calls.find((call) => call.participantStatus === "RINGING");
+    if (incomingCall) openCall(incomingCall);
+  }, [calls, openCall]);
+
+  useEffect(() => {
     if (!accessToken) return;
     const socket = createMeetingSocket(accessToken);
     socket.on("meeting:call-incoming", ({ call }) => {
       setCalls((current) => [call, ...current.filter((item) => item.id !== call.id)]);
-      Alert.alert(
-        "영상통화 요청",
-        `${call.meetingTitle} 모임에서 영상통화를 요청했습니다.`,
-        [
-          {
-            text: "거절",
-            style: "cancel",
-            onPress: () => void declineCall(call.id),
-          },
-          {
-            text: "참여",
-            onPress: () => navigation.navigate("VideoCall", {
-              callId: call.id,
-              meetingId: call.meetingId,
-            }),
-          },
-        ],
-      );
+      openCall(call);
     });
     socket.on("meeting:invitation", ({ invitation }) => {
       setInvitations((current) => [
@@ -94,7 +92,7 @@ export function HomeScreen({ navigation }: Props) {
       clearInterval(timer);
       socket.disconnect();
     };
-  }, [accessToken, load]);
+  }, [accessToken, load, openCall]);
 
   async function declineCall(callId: string) {
     await apiRequest(`/meeting-calls/${callId}`, {
