@@ -6,7 +6,7 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -53,6 +53,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [pokeBusy, setPokeBusy] = useState(false);
   const [pokeCooldown, setPokeCooldown] = useState(0);
   const musicSource = page?.hasMusic
@@ -142,6 +143,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         }),
       });
       applyPage(data.page);
+      if (Platform.OS !== "web") setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "꾸미기 설정을 저장하지 못했습니다.");
@@ -280,33 +282,43 @@ export function UserPageScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         allowsMultipleSelection: true,
-        selectionLimit: Math.max(1, 30 - page.photos.length),
+        // 일부 Android/브라우저 선택기는 양의 selectionLimit을 단일 선택으로 처리할 수 있어
+        // 시스템 최대값으로 열고, 실제 30장 제한은 업로드 전에 앱에서 적용합니다.
+        selectionLimit: 0,
         quality: 1,
       });
       if (result.canceled) return;
       const uploadedPhotos: UserPageSummary["photos"] = [];
-      for (const image of result.assets) {
+      let failedCount = 0;
+      for (const image of result.assets.slice(0, Math.max(1, 30 - page.photos.length))) {
         if (!image.uri || !image.width || !image.height) continue;
-        const resize = image.width >= image.height
-          ? { width: Math.min(1200, image.width) }
-          : { height: Math.min(1200, image.height) };
-        const edited = await manipulateAsync(
-          image.uri,
-          [{ resize }],
-          { base64: true, compress: 0.76, format: SaveFormat.JPEG },
-        );
-        if (!edited.base64) continue;
-        const data = await apiRequest<{ photo: UserPageSummary["photos"][number] }>("/users/me/page-photos", {
-          method: "POST",
-          body: JSON.stringify({
-            imageBase64: edited.base64,
-            mimeType: "image/jpeg",
-            caption: photoCaption.trim() || null,
-            width: edited.width,
-            height: edited.height,
-          }),
-        });
-        uploadedPhotos.push(data.photo);
+        try {
+          const resize = image.width >= image.height
+            ? { width: Math.min(1200, image.width) }
+            : { height: Math.min(1200, image.height) };
+          const edited = await manipulateAsync(
+            image.uri,
+            [{ resize }],
+            { base64: true, compress: 0.68, format: SaveFormat.JPEG },
+          );
+          if (!edited.base64) {
+            failedCount += 1;
+            continue;
+          }
+          const data = await apiRequest<{ photo: UserPageSummary["photos"][number] }>("/users/me/page-photos", {
+            method: "POST",
+            body: JSON.stringify({
+              imageBase64: edited.base64,
+              mimeType: "image/jpeg",
+              caption: photoCaption.trim() || null,
+              width: edited.width,
+              height: edited.height,
+            }),
+          });
+          uploadedPhotos.push(data.photo);
+        } catch {
+          failedCount += 1;
+        }
       }
       if (!uploadedPhotos.length) throw new Error("선택한 사진을 업로드하지 못했습니다.");
       setPage((current) => current
@@ -371,7 +383,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               />
             ) : null}
 
-            {page.isOwner ? (
+            {page.isOwner && Platform.OS === "web" ? (
               <Card style={styles.editorCard}>
                 <SectionHeading title="간편 설정" action="나만 수정 가능" />
                 <Text style={styles.label}>대표 이모지</Text>
@@ -412,6 +424,9 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
+            {page.isOwner && Platform.OS !== "web" ? (
+              <Button label="홈피 편집" onPress={() => setEditing(true)} variant="soft" />
+            ) : null}
 
             <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
               <Pressable
@@ -448,7 +463,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
-            <View style={styles.pageColumns}>
+            <View style={[styles.pageColumns, Platform.OS !== "web" && styles.pageColumnsMobile]}>
               <Card style={styles.aboutPhotoPanel}>
                 <View style={styles.introSection}>
                   <SectionHeading title="About me" />
@@ -531,6 +546,38 @@ export function UserPageScreen({ navigation, route }: Props) {
           </>
         ) : !loading ? <Button label="다시 시도" onPress={() => void load()} variant="secondary" /> : null}
       </ScrollView>
+      <Modal animationType="slide" onRequestClose={() => setEditing(false)} visible={editing && page?.isOwner}>
+        <SafeAreaView style={[styles.editModalSafeArea, { backgroundColor: palette.background }]}>
+          <View style={styles.editModalHeader}>
+            <ScreenHeader title="홈피 편집" onBack={() => setEditing(false)} />
+          </View>
+          <ScrollView contentContainerStyle={styles.editModalContent}>
+            <Card style={styles.editorCard}>
+              <Text style={styles.label}>대표 이모지</Text>
+              <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
+              <Text style={styles.label}>상태 메시지</Text>
+              <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={colors.subtle} style={styles.input} value={statusMessage} />
+              <Text style={styles.label}>소개글</Text>
+              <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
+              <Text style={styles.label}>BGM 제목</Text>
+              <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+              <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
+              <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
+              {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
+              <Text style={styles.label}>테마</Text>
+              <View style={styles.themeRow}>
+                {(Object.keys(themes) as ProfileTheme[]).map((item) => (
+                  <Pressable key={item} onPress={() => setTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
+                    <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
+                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
+            </Card>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
       <Modal animationType="fade" onRequestClose={() => setSelectedPhotoId(null)} transparent visible={selectedPhotoId !== null}>
         <View style={styles.photoModalBackdrop}>
           {page && selectedPhotoId ? (() => {
@@ -568,6 +615,9 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   loader: { marginTop: 40 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
+  editModalSafeArea: { flex: 1 },
+  editModalHeader: { paddingHorizontal: 4 },
+  editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   heroCard: { alignItems: "center", gap: 6, overflow: "hidden" },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
@@ -595,6 +645,7 @@ const styles = StyleSheet.create({
   musicTime: { color: colors.muted, fontSize: 10 },
   musicError: { color: colors.red, fontSize: 10 },
   pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  pageColumnsMobile: { flexDirection: "column" },
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
   introSection: { gap: 12 },
