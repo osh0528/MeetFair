@@ -20,6 +20,14 @@ export function NotificationsScreen({ navigation }: Props) {
     try {
       const data = await apiRequest<{ notifications: NotificationSummary[] }>("/notifications");
       setNotifications(data.notifications);
+      await Promise.all(
+        data.notifications
+          .filter((item) => !item.readAt)
+          .map((item) => apiRequest(`/notifications/${item.id}/read`, { method: "PATCH" })),
+      );
+      if (data.notifications.some((item) => !item.readAt)) {
+        setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "알림을 불러오지 못했습니다.");
     } finally {

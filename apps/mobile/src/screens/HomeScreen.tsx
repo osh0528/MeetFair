@@ -1,4 +1,4 @@
-import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary } from "@meetfair/shared";
+import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary, NotificationSummary } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,6 +19,7 @@ export function HomeScreen({ navigation }: Props) {
   const [invitations, setInvitations] = useState<MeetingInvitationSummary[]>([]);
   const [activities, setActivities] = useState<FriendActivitySummary[]>([]);
   const [calls, setCalls] = useState<MeetingCallSummary[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const openedCallIds = useRef(new Set<string>());
@@ -36,16 +37,18 @@ export function HomeScreen({ navigation }: Props) {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const [meetingData, invitationData, activityData, callData] = await Promise.all([
+      const [meetingData, invitationData, activityData, callData, notificationData] = await Promise.all([
         apiRequest<MeetingSummary[]>("/meetings"),
         apiRequest<{ invitations: MeetingInvitationSummary[] }>("/meeting-invitations"),
         apiRequest<{ activities: FriendActivitySummary[] }>("/meetings/activity/friends"),
         apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending"),
+        apiRequest<{ notifications: NotificationSummary[] }>("/notifications"),
       ]);
       setMeetings(meetingData);
       setInvitations(invitationData.invitations.filter((item) => item.status === "PENDING"));
       setActivities(activityData.activities);
       setCalls(callData.calls);
+      setUnreadNotificationCount(notificationData.notifications.filter((item) => !item.readAt).length);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "홈 정보를 불러오지 못했습니다.");
     } finally {
@@ -106,7 +109,14 @@ export function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>MeetFair</Text></View>
-        <Pressable onPress={() => navigation.navigate("Notifications")}><Text style={styles.link}>알림</Text></Pressable>
+        <Pressable accessibilityLabel="알림" onPress={() => navigation.navigate("Notifications")} style={styles.notificationButton}>
+          <Text style={styles.bell}>🔔</Text>
+          {unreadNotificationCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
@@ -176,7 +186,10 @@ const styles = StyleSheet.create({
   header: { height: 64, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
   brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
-  link: { color: colors.primary, fontWeight: "900" },
+  notificationButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center", position: "relative" },
+  bell: { fontSize: 25 },
+  notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
+  notificationBadgeText: { color: colors.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
   content: { padding: 20, gap: 14, paddingBottom: 28 },
   hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
   accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
