@@ -178,13 +178,28 @@ usersRouter.get("/search", async (request: AuthenticatedRequest, response, next)
         profileBio: true,
       },
     });
+    const userIds = users.map((user) => user.id);
+    const friendships = userIds.length
+      ? await prisma.friendship.findMany({
+        where: {
+          OR: [
+            { userAId: currentUserId, userBId: { in: userIds } },
+            { userAId: { in: userIds }, userBId: currentUserId },
+          ],
+        },
+        select: { userAId: true, userBId: true },
+      })
+      : [];
+    const friendIds = new Set(friendships.map((friendship) => (
+      friendship.userAId === currentUserId ? friendship.userBId : friendship.userAId
+    )));
     response.json({
       success: true,
       data: {
         users: users.map((user) => ({
           ...toUserSummary(user),
           profileBio: user.profileBio,
-          online: isUserOnline(user.id),
+          online: friendIds.has(user.id) && isUserOnline(user.id),
         })),
       },
     });
