@@ -90,6 +90,86 @@ friendsRouter.get("/online", async (request: AuthenticatedRequest, response, nex
   } catch (error) { next(error); }
 });
 
+friendsRouter.get("/recommendations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const userId = currentUserId(request);
+    const directFriendships = await prisma.friendship.findMany({
+      where: { OR: [{ userAId: userId }, { userBId: userId }] },
+      select: {
+        userAId: true,
+        userBId: true,
+        userA: { select: { nickname: true } },
+        userB: { select: { nickname: true } },
+      },
+    });
+    const directIds = new Set(directFriendships.map((friendship) =>
+      friendship.userAId === userId ? friendship.userBId : friendship.userAId));
+    if (!directIds.size) {
+      response.json({ success: true, data: { recommendations: [] } });
+      return;
+    }
+    const secondDegreeFriendships = await prisma.friendship.findMany({
+      where: { OR: [{ userAId: { in: [...directIds] } }, { userBId: { in: [...directIds] } }] },
+      select: {
+        userAId: true,
+        userBId: true,
+        userA: { select: { nickname: true } },
+        userB: { select: { nickname: true } },
+      },
+    });
+    const mutuals = new Map<string, string[]>();
+    for (const friendship of secondDegreeFriendships) {
+      const directId = directIds.has(friendship.userAId) ? friendship.userAId : directIds.has(friendship.userBId) ? friendship.userBId : null;
+      const candidateId = directId === friendship.userAId ? friendship.userBId : friendship.userAId;
+      if (!directId || candidateId === userId || directIds.has(candidateId)) continue;
+      const mutual = directFriendships.find((item) => item.userAId === directId || item.userBId === directId);
+      const names = mutuals.get(candidateId) ?? [];
+      if (mutual) names.push(mutual.userAId === directId ? mutual.userA.nickname : mutual.userB.nickname);
+      mutuals.set(candidateId, names);
+    }
+    const pendingRequests = await prisma.friendRequest.findMany({
+      where: {
+        status: "PENDING",
+        OR: [
+          { requesterId: userId, recipientId: { in: [...mutuals.keys()] } },
+          { recipientId: userId, requesterId: { in: [...mutuals.keys()] } },
+        ],
+      },
+      select: { requesterId: true, recipientId: true },
+    });
+    const pendingIds = new Set(pendingRequests.map((item) => item.requesterId === userId ? item.recipientId : item.requesterId));
+    const candidateIds = [...mutuals.keys()].filter((id) => !pendingIds.has(id));
+    const candidates = candidateIds.length
+      ? await prisma.user.findMany({
+        where: { id: { in: candidateIds } },
+        select: { id: true, accountId: true, nickname: true, avatarUpdatedAt: true },
+      })
+      : [];
+    const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+    response.json({
+      success: true,
+      data: {
+        recommendations: candidateIds
+          .map((id) => {
+            const candidate = byId.get(id);
+            const names = mutuals.get(id) ?? [];
+            return candidate ? {
+              userId: candidate.id,
+              accountId: candidate.accountId,
+              nickname: candidate.nickname,
+              avatarUpdatedAt: candidate.avatarUpdatedAt?.toISOString() ?? null,
+              mutualFriendCount: names.length,
+              mutualFriendNames: names.slice(0, 3),
+            } : null;
+          })
+          .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+          .sort((a, b) => b.mutualFriendCount - a.mutualFriendCount)
+          .slice(0, 20),
+      },
+    });
+  } catch (error) { next(error); }
+});
+
 friendsRouter.post("/friend-requests", async (request: AuthenticatedRequest, response, next) => {
   try {
     const userId = currentUserId(request);

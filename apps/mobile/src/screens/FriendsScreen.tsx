@@ -1,4 +1,4 @@
-import type { FriendSummary } from "@meetfair/shared";
+import type { FriendRecommendation, FriendSummary } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
@@ -18,22 +18,26 @@ export function FriendsScreen({ navigation }: Props) {
   const { accessToken } = useSession();
   const [accountId, setAccountId] = useState("");
   const [friends, setFriends] = useState<FriendSummary[]>([]);
+  const [recommendations, setRecommendations] = useState<FriendRecommendation[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [busyFriendId, setBusyFriendId] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [recommendationBusyId, setRecommendationBusyId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const [friendData, onlineData] = await Promise.all([
+      const [friendData, onlineData, recommendationData] = await Promise.all([
         apiRequest<{ friends: FriendSummary[] }>("/friends"),
         apiRequest<{ onlineUserIds: string[] }>("/friends/online"),
+        apiRequest<{ recommendations: FriendRecommendation[] }>("/friends/recommendations"),
       ]);
       setFriends(friendData.friends);
       setOnlineUserIds(onlineData.onlineUserIds);
+      setRecommendations(recommendationData.recommendations);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "친구 목록을 불러오지 못했습니다.");
     } finally {
@@ -65,20 +69,42 @@ export function FriendsScreen({ navigation }: Props) {
   const onlineFriends = friends.filter((friend) => onlineUserIds.includes(friend.userId));
 
   async function sendRequest() {
+    await sendFriendRequest(accountId);
+  }
+
+  async function sendFriendRequest(recipientAccountId: string) {
     if (submitting) return;
     setSubmitting(true);
     setMessage("");
     try {
       await apiRequest("/friends/friend-requests", {
         method: "POST",
-        body: JSON.stringify({ recipientAccountId: accountId }),
+        body: JSON.stringify({ recipientAccountId }),
       });
       setMessage("친구 요청을 보냈습니다.");
-      setAccountId("");
+      if (recipientAccountId === accountId) setAccountId("");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "친구 요청을 보내지 못했습니다.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function sendRecommendationRequest(recommendation: FriendRecommendation) {
+    if (recommendationBusyId) return;
+    setRecommendationBusyId(recommendation.userId);
+    setMessage("");
+    try {
+      await apiRequest("/friends/friend-requests", {
+        method: "POST",
+        body: JSON.stringify({ recipientAccountId: recommendation.accountId }),
+      });
+      setRecommendations((current) => current.filter((item) => item.userId !== recommendation.userId));
+      setMessage(recommendation.nickname + "님에게 친구 요청을 보냈습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "친구 요청을 보내지 못했습니다.");
+    } finally {
+      setRecommendationBusyId("");
     }
   }
 
@@ -115,6 +141,25 @@ export function FriendsScreen({ navigation }: Props) {
         <Button label="미니홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" />
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
+
+        {recommendations.length ? (
+          <>
+            <SectionHeading title="추천 친구" action={recommendations.length + "명"} />
+            <ScrollView contentContainerStyle={styles.recommendationRow} horizontal showsHorizontalScrollIndicator={false}>
+              {recommendations.map((recommendation) => (
+                <Card key={recommendation.userId} style={styles.recommendationCard}>
+                  <Pressable onPress={() => navigation.navigate("UserPage", { userId: recommendation.userId })}>
+                    <Avatar imageUrl={avatarUrl(recommendation.userId, recommendation.avatarUpdatedAt)} name={recommendation.nickname} size={52} />
+                  </Pressable>
+                  <Text numberOfLines={1} style={styles.recommendationName}>{recommendation.nickname}</Text>
+                  <Text numberOfLines={1} style={styles.recommendationMeta}>@{recommendation.accountId}</Text>
+                  <Text numberOfLines={1} style={styles.recommendationMutual}>공통 친구 {recommendation.mutualFriendCount}명</Text>
+                  <Button disabled={recommendationBusyId === recommendation.userId} label={recommendationBusyId === recommendation.userId ? "전송 중" : "친구 추가"} onPress={() => void sendRecommendationRequest(recommendation)} variant="soft" />
+                </Card>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
 
         <SectionHeading title="온라인 친구" action={onlineFriends.length + "명"} />
         {onlineFriends.length ? (
@@ -161,6 +206,11 @@ const styles = StyleSheet.create({
   addText: { color: colors.surface, fontWeight: "900" },
   message: { color: colors.primary, fontSize: 12 },
   onlineRow: { gap: 16, paddingVertical: 4, paddingRight: 20 },
+  recommendationRow: { gap: 10, paddingRight: 20 },
+  recommendationCard: { width: 156, gap: 6 },
+  recommendationName: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  recommendationMeta: { color: colors.muted, fontSize: 10 },
+  recommendationMutual: { color: colors.muted, fontSize: 10 },
   onlineFriend: { width: 68, alignItems: "center", gap: 7 },
   onlineName: { width: 68, textAlign: "center", color: colors.text, fontSize: 12, fontWeight: "800" },
   empty: { color: colors.muted, fontSize: 12 },

@@ -71,6 +71,24 @@ export interface FriendSummary {
   avatarUpdatedAt?: string | null;
 }
 
+export interface FriendRecommendation {
+  userId: string;
+  accountId: string;
+  nickname: string;
+  avatarUpdatedAt?: string | null;
+  mutualFriendCount: number;
+  mutualFriendNames: string[];
+}
+
+export interface FriendRecommendation {
+  userId: string;
+  accountId: string;
+  nickname: string;
+  avatarUpdatedAt?: string | null;
+  mutualFriendCount: number;
+  mutualFriendNames: string[];
+}
+
 export interface PublicProfileSearchResult extends UserSummary {
   profileBio: string | null;
   online: boolean;
