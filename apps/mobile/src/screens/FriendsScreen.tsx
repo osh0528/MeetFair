@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   name: { color: colors.text, fontWeight: "900" },
   meta: { color: colors.muted, fontSize: 11 },
-  onlineMeta: { color: colors.green, fontSize: 11, fontWeight: "800" },
+  onlineMeta: { color: colors.online, fontSize: 11, fontWeight: "800" },
   permissionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   friendHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   friendCopy: { flex: 1, gap: 3 },

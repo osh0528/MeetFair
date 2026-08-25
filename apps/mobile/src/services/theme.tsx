@@ -10,14 +10,14 @@ const palettes = {
   LIGHT: {
     background: "#F5F5F5", surface: "#FFFFFF", text: "#1C1C1C", muted: "#707070",
     subtle: "#A3A3A3", border: "#E2E2E2", primary: "#303030", "primary-pressed": "#151515",
-    "primary-soft": "#ECECEC", mint: "#E8E8E8", green: "#525252", amber: "#686868",
+    "primary-soft": "#ECECEC", mint: "#E8E8E8", green: "#525252", online: "#22C55E", amber: "#686868",
     "amber-soft": "#F0F0F0", red: "#B95058", "red-soft": "#F5EDEE", blue: "#5D5D5D",
     "blue-soft": "#EDEDED", charcoal: "#242424",
   },
   DARK: {
     background: "#111111", surface: "#1D1D1D", text: "#F4F4F4", muted: "#B0B0B0",
     subtle: "#858585", border: "#363636", primary: "#F0F0F0", "primary-pressed": "#D0D0D0",
-    "primary-soft": "#2B2B2B", mint: "#292929", green: "#B8B8B8", amber: "#BDBDBD",
+    "primary-soft": "#2B2B2B", mint: "#292929", green: "#B8B8B8", online: "#22C55E", amber: "#BDBDBD",
     "amber-soft": "#292929", red: "#E07A82", "red-soft": "#382528", blue: "#B5B5B5",
     "blue-soft": "#292929", charcoal: "#090909",
   },

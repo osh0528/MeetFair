@@ -16,6 +16,7 @@ export const colors = {
   primarySoft: themed("primary-soft", "#ECECEC"),
   mint: themed("mint", "#E8E8E8"),
   green: themed("green", "#525252"),
+  online: themed("online", "#22C55E"),
   amber: themed("amber", "#686868"),
   amberSoft: themed("amber-soft", "#F0F0F0"),
   red: themed("red", "#B95058"),
