@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
-import { NaverAddressMap } from "../components/NaverAddressMap";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { colors } from "../theme/colors";
 import type { AddressSelection } from "../types/location";
 
@@ -36,13 +36,13 @@ export function AddressSearchScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScreenHeader
         title="집 주소 설정"
-        subtitle="네이버 지도"
+        subtitle="카카오 지도"
         onBack={() => navigation.goBack()}
       />
 
       <View style={styles.searchArea}>
         <View style={styles.searchBox}>
-          <View style={styles.naverBadge}><Text style={styles.naverBadgeText}>N</Text></View>
+          <View style={styles.providerBadge}><Text style={styles.providerBadgeText}>K</Text></View>
           <TextInput
             autoFocus
             onChangeText={setInput}
@@ -65,7 +65,7 @@ export function AddressSearchScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.mapArea}>
-        <NaverAddressMap
+        <KakaoAddressMap
           onResolved={handleResolved}
           query={query}
           requestId={requestId}
@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   searchArea: { flexDirection: "row", gap: 9, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: colors.background },
   searchBox: { flex: 1, height: 52, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 11 },
-  naverBadge: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#03A94D", alignItems: "center", justifyContent: "center" },
-  naverBadgeText: { color: colors.surface, fontSize: 14, fontWeight: "900" },
+  providerBadge: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#FEE500", alignItems: "center", justifyContent: "center" },
+  providerBadgeText: { color: "#191600", fontSize: 14, fontWeight: "900" },
   searchInput: { flex: 1, color: colors.text, fontSize: 13, paddingHorizontal: 10 },
   clear: { color: colors.subtle, fontSize: 22, paddingHorizontal: 3 },
   searchButton: { width: 58, height: 52, borderRadius: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
