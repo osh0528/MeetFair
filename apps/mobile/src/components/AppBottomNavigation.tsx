@@ -5,7 +5,7 @@ import { colors } from "../theme/colors";
 type Props = {
   currentRoute?: string;
   onSettings(): void;
-  onCreateMeeting(): void;
+  onMeetings(): void;
   onFriends(): void;
   onUserPage(): void;
 };
@@ -15,10 +15,9 @@ type ItemProps = {
   icon: string;
   label: string;
   onPress(): void;
-  emphasized?: boolean;
 };
 
-function NavigationItem({ active, icon, label, onPress, emphasized }: ItemProps) {
+function NavigationItem({ active, icon, label, onPress }: ItemProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -30,8 +29,8 @@ function NavigationItem({ active, icon, label, onPress, emphasized }: ItemProps)
         pressed && styles.itemPressed,
       ]}
     >
-      <View style={[styles.icon, emphasized && styles.iconEmphasized, active && styles.iconActive]}>
-        <Text style={[styles.iconText, emphasized && styles.iconTextEmphasized, active && styles.iconTextActive]}>{icon}</Text>
+      <View style={[styles.icon, active && styles.iconActive]}>
+        <Text style={[styles.iconText, active && styles.iconTextActive]}>{icon}</Text>
       </View>
       <Text numberOfLines={1} style={styles.label}>{label}</Text>
     </Pressable>
@@ -41,7 +40,7 @@ function NavigationItem({ active, icon, label, onPress, emphasized }: ItemProps)
 export function AppBottomNavigation({
   currentRoute,
   onSettings,
-  onCreateMeeting,
+  onMeetings,
   onFriends,
   onUserPage,
 }: Props) {
@@ -55,11 +54,15 @@ export function AppBottomNavigation({
           onPress={onUserPage}
         />
         <NavigationItem
-          active={currentRoute === "CreateMeeting"}
-          emphasized
-          icon="＋"
-          label="새 모임"
-          onPress={onCreateMeeting}
+          active={currentRoute === "Home"
+            || currentRoute === "CreateMeeting"
+            || currentRoute === "Meeting"
+            || currentRoute === "MeetingInvitation"
+            || currentRoute === "PublicMeetingRequest"
+            || currentRoute === "Recommendations"}
+          icon="▣"
+          label="모임"
+          onPress={onMeetings}
         />
         <NavigationItem
           active={currentRoute === "Friends" || currentRoute === "FriendRequests"}
@@ -114,10 +117,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.background,
   },
-  iconEmphasized: { backgroundColor: colors.primary },
   iconActive: { backgroundColor: colors.primary, transform: [{ scale: 1.08 }] },
   iconText: { color: colors.muted, fontSize: 18, fontWeight: "900", lineHeight: 20 },
-  iconTextEmphasized: { color: colors.surface },
   iconTextActive: { color: colors.surface },
   label: { color: colors.muted, fontSize: 10, fontWeight: "800", textAlign: "center" },
 });

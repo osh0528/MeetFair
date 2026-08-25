@@ -125,7 +125,7 @@ function AppNavigator() {
         {user && !bottomNavHidden ? (
           <AppBottomNavigation
             currentRoute={currentRoute}
-            onCreateMeeting={() => navigationRef.navigate("CreateMeeting")}
+            onMeetings={() => navigationRef.navigate("Home")}
             onFriends={() => navigationRef.navigate("Friends")}
             onSettings={() => navigationRef.navigate("Settings")}
             onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
