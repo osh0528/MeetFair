@@ -50,10 +50,10 @@ export function AppBottomNavigation({
     <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
       <View style={styles.navigation}>
         <NavigationItem
-          active={currentRoute === "Settings" || currentRoute === "Profile"}
-          icon="⚙"
-          label="설정"
-          onPress={onSettings}
+          active={currentRoute === "UserPage"}
+          icon="⌂"
+          label="홈피"
+          onPress={onUserPage}
         />
         <NavigationItem
           active={currentRoute === "CreateMeeting"}
@@ -69,10 +69,10 @@ export function AppBottomNavigation({
           onPress={onFriends}
         />
         <NavigationItem
-          active={currentRoute === "UserPage"}
-          icon="⌂"
-          label="홈피"
-          onPress={onUserPage}
+          active={currentRoute === "Settings" || currentRoute === "Profile"}
+          icon="⚙"
+          label="설정"
+          onPress={onSettings}
         />
       </View>
     </SafeAreaView>
