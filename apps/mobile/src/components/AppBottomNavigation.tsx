@@ -61,7 +61,7 @@ export function AppBottomNavigation({
             || currentRoute === "PublicMeetingRequest"
             || currentRoute === "Recommendations"}
           icon="▣"
-          label="모임"
+          label="모임창"
           onPress={onMeetings}
         />
         <NavigationItem

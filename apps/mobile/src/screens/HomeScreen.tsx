@@ -111,7 +111,7 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
-        <Button label="＋ 새 모임 만들기" onPress={() => navigation.navigate("CreateMeeting")} />
+        <Button label="＋ 새 모임 생성" onPress={() => navigation.navigate("CreateMeeting")} />
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
