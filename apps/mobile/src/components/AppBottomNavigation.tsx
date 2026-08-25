@@ -27,14 +27,13 @@ function NavigationItem({ active, icon, label, onPress, emphasized }: ItemProps)
       onPress={onPress}
       style={({ pressed }) => [
         styles.item,
-        active && styles.itemActive,
         pressed && styles.itemPressed,
       ]}
     >
       <View style={[styles.icon, emphasized && styles.iconEmphasized, active && styles.iconActive]}>
         <Text style={[styles.iconText, emphasized && styles.iconTextEmphasized, active && styles.iconTextActive]}>{icon}</Text>
       </View>
-      <Text numberOfLines={1} style={[styles.label, active && styles.labelActive]}>{label}</Text>
+      <Text numberOfLines={1} style={styles.label}>{label}</Text>
     </Pressable>
   );
 }
@@ -106,7 +105,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 14,
   },
-  itemActive: { backgroundColor: colors.primary, transform: [{ scale: 1.04 }] },
   itemPressed: { opacity: 0.68 },
   icon: {
     width: 34,
@@ -117,10 +115,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   iconEmphasized: { backgroundColor: colors.primary },
-  iconActive: { backgroundColor: colors.surface, borderWidth: 0 },
+  iconActive: { backgroundColor: colors.primary, transform: [{ scale: 1.08 }] },
   iconText: { color: colors.muted, fontSize: 18, fontWeight: "900", lineHeight: 20 },
   iconTextEmphasized: { color: colors.surface },
-  iconTextActive: { color: colors.primary },
+  iconTextActive: { color: colors.surface },
   label: { color: colors.muted, fontSize: 10, fontWeight: "800", textAlign: "center" },
-  labelActive: { color: colors.surface, fontWeight: "900" },
 });
