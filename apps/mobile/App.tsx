@@ -49,7 +49,7 @@ export type RootStackParamList = {
   MeetingInvitation: { invitation: MeetingInvitationSummary };
   PublicMeetingRequest: { meetingId: string };
   VideoCall: { callId: string; meetingId: string };
-  DirectMessages: { friendId?: string } | undefined;
+  DirectMessages: { conversationId?: string; friendUserId?: string } | undefined;
   MiniHomeSearch: undefined;
 };
 

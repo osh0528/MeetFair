@@ -311,6 +311,33 @@ export interface FriendPresencePayload {
   online: boolean;
 }
 
+export interface DirectMessageSummary {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface DirectConversationSummary {
+  id: string;
+  friend: UserSummary;
+  lastMessage: DirectMessageSummary | null;
+  unreadCount: number;
+  updatedAt: string;
+}
+
+export interface DirectMessageReceivedPayload {
+  message: DirectMessageSummary;
+}
+
+export interface DirectMessageReadPayload {
+  conversationId: string;
+  messageId: string;
+  readAt: string;
+}
+
 export interface MeetingInvitationReceivedPayload {
   invitation: MeetingInvitationSummary;
 }
@@ -343,4 +370,6 @@ export interface ServerToClientEvents {
   "notification:created": (payload: NotificationCreatedPayload) => void;
   "meeting:updated": (payload: MeetingUpdatedPayload) => void;
   "meeting:error": (payload: MeetingErrorPayload) => void;
+  "direct-message:received": (payload: DirectMessageReceivedPayload) => void;
+  "direct-message:read": (payload: DirectMessageReadPayload) => void;
 }

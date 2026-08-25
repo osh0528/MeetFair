@@ -134,6 +134,9 @@ model User {
   profileGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookOwner")
   authoredGuestbookEntries ProfileGuestbookEntry[] @relation("ProfileGuestbookAuthor")
   profilePhotos   ProfilePhoto[]
+  conversationsA  Conversation[]       @relation("ConversationUserA")
+  conversationsB  Conversation[]       @relation("ConversationUserB")
+  directMessages  DirectMessage[]      @relation("DirectMessageSender")
 }
 
 model ProfilePhoto {
@@ -372,6 +375,37 @@ model Poke {
   @@index([meetingId, targetId, createdAt])
   @@index([senderId])
   @@unique([senderId, clientRequestId])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userA     User     @relation("ConversationUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("ConversationUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages  DirectMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+}
+
+model DirectMessage {
+  id              String   @id @default(uuid())
+  conversationId  String
+  senderId        String
+  content         String
+  clientMessageId String?
+  createdAt       DateTime @default(now())
+  readAt          DateTime?
+  deletedAt       DateTime?
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation("DirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@unique([conversationId, clientMessageId])
 }
 
 model Notification {

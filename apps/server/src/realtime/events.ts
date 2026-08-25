@@ -1,14 +1,16 @@
 ﻿import type { Server } from "socket.io";
 import type {
   ClientToServerEvents,
+  DirectMessageReadPayload,
+  DirectMessageReceivedPayload,
   FriendRequestAcceptedPayload,
   FriendRequestReceivedPayload,
+  MeetingCallIncomingPayload,
   MeetingInvitationReceivedPayload,
   MeetingInvitationRespondedPayload,
-  PokeReceivedPayload,
-  MeetingCallIncomingPayload,
-  NotificationCreatedPayload,
   MeetingUpdatedPayload,
+  NotificationCreatedPayload,
+  PokeReceivedPayload,
   ServerToClientEvents,
 } from "@meetfair/shared";
 
@@ -66,4 +68,18 @@ export function emitMeetingCallIncoming(
 
 export function emitMeetingUpdated(meetingId: string, payload: MeetingUpdatedPayload) {
   realtimeServer?.to(`meeting:${meetingId}`).emit("meeting:updated", payload);
+}
+
+export function emitDirectMessageReceived(
+  targetUserId: string,
+  payload: DirectMessageReceivedPayload,
+) {
+  realtimeServer?.to(`user:${targetUserId}`).emit("direct-message:received", payload);
+}
+
+export function emitDirectMessageRead(
+  targetUserId: string,
+  payload: DirectMessageReadPayload,
+) {
+  realtimeServer?.to(`user:${targetUserId}`).emit("direct-message:read", payload);
 }

@@ -242,8 +242,14 @@ export function FriendsScreen({ navigation }: Props) {
               <Text style={styles.meta}>이 친구의 찌르기 허용</Text>
               <Switch disabled={busyFriendId === friend.userId} value={friend.allowsPokesFromFriend} onValueChange={(allowed) => void updatePokePermission(friend, allowed)} />
             </View>
-            <Button disabled={busyFriendId === friend.userId || !!pokeCooldowns[friend.userId]} label={pokeCooldowns[friend.userId] ? `${pokeCooldowns[friend.userId]}초 후 가능` : "찌르기"} onPress={() => void handlePoke(friend)} variant="soft" />
-            <Button label="디엠 보내기" onPress={() => navigation.navigate("DirectMessages", { friendId: friend.userId })} variant="secondary" />
+            <View style={styles.actionRow}>
+              <View style={styles.actionHalf}>
+                <Button disabled={busyFriendId === friend.userId || !!pokeCooldowns[friend.userId]} label={pokeCooldowns[friend.userId] ? `${pokeCooldowns[friend.userId]}초 후 가능` : "찌르기"} onPress={() => void handlePoke(friend)} variant="soft" />
+              </View>
+              <View style={styles.actionHalf}>
+                <Button label="대화하기" onPress={() => navigation.navigate("DirectMessages", { friendUserId: friend.userId })} variant="secondary" />
+              </View>
+            </View>
           </Card>
         ))}
       </ScrollView>
@@ -277,5 +283,7 @@ const styles = StyleSheet.create({
   permissionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   friendHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   friendCopy: { flex: 1, gap: 3 },
+  actionRow: { flexDirection: "row", gap: 8 },
+  actionHalf: { flex: 1 },
   disabled: { opacity: 0.5 },
 });

@@ -13,6 +13,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { pokesRouter } from "./routes/pokes.js";
 import { meetingSocialRouter } from "./routes/meeting-social.js";
 import { meetingCallsRouter } from "./routes/meeting-calls.js";
+import { directMessagesRouter } from "./routes/direct-messages.js";
 
 export function createApp() {
   const app = express();
@@ -38,6 +39,7 @@ export function createApp() {
   app.use("/api/users", usersRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/pokes", pokesRouter);
+  app.use("/api/direct-messages", directMessagesRouter);
   app.use("/api/meeting-calls", meetingCallsRouter);
 
   app.use(notFoundHandler);
