@@ -112,6 +112,7 @@ export function FriendsScreen({ navigation }: Props) {
         </View>
         <Button label="친구 요청 확인" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" />
         <Button label="개인 디엠 보기" onPress={() => navigation.navigate("DirectMessages")} variant="soft" />
+        <Button label="미니홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" />
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
 

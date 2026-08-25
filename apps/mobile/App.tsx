@@ -29,6 +29,7 @@ import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
 import { ThemeProvider } from "./src/services/theme";
 import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
+import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -49,6 +50,7 @@ export type RootStackParamList = {
   PublicMeetingRequest: { meetingId: string };
   VideoCall: { callId: string; meetingId: string };
   DirectMessages: { friendId?: string } | undefined;
+  MiniHomeSearch: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -124,6 +126,7 @@ function AppNavigator() {
           <Stack.Screen name="PublicMeetingRequest" component={PublicMeetingRequestScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
           <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} />
+          <Stack.Screen name="MiniHomeSearch" component={MiniHomeSearchScreen} />
         </Stack.Navigator>
         {user && !bottomNavHidden ? (
           <AppBottomNavigation
