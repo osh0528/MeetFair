@@ -39,14 +39,10 @@ export async function evaluateMeetingVote(meetingId: string) {
     leadingCandidate(meetingId),
   ]);
   if (!meeting || meeting.confirmedPlaceId || !leader) return;
-  if (leader._count.votes > participantCount / 2) {
-    await finalizeMeetingVote(meetingId);
-    return;
-  }
   if (participantCount > 0 && voteCount === participantCount && !meeting.voteCountdownEndsAt) {
     await prisma.meeting.update({
       where: { id: meetingId },
-      data: { voteCountdownEndsAt: new Date(Date.now() + 60_000) },
+      data: { voteCountdownEndsAt: new Date(Date.now() + 20_000) },
     });
     emitMeetingUpdated(meetingId, { meetingId, reason: "VOTES" });
   }

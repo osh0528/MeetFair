@@ -5,6 +5,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "MeetFair"
+    },
     "plugins": [
       ["expo-camera", {
         "cameraPermission": "모임 영상 통화와 지각 확인을 위해 카메라 접근을 허용해 주세요.",

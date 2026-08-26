@@ -8,6 +8,7 @@ import { apiRequest } from "../services/api";
 import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
+import { appConfig } from "../config/env";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
 interface LocationItem {
@@ -25,6 +26,90 @@ interface MeetingLocationDetail {
   title: string;
   scheduledAt: string;
   confirmedPlace: { name: string; latitude: number; longitude: number } | null;
+}
+
+declare global {
+  interface Window {
+    kakao?: any;
+    meetfairKakaoMapsLoader?: Promise<void>;
+  }
+}
+
+function loadKakaoMaps() {
+  if (window.kakao?.maps) return Promise.resolve();
+  if (window.meetfairKakaoMapsLoader) return window.meetfairKakaoMapsLoader;
+  window.meetfairKakaoMapsLoader = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appConfig.kakaoMapJsKey)}&autoload=false`;
+    script.onload = () => {
+      if (!window.kakao?.maps?.load) {
+        reject(new Error("카카오 지도 SDK를 불러오지 못했습니다."));
+        return;
+      }
+      window.kakao.maps.load(() => resolve());
+    };
+    script.onerror = () => reject(new Error("카카오 지도 SDK를 불러오지 못했습니다."));
+    document.head.appendChild(script);
+  });
+  return window.meetfairKakaoMapsLoader;
+}
+
+function LocationMap({ locations, meeting }: { locations: LocationItem[]; meeting: MeetingLocationDetail | null }) {
+  const containerRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<Map<string, any>>(new Map());
+  const [error, setError] = useState("");
+  const mappedLocations = locations.filter((item) => item.latitude != null && item.longitude != null);
+
+  useEffect(() => {
+    if (!appConfig.kakaoMapJsKey) {
+      setError("카카오 지도 키가 설정되지 않았습니다.");
+      return;
+    }
+    let cancelled = false;
+    void loadKakaoMaps().then(() => {
+      if (cancelled || !containerRef.current) return;
+      const kakao = window.kakao;
+      if (!mapRef.current) {
+        mapRef.current = new kakao.maps.Map(containerRef.current, {
+          center: new kakao.maps.LatLng(
+            meeting?.confirmedPlace?.latitude ?? mappedLocations[0]?.latitude ?? 37.5665,
+            meeting?.confirmedPlace?.longitude ?? mappedLocations[0]?.longitude ?? 126.978,
+          ),
+          level: 5,
+        });
+      }
+      const activeIds = new Set(mappedLocations.map((item) => item.userId));
+      for (const [userId, marker] of markersRef.current) {
+        if (!activeIds.has(userId)) {
+          marker.setMap(null);
+          markersRef.current.delete(userId);
+        }
+      }
+      for (const item of mappedLocations) {
+        const position = new kakao.maps.LatLng(item.latitude, item.longitude);
+        const marker = markersRef.current.get(item.userId);
+        if (marker) marker.setPosition(position);
+        else markersRef.current.set(item.userId, new kakao.maps.Marker({ map: mapRef.current, position, title: item.nickname }));
+      }
+      const bounds = new kakao.maps.LatLngBounds();
+      for (const item of mappedLocations) bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
+      if (meeting?.confirmedPlace) bounds.extend(new kakao.maps.LatLng(meeting.confirmedPlace.latitude, meeting.confirmedPlace.longitude));
+      if (!bounds.isEmpty()) mapRef.current.setBounds(bounds, 48, 48, 48, 48);
+    }).catch((caught) => {
+      if (!cancelled) setError(caught instanceof Error ? caught.message : "지도를 불러오지 못했습니다.");
+    });
+    return () => { cancelled = true; };
+  }, [locations, meeting]);
+
+  return (
+    <View style={styles.locationMap}>
+      <View ref={containerRef} style={styles.map} />
+      {error ? <Text style={styles.mapError}>{error}</Text> : null}
+      {!error && !mappedLocations.length ? <Text style={styles.mapHint}>위치 공유를 시작한 참여자의 위치가 여기에 표시됩니다.</Text> : null}
+    </View>
+  );
 }
 
 export function TrackingScreen({ navigation, route }: Props) {
@@ -112,7 +197,8 @@ export function TrackingScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
-      <View style={styles.mapPlaceholder}>
+      <LocationMap locations={locations} meeting={meeting} />
+      <View style={styles.legacyMapPlaceholder}>
         <Text style={styles.mapIcon}>⌖</Text>
         <Text style={styles.mapTitle}>브라우저 위치 공유</Text>
         <Text style={styles.mapBody}>현재 위치는 참여자에게 실시간으로 전송됩니다.</Text>
@@ -141,7 +227,11 @@ export function TrackingScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  mapPlaceholder: { flex: 1, minHeight: 300, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: colors.primarySoft },
+  locationMap: { flex: 1, minHeight: 300, backgroundColor: colors.primarySoft },
+  map: { flex: 1, minHeight: 300 },
+  mapError: { color: colors.red, textAlign: "center", padding: 14 },
+  mapHint: { color: colors.muted, textAlign: "center", padding: 14 },
+  legacyMapPlaceholder: { display: "none" },
   mapIcon: { color: colors.primary, fontSize: 52, fontWeight: "900" },
   mapTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
   mapBody: { color: colors.muted, textAlign: "center", marginTop: 8 },

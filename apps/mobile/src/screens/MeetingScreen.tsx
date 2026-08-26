@@ -10,7 +10,7 @@ import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
-import type { AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
 interface MeetingDetail {
@@ -64,6 +64,12 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
   const [showPlacePicker, setShowPlacePicker] = useState(false);
   const [pickedPlace, setPickedPlace] = useState<AddressSelection | null>(null);
+  const [placeInput, setPlaceInput] = useState("");
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeRequestId, setPlaceRequestId] = useState(0);
+  const [placeCandidates, setPlaceCandidates] = useState<AddressCandidate[]>([]);
+  const [placeFocusTarget, setPlaceFocusTarget] = useState<AddressSelection | null>(null);
+  const [voteCountdownSeconds, setVoteCountdownSeconds] = useState<number | null>(null);
   const [placeName, setPlaceName] = useState("");
   const [placeCategory, setPlaceCategory] = useState("직접 추천");
 
@@ -94,6 +100,26 @@ export function MeetingScreen({ navigation, route }: Props) {
         if (allowed) await load();
       }).catch((error) => setMessage(error instanceof Error ? error.message : "모임을 불러오지 못했습니다."));
   }, [meetingId]);
+
+  useEffect(() => {
+    const timer = setInterval(() => void load().catch(() => undefined), 5_000);
+    return () => clearInterval(timer);
+  }, [meetingId, user?.id]);
+
+  useEffect(() => {
+    if (!meeting?.voteCountdownEndsAt) {
+      setVoteCountdownSeconds(null);
+      return;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((new Date(meeting.voteCountdownEndsAt!).getTime() - Date.now()) / 1000));
+      setVoteCountdownSeconds(remaining);
+      if (remaining === 0) void load().catch(() => undefined);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [meeting?.voteCountdownEndsAt]);
 
   useEffect(() => {
     if (!Object.keys(pokeCooldowns).length) return;
@@ -155,6 +181,30 @@ export function MeetingScreen({ navigation, route }: Props) {
       setMessage(caught instanceof Error ? caught.message : "투표하지 못했습니다.");
     }
   }
+
+  function searchPlace() {
+    const query = placeInput.trim();
+    if (!query) return;
+    setPlaceQuery(query);
+    setPlaceRequestId((current) => current + 1);
+  }
+
+  function handlePlaceResults(items: AddressCandidate[]) {
+    setPlaceCandidates(items);
+    if (items.length === 1 && items[0]) {
+      setPickedPlace(items[0]);
+      setPlaceFocusTarget(items[0]);
+      setPlaceName(items[0].title);
+    }
+  }
+
+  function handlePlaceResolved(selection: AddressSelection) {
+    setPickedPlace(selection);
+    setPlaceFocusTarget(selection);
+    setPlaceCandidates([{ ...selection, title: selection.address }]);
+    if (!placeName.trim()) setPlaceName(selection.address);
+  }
+
   async function addPlaceCandidate() {
     if (!pickedPlace || !placeName.trim()) {
       setMessage("장소 이름과 지도 위치를 모두 선택해 주세요.");
@@ -163,9 +213,10 @@ export function MeetingScreen({ navigation, route }: Props) {
     setBusyAction("place");
     setMessage("");
     try {
-      await apiRequest(`/meetings/${meetingId}/place-candidates`, {
+      await apiRequest(`/meetings/${meetingId}/candidates`, {
         method: "POST",
         body: JSON.stringify({
+          providerPlaceId: `manual:${pickedPlace.latitude}:${pickedPlace.longitude}`,
           name: placeName.trim(),
           category: placeCategory.trim() || "직접 추천",
           ...pickedPlace,
@@ -327,6 +378,7 @@ export function MeetingScreen({ navigation, route }: Props) {
         ) : (
           <>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
+            {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
             {meeting.placeCandidates.map((candidate) => (
               <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
                 <Card style={styles.card}>
@@ -341,7 +393,44 @@ export function MeetingScreen({ navigation, route }: Props) {
                 <Text style={styles.cardTitle}>지도를 눌러 장소를 선택하세요</Text>
                 <TextInput onChangeText={setPlaceName} placeholder="장소 이름" placeholderTextColor={colors.subtle} style={styles.input} value={placeName} />
                 <TextInput onChangeText={setPlaceCategory} placeholder="장소 종류 (선택)" placeholderTextColor={colors.subtle} style={styles.input} value={placeCategory} />
-                <View style={styles.placeMap}><KakaoAddressMap interactive onResolved={setPickedPlace} query="" requestId={0} /></View>
+                <View style={styles.placeSearchRow}>
+                  <TextInput
+                    onChangeText={setPlaceInput}
+                    onSubmitEditing={searchPlace}
+                    placeholder="장소명 또는 주소 검색"
+                    placeholderTextColor={colors.subtle}
+                    returnKeyType="search"
+                    style={[styles.input, styles.placeSearchInput]}
+                    value={placeInput}
+                  />
+                  <Pressable onPress={searchPlace} style={styles.searchButton}>
+                    <Text style={styles.searchButtonText}>검색</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.placeMap}>
+                  <KakaoAddressMap
+                    focusTarget={placeFocusTarget}
+                    interactive
+                    onResolved={handlePlaceResolved}
+                    onResults={handlePlaceResults}
+                    query={placeQuery}
+                    requestId={placeRequestId}
+                  />
+                </View>
+                {placeCandidates.length > 1 ? (
+                  <View style={styles.placeCandidateList}>
+                    {placeCandidates.map((candidate) => (
+                      <Pressable
+                        key={`${candidate.latitude}-${candidate.longitude}-${candidate.title}`}
+                        onPress={() => { setPickedPlace(candidate); setPlaceFocusTarget(candidate); setPlaceName(candidate.title); }}
+                        style={[styles.placeCandidate, pickedPlace?.latitude === candidate.latitude && pickedPlace?.longitude === candidate.longitude && styles.placeCandidateSelected]}
+                      >
+                        <Text numberOfLines={1} style={styles.placeCandidateTitle}>{candidate.title}</Text>
+                        <Text numberOfLines={1} style={styles.placeCandidateAddress}>{candidate.address}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
                 <Text style={styles.meta}>{pickedPlace ? `선택 위치: ${pickedPlace.address}` : "지도를 눌러 위치를 선택하세요."}</Text>
                 <Button disabled={busyAction === "place" || !pickedPlace || !placeName.trim()} label={busyAction === "place" ? "추가 중..." : "이 장소를 후보로 추가"} onPress={() => void addPlaceCandidate()} />
               </Card>
@@ -452,6 +541,16 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
+  placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  placeSearchInput: { flex: 1 },
+  searchButton: { minHeight: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: colors.surface, fontWeight: "900" },
+  placeCandidateList: { gap: 8 },
+  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
+  placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  voteCountdown: { color: colors.red, fontWeight: "900", fontSize: 13 },
   selectedCard: { borderColor: colors.primary },
   cardTitle: { color: colors.text, fontWeight: "900" },
   input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
