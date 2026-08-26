@@ -37,7 +37,7 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
 };
 
 export function UserPageScreen({ navigation, route }: Props) {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactLayout = windowWidth < 768;
   const { user } = useSession();
   const { mode } = useAppTheme();
@@ -702,7 +702,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                       <Image
                         resizeMode="contain"
                         source={{ uri: profilePhotoUrl(page.user.id, groupPhoto.id) }}
-                        style={styles.photoDetail}
+                        style={[styles.photoDetail, { height: Math.max(240, windowHeight - 190) }]}
                       />
                       {groupPhoto.caption ? <Text style={styles.photoDetailCaption}>{groupPhoto.caption}</Text> : null}
                     </View>
@@ -768,8 +768,8 @@ const styles = StyleSheet.create({
   photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   photoImageWrap: { position: "relative" },
   photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
-  photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.42)", alignItems: "center", justifyContent: "center" },
-  photoGroupCount: { color: colors.surface, fontSize: 24, fontWeight: "900" },
+  photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },
+  photoGroupCount: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
   photoLikeButton: { paddingHorizontal: 9, paddingBottom: 9 },
   photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
   photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
   photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
   photoDetailScroller: { flex: 1, width: "100%" },
-  photoDetail: { width: "100%", flex: 1, minHeight: 0 },
+  photoDetail: { width: "100%", maxWidth: "100%", backgroundColor: "#0B0B0C" },
   photoGroupDetail: { flexGrow: 1, alignItems: "center" },
   photoDetailPage: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
