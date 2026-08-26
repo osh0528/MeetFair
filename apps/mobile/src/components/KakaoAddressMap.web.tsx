@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressCandidate, AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
 
 export interface KakaoAddressMapProps {
   query: string;
@@ -11,6 +11,7 @@ export interface KakaoAddressMapProps {
   onResults?: (candidates: AddressCandidate[]) => void;
   onResolved?: (selection: AddressSelection) => void;
   interactive?: boolean;
+  mapMarkers?: MapDisplayMarker[];
 }
 
 declare global {
@@ -71,10 +72,11 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const displayMarkersRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -213,6 +215,28 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     mapRef.current?.setCenter(position);
     markerRef.current?.setPosition(position);
   }, [focusTarget]);
+
+  useEffect(() => {
+    if (!ready || !window.kakao?.maps || !mapRef.current) return;
+    for (const overlay of displayMarkersRef.current) overlay.setMap(null);
+    displayMarkersRef.current = mapMarkers.map((item) => {
+      const content = document.createElement("div");
+      content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
+      const icon = document.createElement("div");
+      icon.textContent = "🏠";
+      icon.style.cssText = "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
+      const label = document.createElement("div");
+      label.textContent = item.label;
+      label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      content.append(icon, label);
+      return new window.kakao.maps.CustomOverlay({
+        map: mapRef.current,
+        position: new window.kakao.maps.LatLng(item.latitude, item.longitude),
+        content,
+        yAnchor: 1,
+      });
+    });
+  }, [mapMarkers, ready]);
 
   return (
     <View style={styles.wrapper}>

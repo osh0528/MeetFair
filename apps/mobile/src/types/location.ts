@@ -7,3 +7,9 @@ export interface AddressSelection {
 export interface AddressCandidate extends AddressSelection {
   title: string;
 }
+
+export interface MapDisplayMarker extends AddressSelection {
+  id: string;
+  label: string;
+  kind: "HOME";
+}

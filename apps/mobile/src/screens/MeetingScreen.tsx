@@ -29,7 +29,7 @@ interface MeetingDetail {
     sharingStatus: string;
     cameraPermissionGranted: boolean;
     microphonePermissionGranted: boolean;
-    user: { id: string; nickname: string; accountId: string };
+    user: { id: string; nickname: string; accountId: string; homeLatitude?: number | null; homeLongitude?: number | null };
   }>;
   memberStatuses: MeetingMemberStatusEntry[];
   placeCandidates: Array<{
@@ -159,6 +159,20 @@ export function MeetingScreen({ navigation, route }: Props) {
   }
 
   const me = meeting.participants.find((participant) => participant.userId === user?.id);
+  const homeMapMarkers = meeting.participants.flatMap((participant) => (
+    participant.userId !== user?.id
+    && participant.user.homeLatitude != null
+    && participant.user.homeLongitude != null
+      ? [{
+          id: `home:${participant.userId}`,
+          label: participant.user.nickname,
+          kind: "HOME" as const,
+          address: "친구가 설정한 집 근처",
+          latitude: participant.user.homeLatitude,
+          longitude: participant.user.homeLongitude,
+        }]
+      : []
+  ));
   const started = new Date(meeting.scheduledAt) <= new Date();
   const inviteCutoff = new Date(meeting.scheduledAt).getTime() - 30 * 60_000;
   const isHost = meeting.hostId === user?.id;
@@ -411,6 +425,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   <KakaoAddressMap
                     focusTarget={placeFocusTarget}
                     interactive
+                    mapMarkers={homeMapMarkers}
                     onResolved={handlePlaceResolved}
                     onResults={handlePlaceResults}
                     query={placeQuery}

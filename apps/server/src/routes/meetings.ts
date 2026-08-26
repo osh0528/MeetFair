@@ -20,6 +20,7 @@ import { createNotification } from "../lib/notifications.js";
 import { evaluateMeetingVote } from "../services/meetings.js";
 import { generateRecommendations } from "../services/recommendations.js";
 import { canInviteToMeeting } from "../services/invitation-policy.js";
+import { approximateHomeCoordinate, friendIdsAmong } from "../services/friend-home-locations.js";
 
 export const meetingsRouter = Router();
 meetingsRouter.use(requireAuth);
@@ -317,11 +318,25 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
       },
     });
     if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+    const friendIds = await friendIdsAmong(currentUserId, meeting.participants.map((participant) => participant.userId));
     const maskedParticipants = meeting.participants.map((p) => {
       if (p.userId === currentUserId) return p;
       const { originLatitude: _1, originLongitude: _2, originAddress: _3, ...rest } = p as Record<string, unknown>;
       const user = p.user as Record<string, unknown>;
       const { homeLatitude: _4, homeLongitude: _5, ...userRest } = user;
+      if (friendIds.has(p.userId)) {
+        return {
+          ...rest,
+          originLatitude: null,
+          originLongitude: null,
+          originAddress: null,
+          user: {
+            ...userRest,
+            homeLatitude: approximateHomeCoordinate(p.user.homeLatitude),
+            homeLongitude: approximateHomeCoordinate(p.user.homeLongitude),
+          },
+        };
+      }
       return { ...rest, originLatitude: null, originLongitude: null, originAddress: null, user: userRest };
     });
     const memberStatuses = [

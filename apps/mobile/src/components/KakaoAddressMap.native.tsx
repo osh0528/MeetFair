@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressCandidate, AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
 // props 타입이 never로 붕괴되는 업스트림 타입 버그가 있다.
@@ -29,6 +29,7 @@ export interface KakaoAddressMapProps {
   onResults?: (candidates: AddressCandidate[]) => void;
   onResolved?: (selection: AddressSelection) => void;
   interactive?: boolean;
+  mapMarkers?: MapDisplayMarker[];
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
@@ -157,6 +158,24 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
     focusAt(Number(lat), Number(lng));
   };
 
+  var displayOverlays = [];
+  window.meetfairSetMarkers = function (items) {
+    displayOverlays.forEach(function (overlay) { overlay.setMap(null); });
+    displayOverlays = (items || []).map(function (item) {
+      var content = document.createElement("div");
+      content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
+      var icon = document.createElement("div");
+      icon.textContent = "🏠";
+      icon.style.cssText = "font-size:25px;";
+      var label = document.createElement("div");
+      label.textContent = item.label;
+      label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      content.appendChild(icon);
+      content.appendChild(label);
+      return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
+    });
+  };
+
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
     kakao.maps.load(init);
     setTimeout(function () {
@@ -171,7 +190,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -198,6 +217,11 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       `window.meetfairFocus(${focusTarget.latitude}, ${focusTarget.longitude}); true;`,
     );
   }, [focusTarget]);
+
+  useEffect(() => {
+    if (!readyRef.current) return;
+    webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}); true;`);
+  }, [mapMarkers, ready]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

@@ -20,6 +20,8 @@ interface LocationItem {
   updatedAt: string | null;
   arrivedAt: string | null;
   sharingStatus: string;
+  homeLatitude: number | null;
+  homeLongitude: number | null;
 }
 interface MeetingLocationDetail {
   id: string;
@@ -58,9 +60,10 @@ function loadKakaoMaps() {
 function LocationMap({ locations, meeting }: { locations: LocationItem[]; meeting: MeetingLocationDetail | null }) {
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const markersRef = useRef<any[]>([]);
   const [error, setError] = useState("");
-  const mappedLocations = locations.filter((item) => item.latitude != null && item.longitude != null);
+  const mappedLocations = locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null);
+  const homeLocations = locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null);
 
   useEffect(() => {
     if (!appConfig.kakaoMapJsKey) {
@@ -80,21 +83,36 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
           level: 5,
         });
       }
-      const activeIds = new Set(mappedLocations.map((item) => item.userId));
-      for (const [userId, marker] of markersRef.current) {
-        if (!activeIds.has(userId)) {
-          marker.setMap(null);
-          markersRef.current.delete(userId);
-        }
-      }
+      for (const marker of markersRef.current) marker.setMap(null);
+      markersRef.current = [];
       for (const item of mappedLocations) {
         const position = new kakao.maps.LatLng(item.latitude, item.longitude);
-        const marker = markersRef.current.get(item.userId);
-        if (marker) marker.setPosition(position);
-        else markersRef.current.set(item.userId, new kakao.maps.Marker({ map: mapRef.current, position, title: item.nickname }));
+        const content = document.createElement("div");
+        content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px;";
+        const dot = document.createElement("div");
+        dot.style.cssText = "width:20px;height:20px;border-radius:50%;background:#1677ff;border:4px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35);box-sizing:border-box;";
+        const label = document.createElement("div");
+        label.textContent = item.nickname;
+        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font:800 11px system-ui,sans-serif;white-space:nowrap;";
+        content.append(dot, label);
+        markersRef.current.push(new kakao.maps.CustomOverlay({ map: mapRef.current, position, content, yAnchor: 0.45 }));
+      }
+      for (const item of homeLocations) {
+        const position = new kakao.maps.LatLng(item.homeLatitude, item.homeLongitude);
+        const content = document.createElement("div");
+        content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;";
+        const icon = document.createElement("div");
+        icon.textContent = "🏠";
+        icon.style.cssText = "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
+        const label = document.createElement("div");
+        label.textContent = item.nickname;
+        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font:800 11px system-ui,sans-serif;white-space:nowrap;";
+        content.append(icon, label);
+        markersRef.current.push(new kakao.maps.CustomOverlay({ map: mapRef.current, position, content, yAnchor: 0.8 }));
       }
       const bounds = new kakao.maps.LatLngBounds();
       for (const item of mappedLocations) bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
+      for (const item of homeLocations) bounds.extend(new kakao.maps.LatLng(item.homeLatitude, item.homeLongitude));
       if (meeting?.confirmedPlace) bounds.extend(new kakao.maps.LatLng(meeting.confirmedPlace.latitude, meeting.confirmedPlace.longitude));
       if (!bounds.isEmpty()) mapRef.current.setBounds(bounds, 48, 48, 48, 48);
     }).catch((caught) => {
@@ -171,6 +189,14 @@ export function TrackingScreen({ navigation, route }: Props) {
       socket.emit("sharing:status", { meetingId, status: "SHARING" });
       watchIdRef.current = navigator.geolocation.watchPosition((position) => {
         socket.emit("location:update", { meetingId, latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, sentAt: new Date(position.timestamp).toISOString() });
+        setLocations((current) => current.map((item) => item.userId === user?.id ? {
+          ...item,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          updatedAt: new Date(position.timestamp).toISOString(),
+          sharingStatus: "SHARING",
+        } : item));
       }, (error) => setMessage(`위치 갱신에 실패했습니다: ${error.message}`), { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
       setSharing(true);
       setMessage("실시간 위치 공유를 시작했습니다.");
@@ -206,7 +232,7 @@ export function TrackingScreen({ navigation, route }: Props) {
       </View>
       <View style={styles.panel}>
         <View style={styles.row}>
-          <Text style={styles.title}>{locations.filter((item) => item.latitude != null).length}명 위치 공유</Text>
+          <Text style={styles.title}>{locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).length}명 위치 공유</Text>
           <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "gray"} />
         </View>
         {locations.map((item) => (

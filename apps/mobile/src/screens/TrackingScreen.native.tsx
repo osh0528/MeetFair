@@ -26,6 +26,8 @@ interface LocationItem {
   updatedAt: string | null;
   arrivedAt: string | null;
   sharingStatus: string;
+  homeLatitude: number | null;
+  homeLongitude: number | null;
 }
 interface MeetingLocationDetail {
   id: string;
@@ -58,6 +60,28 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
 });
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
+
+function LiveLocationMarker({ item, mine }: { item: LocationItem; mine: boolean }) {
+  return (
+    <NaverMapMarkerOverlay width={110} height={52} anchor={{ x: 0.5, y: 0.35 }} latitude={item.latitude!} longitude={item.longitude!}>
+      <View collapsable={false} style={styles.liveMarker}>
+        <View style={styles.liveDot} />
+        <Text numberOfLines={1} style={styles.liveLabel}>{mine ? `${item.nickname} (나)` : item.nickname}</Text>
+      </View>
+    </NaverMapMarkerOverlay>
+  );
+}
+
+function HomeLocationMarker({ item }: { item: LocationItem }) {
+  return (
+    <NaverMapMarkerOverlay width={110} height={58} anchor={{ x: 0.5, y: 0.4 }} latitude={item.homeLatitude!} longitude={item.homeLongitude!}>
+      <View collapsable={false} style={styles.homeMarker}>
+        <Text style={styles.homeIcon}>🏠</Text>
+        <Text numberOfLines={1} style={styles.homeLabel}>{item.nickname}</Text>
+      </View>
+    </NaverMapMarkerOverlay>
+  );
+}
 
 export function TrackingScreen({ navigation, route }: Props) {
   const meetingId = route.params.meetingId;
@@ -148,6 +172,14 @@ export function TrackingScreen({ navigation, route }: Props) {
         accuracy: position.coords.accuracy ?? 0,
         sentAt: new Date(position.timestamp).toISOString(),
       });
+      setLocations((current) => current.map((item) => item.userId === user?.id ? {
+        ...item,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy ?? 0,
+        updatedAt: new Date(position.timestamp).toISOString(),
+        sharingStatus: "SHARING",
+      } : item));
     });
     await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
     const background = await Location.requestBackgroundPermissionsAsync();
@@ -200,18 +232,16 @@ export function TrackingScreen({ navigation, route }: Props) {
             caption={{ text: `약속 장소 · ${meeting.confirmedPlace.name}` }}
           />
         ) : null}
-        {locations.filter((item) => item.latitude != null && item.longitude != null).map((item) => (
-          <NaverMapMarkerOverlay
-            key={item.userId}
-            latitude={item.latitude!}
-            longitude={item.longitude!}
-            caption={{ text: item.userId === user?.id ? `${item.nickname} (나)` : item.nickname }}
-          />
+        {locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null).map((item) => (
+          <HomeLocationMarker item={item} key={`home:${item.userId}`} />
+        ))}
+        {locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).map((item) => (
+          <LiveLocationMarker item={item} key={`live:${item.userId}`} mine={item.userId === user?.id} />
         ))}
       </NaverMapView>
       <View style={styles.panel}>
         <View style={styles.row}>
-          <Text style={styles.title}>{locations.filter((item) => item.latitude != null).length}명 위치 공유</Text>
+          <Text style={styles.title}>{locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).length}명 위치 공유</Text>
           <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "gray"} />
         </View>
         {locations.map((item) => (
@@ -241,4 +271,10 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
   actions: { gap: 8 },
+  liveMarker: { width: 110, alignItems: "center", gap: 3 },
+  liveDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#1677FF", borderWidth: 4, borderColor: "#FFFFFF", shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 5 },
+  liveLabel: { maxWidth: 105, borderRadius: 10, overflow: "hidden", backgroundColor: "#1677FF", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
+  homeMarker: { width: 110, alignItems: "center", gap: 1 },
+  homeIcon: { fontSize: 25 },
+  homeLabel: { maxWidth: 105, borderRadius: 10, overflow: "hidden", backgroundColor: "#303030", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
 });

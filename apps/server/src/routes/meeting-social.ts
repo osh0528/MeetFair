@@ -8,6 +8,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitMeetingUpdated, emitPoke } from "../realtime/events.js";
 import { canStartSharing } from "../lib/share-window.js";
 import { checkCooldown, cooldownKey, MEETING_COOLDOWN_MS, setCooldown } from "../lib/poke-cooldown.js";
+import { approximateHomeCoordinate, friendIdsAmong } from "../services/friend-home-locations.js";
 
 export const meetingSocialRouter = Router();
 meetingSocialRouter.use(requireAuth);
@@ -231,8 +232,10 @@ meetingSocialRouter.get("/:meetingId/locations", async (request: AuthenticatedRe
     }
     const participants = await prisma.meetingParticipant.findMany({
       where: { meetingId },
-      include: { user: { select: { id: true, nickname: true } } },
+      include: { user: { select: { id: true, nickname: true, homeLatitude: true, homeLongitude: true } } },
     });
+    const currentUserId = userId(request);
+    const friendIds = await friendIdsAmong(currentUserId, participants.map((item) => item.userId));
     response.json({
       success: true,
       data: {
@@ -245,6 +248,8 @@ meetingSocialRouter.get("/:meetingId/locations", async (request: AuthenticatedRe
           updatedAt: participant.lastLocationAt,
           arrivedAt: participant.arrivedAt,
           sharingStatus: participant.sharingStatus,
+          homeLatitude: friendIds.has(participant.userId) ? approximateHomeCoordinate(participant.user.homeLatitude) : null,
+          homeLongitude: friendIds.has(participant.userId) ? approximateHomeCoordinate(participant.user.homeLongitude) : null,
         })),
       },
     });
