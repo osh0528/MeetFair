@@ -458,14 +458,13 @@ export function UserPageScreen({ navigation, route }: Props) {
                 variant="soft"
               />
             ) : null}
-            <Button
-              label="미니홈 방문"
-              onPress={() => {
-                if (!page) return;
-                navigation.navigate("MiniHome", { userId: page.user.id, nickname: page.user.nickname });
-              }}
-              variant="secondary"
-            />
+            {!page.isOwner ? (
+              <Button
+                label="개인 디엠으로 가기"
+                onPress={() => navigation.navigate("DirectMessages", { friendUserId: page.user.id })}
+                variant="secondary"
+              />
+            ) : null}
 
             {page.isOwner && !isCompactLayout ? (
               <Card style={styles.editorCard}>
