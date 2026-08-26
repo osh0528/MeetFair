@@ -1,13 +1,15 @@
 import type { FriendSummary, LocationShareMode, MeetingSummary, MeetingVisibility, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest } from "../services/api";
 import { colors } from "../theme/colors";
+import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateMeeting">;
 const categoryOptions = ["카페", "음식점", "술집", "문화시설"];
@@ -23,6 +25,12 @@ export function CreateMeetingScreen({ navigation }: Props) {
   const [categories, setCategories] = useState<string[]>(["카페"]);
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [invitees, setInvitees] = useState<string[]>([]);
+  const [placeInput, setPlaceInput] = useState("");
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeRequestId, setPlaceRequestId] = useState(0);
+  const [placeCandidates, setPlaceCandidates] = useState<AddressCandidate[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<AddressCandidate | null>(null);
+  const [placeFocusTarget, setPlaceFocusTarget] = useState<AddressSelection | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -31,6 +39,27 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
   function toggle<T>(items: T[], item: T) {
     return items.includes(item) ? items.filter((value) => value !== item) : [...items, item];
+  }
+
+  const handlePlaceResults = useCallback((items: AddressCandidate[]) => {
+    setPlaceCandidates(items);
+    setSelectedPlace(items.length === 1 ? items[0] ?? null : null);
+    setPlaceFocusTarget(items[0] ?? null);
+  }, []);
+
+  const handlePlaceResolved = useCallback((selection: AddressSelection) => {
+    const candidate: AddressCandidate = { ...selection, title: selection.address };
+    setPlaceCandidates([candidate]);
+    setSelectedPlace(candidate);
+    setPlaceFocusTarget(selection);
+  }, []);
+
+  function searchPlace() {
+    const query = placeInput.trim();
+    if (!query) return;
+    setSelectedPlace(null);
+    setPlaceQuery(query);
+    setPlaceRequestId((current) => current + 1);
   }
 
   async function createMeeting() {
@@ -57,6 +86,19 @@ export function CreateMeetingScreen({ navigation }: Props) {
           shareMinutesBefore: shareMode === "BEFORE_START" ? Number(minutesBefore) : null,
         }),
       });
+      if (selectedPlace) {
+        await apiRequest(`/meetings/${meeting.id}/candidates`, {
+          method: "POST",
+          body: JSON.stringify({
+            providerPlaceId: `manual:${selectedPlace.latitude}:${selectedPlace.longitude}`,
+            name: selectedPlace.title || selectedPlace.address,
+            address: selectedPlace.address,
+            latitude: selectedPlace.latitude,
+            longitude: selectedPlace.longitude,
+            category: categories[0] || "추천 장소",
+          }),
+        });
+      }
       navigation.replace("Meeting", { meetingId: meeting.id });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "모임을 만들지 못했습니다.");
@@ -97,6 +139,51 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
         <SectionHeading title="장소 종류" />
         <View style={styles.wrap}>{categoryOptions.map((category) => <Chip key={category} label={category} selected={categories.includes(category)} onPress={() => setCategories(toggle(categories, category))} />)}</View>
+
+        <SectionHeading title="모임 장소 추천" action={selectedPlace ? "선택됨" : "선택 사항"} />
+        <View style={styles.placeSearchRow}>
+          <TextInput
+            onChangeText={setPlaceInput}
+            onSubmitEditing={searchPlace}
+            placeholder="장소명이나 주소 검색"
+            placeholderTextColor={colors.subtle}
+            returnKeyType="search"
+            style={[styles.input, styles.placeSearchInput]}
+            value={placeInput}
+          />
+          <Pressable onPress={searchPlace} style={styles.searchButton}>
+            <Text style={styles.searchButtonText}>검색</Text>
+          </Pressable>
+        </View>
+        <View style={styles.placeMap}>
+          <KakaoAddressMap
+            focusTarget={placeFocusTarget}
+            interactive
+            onResolved={handlePlaceResolved}
+            onResults={handlePlaceResults}
+            query={placeQuery}
+            requestId={placeRequestId}
+          />
+        </View>
+        <Text style={styles.note}>검색 결과를 선택하거나 지도에서 원하는 위치를 직접 눌러주세요.</Text>
+        {placeCandidates.length > 1 ? (
+          <View style={styles.placeCandidateList}>
+            {placeCandidates.map((candidate) => (
+              <Pressable
+                key={`${candidate.latitude}-${candidate.longitude}-${candidate.title}`}
+                onPress={() => {
+                  setSelectedPlace(candidate);
+                  setPlaceFocusTarget(candidate);
+                }}
+                style={[styles.placeCandidate, selectedPlace === candidate && styles.placeCandidateSelected]}
+              >
+                <Text numberOfLines={1} style={styles.placeCandidateTitle}>{candidate.title}</Text>
+                <Text numberOfLines={1} style={styles.placeCandidateAddress}>{candidate.address}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {selectedPlace ? <Text style={styles.selectedPlace}>선택한 장소: {selectedPlace.title || selectedPlace.address}</Text> : null}
 
         <SectionHeading title="초대할 친구" action={`${invitees.length}명`} />
         {friends.map((friend) => (
@@ -157,6 +244,17 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 13, paddingBottom: 40 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  placeSearchInput: { flex: 1 },
+  searchButton: { height: 50, borderRadius: 15, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: colors.surface, fontWeight: "900" },
+  placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
+  placeCandidateList: { gap: 8 },
+  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
+  placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  selectedPlace: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   visibilityRow: { flexDirection: "row", gap: 10 },
   visibilityOption: { flex: 1 },
   visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
