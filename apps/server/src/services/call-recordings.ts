@@ -1,4 +1,5 @@
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   EgressClient,
   EgressStatus,
@@ -10,8 +11,10 @@ import {
 } from "livekit-server-sdk";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
+import { emitMeetingChatReceived } from "../realtime/events.js";
 
 export const CALL_RECORDING_RETENTION_MS = 24 * 60 * 60 * 1000;
+const RECORDING_PLAYBACK_URL_TTL_SECONDS = 15 * 60;
 
 function recordingConfig() {
   if (
@@ -133,7 +136,12 @@ export async function stopCallRecording(callId: string, endedAt = new Date()) {
   const config = recordingConfig();
   const call = await prisma.meetingCall.findUnique({
     where: { id: callId },
-    select: { recordingStatus: true, recordingEgressId: true },
+    select: {
+      recordingStatus: true,
+      recordingEgressId: true,
+      meetingId: true,
+      meeting: { select: { hostId: true, scheduledAt: true } },
+    },
   });
   if (!call || call.recordingStatus !== "RECORDING" || !call.recordingEgressId || !config) return;
 
@@ -162,9 +170,22 @@ export async function stopCallRecording(callId: string, endedAt = new Date()) {
       data: {
         recordingStatus: finalStatus,
         recordingEndedAt: endedAt,
-        recordingExpiresAt: new Date(endedAt.getTime() + CALL_RECORDING_RETENTION_MS),
+        recordingExpiresAt: new Date(call.meeting.scheduledAt.getTime() + CALL_RECORDING_RETENTION_MS),
       },
     });
+    if (finalStatus === "STORED") {
+      await publishRecordingToChat({
+        callId,
+        meetingId: call.meetingId,
+        senderId: call.meeting.hostId,
+      }).catch(async (error) => {
+        await prisma.meetingCall.update({
+          where: { id: callId },
+          data: { recordingError: errorMessage(error) },
+        });
+        console.error("Stored call recording could not be published to meeting chat", error);
+      });
+    }
   } catch (error) {
     await prisma.meetingCall.update({
       where: { id: callId },
@@ -172,6 +193,32 @@ export async function stopCallRecording(callId: string, endedAt = new Date()) {
     });
     throw error;
   }
+}
+
+async function publishRecordingToChat(input: { callId: string; meetingId: string; senderId: string }) {
+  const message = await prisma.meetingChatMessage.upsert({
+    where: { callId: input.callId },
+    create: {
+      meetingId: input.meetingId,
+      senderId: input.senderId,
+      content: "모임 통화 녹화 영상",
+      messageType: "VIDEO",
+      callId: input.callId,
+    },
+    update: {},
+  });
+  emitMeetingChatReceived(input.meetingId, {
+    message: {
+      id: message.id,
+      meetingId: message.meetingId,
+      senderId: message.senderId,
+      content: message.content,
+      messageType: "VIDEO",
+      callId: message.callId,
+      createdAt: message.createdAt.toISOString(),
+      deletedAt: message.deletedAt?.toISOString() ?? null,
+    },
+  });
 }
 
 function s3Client() {
@@ -186,6 +233,68 @@ function s3Client() {
       credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey },
     }),
   };
+}
+
+export async function createCallRecordingPlaybackUrl(callId: string, now = new Date()) {
+  const storage = s3Client();
+  if (!storage) throw new Error("Call recording storage is not configured.");
+  const call = await prisma.meetingCall.findUnique({
+    where: { id: callId },
+    select: {
+      recordingStatus: true,
+      recordingObjectKey: true,
+      recordingExpiresAt: true,
+      recordingDeletedAt: true,
+    },
+  });
+  if (
+    !call
+    || call.recordingStatus !== "STORED"
+    || !call.recordingObjectKey
+    || call.recordingDeletedAt
+    || !call.recordingExpiresAt
+    || call.recordingExpiresAt <= now
+  ) return null;
+  return getSignedUrl(
+    storage.client,
+    new GetObjectCommand({
+      Bucket: storage.bucket,
+      Key: call.recordingObjectKey,
+      ResponseContentDisposition: "inline",
+      ResponseContentType: "video/mp4",
+    }),
+    { expiresIn: RECORDING_PLAYBACK_URL_TTL_SECONDS },
+  );
+}
+
+export async function deleteMeetingRecordingObjects(meetingId: string, now = new Date()) {
+  const calls = await prisma.meetingCall.findMany({
+    where: { meetingId, recordingObjectKey: { not: null }, recordingDeletedAt: null },
+    select: { id: true, recordingObjectKey: true },
+  });
+  if (!calls.length) return true;
+  const storage = s3Client();
+  if (!storage) return false;
+  for (const call of calls) {
+    if (!call.recordingObjectKey) continue;
+    try {
+      await storage.client.send(new DeleteObjectCommand({
+        Bucket: storage.bucket,
+        Key: call.recordingObjectKey,
+      }));
+      await prisma.meetingCall.update({
+        where: { id: call.id },
+        data: { recordingStatus: "DELETED", recordingDeletedAt: now, recordingError: null },
+      });
+    } catch (error) {
+      await prisma.meetingCall.update({
+        where: { id: call.id },
+        data: { recordingError: errorMessage(error) },
+      });
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function processCallRecordingRetention(now = new Date()) {
@@ -204,6 +313,23 @@ export async function processCallRecordingRetention(now = new Date()) {
   });
   for (const call of endedRecordings) {
     await stopCallRecording(call.id, call.endedAt ?? now).catch(() => undefined);
+  }
+
+  const unpublishedRecordings = await prisma.meetingCall.findMany({
+    where: {
+      recordingStatus: "STORED",
+      recordingDeletedAt: null,
+      recordingMessage: { is: null },
+    },
+    select: { id: true, meetingId: true, meeting: { select: { hostId: true } } },
+    take: 20,
+  });
+  for (const call of unpublishedRecordings) {
+    await publishRecordingToChat({
+      callId: call.id,
+      meetingId: call.meetingId,
+      senderId: call.meeting.hostId,
+    }).catch(() => undefined);
   }
 
   const storage = s3Client();

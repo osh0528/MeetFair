@@ -467,6 +467,7 @@ model MeetingCall {
   recordingError        String?
   meeting   Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   participants MeetingCallParticipant[]
+  recordingMessage MeetingChatMessage?
 
   @@index([meetingId, createdAt])
   @@index([recordingStatus, recordingExpiresAt])
@@ -562,11 +563,14 @@ model MeetingChatMessage {
   meetingId       String
   senderId        String
   content         String
+  messageType     String    @default("TEXT")
+  callId          String?   @unique
   clientMessageId String?
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
   meeting         Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   sender          User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  call            MeetingCall? @relation(fields: [callId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, clientMessageId])
   @@index([meetingId, createdAt])

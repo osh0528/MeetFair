@@ -6,9 +6,16 @@ vi.mock("@aws-sdk/client-s3", () => ({
   DeleteObjectCommand: class DeleteObjectCommand {
     constructor(public input: { Bucket: string; Key: string }) {}
   },
+  GetObjectCommand: class GetObjectCommand {
+    constructor(public input: { Bucket: string; Key: string }) {}
+  },
   S3Client: class S3Client {
     send = mocks.deleteObject;
   },
+}));
+
+vi.mock("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: vi.fn().mockResolvedValue("https://storage.example.com/signed-recording"),
 }));
 
 vi.mock("livekit-server-sdk", () => ({
@@ -40,7 +47,12 @@ vi.mock("../lib/prisma.js", () => ({
     meetingCall: {
       updateMany: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
+    },
+    meetingChatMessage: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
     },
   },
 }));
@@ -58,6 +70,7 @@ describe("call recording retention", () => {
     const { processCallRecordingRetention } = await import("./call-recordings.js");
     vi.mocked(prisma.meetingCall.updateMany).mockResolvedValue({ count: 0 });
     vi.mocked(prisma.meetingCall.findMany)
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: "call-1", recordingObjectKey: "meeting-call-recordings/call-1.mp4" },
@@ -80,6 +93,7 @@ describe("call recording retention", () => {
     vi.mocked(prisma.meetingCall.updateMany).mockResolvedValue({ count: 0 });
     vi.mocked(prisma.meetingCall.findMany)
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: "call-2", recordingObjectKey: "meeting-call-recordings/call-2.mp4" },
       ] as never);
@@ -90,6 +104,46 @@ describe("call recording retention", () => {
     expect(vi.mocked(prisma.meetingCall.update)).toHaveBeenCalledWith({
       where: { id: "call-2" },
       data: { recordingError: "storage unavailable" },
+    });
+  });
+
+  it("publishes a stored recording into the meeting chat once", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    const { processCallRecordingRetention } = await import("./call-recordings.js");
+    vi.mocked(prisma.meetingCall.updateMany).mockResolvedValue({ count: 0 });
+    vi.mocked(prisma.meetingCall.findMany)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: "call-3",
+        meetingId: "meeting-1",
+        meeting: { hostId: "host-1" },
+      }] as never)
+      .mockResolvedValueOnce([]);
+    vi.mocked(prisma.meetingChatMessage.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.meetingChatMessage.upsert).mockResolvedValue({
+      id: "message-1",
+      meetingId: "meeting-1",
+      senderId: "host-1",
+      content: "모임 통화 녹화 영상",
+      messageType: "VIDEO",
+      callId: "call-3",
+      clientMessageId: null,
+      createdAt: new Date("2026-08-26T05:00:00.000Z"),
+      deletedAt: null,
+    });
+
+    await processCallRecordingRetention(new Date("2026-08-26T05:00:00.000Z"));
+
+    expect(vi.mocked(prisma.meetingChatMessage.upsert)).toHaveBeenCalledWith({
+      where: { callId: "call-3" },
+      create: {
+        meetingId: "meeting-1",
+        senderId: "host-1",
+        content: "모임 통화 녹화 영상",
+        messageType: "VIDEO",
+        callId: "call-3",
+      },
+      update: {},
     });
   });
 });

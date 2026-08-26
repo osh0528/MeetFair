@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -25,6 +26,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "MeetingChat">;
 
 type MessagesResponse = { messages: MeetingChatMessageSummary[]; nextCursor: string | null };
 type MessageResponse = { message: MeetingChatMessageSummary };
+type RecordingResponse = { url: string };
 type MeetingParticipantsResponse = {
   participants: Array<{ userId: string; user: { nickname: string } }>;
 };
@@ -38,6 +40,7 @@ export function MeetingChatScreen({ navigation, route }: Props) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [openingRecordingId, setOpeningRecordingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList<MeetingChatMessageSummary>>(null);
@@ -127,6 +130,22 @@ export function MeetingChatScreen({ navigation, route }: Props) {
     }
   }
 
+  async function handleOpenRecording(messageId: string) {
+    if (openingRecordingId) return;
+    setOpeningRecordingId(messageId);
+    setError("");
+    try {
+      const data = await apiRequest<RecordingResponse>(
+        `/meetings/${meetingId}/chat/messages/${messageId}/video`,
+      );
+      await Linking.openURL(data.url);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "녹화 영상을 열지 못했습니다.");
+    } finally {
+      setOpeningRecordingId(null);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title={meetingTitle ?? "모임 채팅"} onBack={() => navigation.goBack()} />
@@ -164,10 +183,30 @@ export function MeetingChatScreen({ navigation, route }: Props) {
               });
               return (
                 <View style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowOther]}>
-                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                    <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
-                      {item.content}
-                    </Text>
+                  <View style={[
+                    styles.bubble,
+                    isMe ? styles.bubbleMe : styles.bubbleOther,
+                    item.messageType === "VIDEO" && styles.videoBubble,
+                  ]}>
+                    {item.messageType === "VIDEO" ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => void handleOpenRecording(item.id)}
+                        style={styles.videoCard}
+                      >
+                        <Text style={styles.videoIcon}>▶</Text>
+                        <View style={styles.videoTextGroup}>
+                          <Text style={styles.videoTitle}>모임 통화 녹화 영상</Text>
+                          <Text style={styles.videoSubtitle}>
+                            {openingRecordingId === item.id ? "영상 여는 중..." : "눌러서 재생 · 모임 24시간 후 삭제"}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ) : (
+                      <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+                        {item.content}
+                      </Text>
+                    )}
                     <Text style={styles.bubbleTime}>
                       {isMe ? timeLabel : `${timeLabel} · ${participantNames[item.senderId] ?? item.senderId.slice(0, 8)}`}
                     </Text>
@@ -217,10 +256,16 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: "78%", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
   bubbleMe: { backgroundColor: colors.primary },
   bubbleOther: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  videoBubble: { maxWidth: "90%", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   bubbleText: { fontSize: 14, lineHeight: 18 },
   bubbleTextMe: { color: colors.surface },
   bubbleTextOther: { color: colors.text },
   bubbleTime: { fontSize: 10, color: colors.subtle },
+  videoCard: { minWidth: 230, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
+  videoIcon: { color: colors.text, fontSize: 24 },
+  videoTextGroup: { flex: 1, gap: 2 },
+  videoTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  videoSubtitle: { color: colors.subtle, fontSize: 11 },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",

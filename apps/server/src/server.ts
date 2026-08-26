@@ -25,25 +25,28 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 registerRealtimeHandlers(io);
 setRealtimeServer(io);
 
+async function processRecordingAndMeetingLifecycle() {
+  await processCallRecordingRetention().catch((error) => {
+    console.error("Call recording retention scheduler failed", error);
+  });
+  await processMeetingLifecycle().catch((error) => {
+    console.error("Meeting lifecycle scheduler failed", error);
+  });
+}
+
 const lifecycleTimer = setInterval(() => {
   void processDueMeetingCalls().catch((error) => {
     console.error("Meeting call scheduler failed", error);
   });
-  void processMeetingLifecycle().catch((error) => {
-    console.error("Meeting lifecycle scheduler failed", error);
-  });
+  void processRecordingAndMeetingLifecycle();
   void processQuietSummaries().catch((error) => {
     console.error("Quiet summary scheduler failed", error);
-  });
-  void processCallRecordingRetention().catch((error) => {
-    console.error("Call recording retention scheduler failed", error);
   });
 }, 15_000);
 lifecycleTimer.unref();
 void processDueMeetingCalls();
-void processMeetingLifecycle();
 void processQuietSummaries();
-void processCallRecordingRetention();
+void processRecordingAndMeetingLifecycle();
 
 httpServer.listen(env.PORT, () => {
   console.log(`MeetFair server listening on http://localhost:${env.PORT}`);

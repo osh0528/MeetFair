@@ -7,6 +7,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const photoMigrationName = "20260825170000_profile_photo_groups";
 const chatMigrationName = "20260826010000_chat_board_visit_profile";
 const recordingMigrationName = "20260826053000_call_recording_retention";
+const chatRecordingMigrationName = "20260826062000_meeting_chat_recordings";
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required before preparing migrations.");
@@ -22,6 +23,8 @@ let shouldResolveChatMigration = false;
 let shouldRollbackFailedChatMigration = false;
 let shouldResolveRecordingMigration = false;
 let shouldRollbackFailedRecordingMigration = false;
+let shouldResolveChatRecordingMigration = false;
+let shouldRollbackFailedChatRecordingMigration = false;
 
 function migrationState(rows, migrationName) {
   const matchingRows = rows.filter((migration) => migration.migration_name === migrationName);
@@ -61,18 +64,20 @@ try {
       shouldResolvePhotoMigration = true;
       shouldResolveChatMigration = true;
       shouldResolveRecordingMigration = true;
+      shouldResolveChatRecordingMigration = true;
     } else {
       const migrations = await client.query(
         `SELECT migration_name, finished_at, rolled_back_at
          FROM public._prisma_migrations
-         WHERE migration_name IN ('0_init', $1, $2, $3)
+         WHERE migration_name IN ('0_init', $1, $2, $3, $4)
          ORDER BY started_at DESC`,
-        [photoMigrationName, chatMigrationName, recordingMigrationName],
+        [photoMigrationName, chatMigrationName, recordingMigrationName, chatRecordingMigrationName],
       );
       const baseline = migrationState(migrations.rows, "0_init");
       const photoMigration = migrationState(migrations.rows, photoMigrationName);
       const chatMigration = migrationState(migrations.rows, chatMigrationName);
       const recordingMigration = migrationState(migrations.rows, recordingMigrationName);
+      const chatRecordingMigration = migrationState(migrations.rows, chatRecordingMigrationName);
       shouldResolveBaseline = !baseline.applied;
       shouldRollbackFailedBaseline = shouldResolveBaseline && baseline.failed;
       shouldResolvePhotoMigration = !photoMigration.applied;
@@ -81,6 +86,8 @@ try {
       shouldRollbackFailedChatMigration = shouldResolveChatMigration && chatMigration.failed;
       shouldResolveRecordingMigration = !recordingMigration.applied;
       shouldRollbackFailedRecordingMigration = shouldResolveRecordingMigration && recordingMigration.failed;
+      shouldResolveChatRecordingMigration = !chatRecordingMigration.applied;
+      shouldRollbackFailedChatRecordingMigration = shouldResolveChatRecordingMigration && chatRecordingMigration.failed;
     }
   }
 } finally {
@@ -109,6 +116,10 @@ if (shouldAlignExistingSchema) {
     console.log(`Failed ${recordingMigrationName} attempt detected; marking it rolled back.`);
     runPrisma(["migrate", "resolve", "--rolled-back", recordingMigrationName]);
   }
+  if (shouldRollbackFailedChatRecordingMigration) {
+    console.log(`Failed ${chatRecordingMigrationName} attempt detected; marking it rolled back.`);
+    runPrisma(["migrate", "resolve", "--rolled-back", chatRecordingMigrationName]);
+  }
   console.log("Aligning the existing MeetFair database with the current schema.");
   runPrisma(["db", "push"]);
   if (shouldResolvePhotoMigration) {
@@ -119,5 +130,8 @@ if (shouldAlignExistingSchema) {
   }
   if (shouldResolveRecordingMigration) {
     runPrisma(["migrate", "resolve", "--applied", recordingMigrationName]);
+  }
+  if (shouldResolveChatRecordingMigration) {
+    runPrisma(["migrate", "resolve", "--applied", chatRecordingMigrationName]);
   }
 }

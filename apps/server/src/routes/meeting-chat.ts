@@ -4,6 +4,7 @@ import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitMeetingChatReceived } from "../realtime/events.js";
+import { createCallRecordingPlaybackUrl } from "../services/call-recordings.js";
 
 export const meetingChatRouter = Router();
 meetingChatRouter.use(requireAuth);
@@ -26,6 +27,8 @@ function toChatMessageSummary(message: {
   meetingId: string;
   senderId: string;
   content: string;
+  messageType: string;
+  callId: string | null;
   createdAt: Date;
   deletedAt: Date | null;
 }) {
@@ -34,6 +37,8 @@ function toChatMessageSummary(message: {
     meetingId: message.meetingId,
     senderId: message.senderId,
     content: message.content,
+    messageType: message.messageType === "VIDEO" ? "VIDEO" as const : "TEXT" as const,
+    callId: message.callId,
     createdAt: message.createdAt.toISOString(),
     deletedAt: message.deletedAt?.toISOString() ?? null,
   };
@@ -70,6 +75,31 @@ meetingChatRouter.get("/:meetingId/chat/messages", async (req, res, next) => {
     const nextCursor = hasMore ? sliced[sliced.length - 1]?.id ?? null : null;
 
     res.json({ success: true, data: { messages: sliced.map(toChatMessageSummary), nextCursor } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /:meetingId/chat/messages/:messageId/video
+meetingChatRouter.get("/:meetingId/chat/messages/:messageId/video", async (req, res, next) => {
+  try {
+    const userId = currentUserId(req as AuthenticatedRequest);
+    const { meetingId, messageId } = z
+      .object({ meetingId: z.string().uuid(), messageId: z.string().uuid() })
+      .parse(req.params);
+    await requireParticipant(meetingId, userId);
+    const message = await prisma.meetingChatMessage.findFirst({
+      where: { id: messageId, meetingId, messageType: "VIDEO", deletedAt: null, callId: { not: null } },
+      select: { callId: true },
+    });
+    if (!message?.callId) {
+      throw new AppError(404, "RECORDING_NOT_FOUND", "Call recording was not found.");
+    }
+    const url = await createCallRecordingPlaybackUrl(message.callId);
+    if (!url) {
+      throw new AppError(410, "RECORDING_EXPIRED", "Call recording has expired.");
+    }
+    res.json({ success: true, data: { url } });
   } catch (error) {
     next(error);
   }

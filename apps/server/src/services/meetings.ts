@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { emitMeetingUpdated } from "../realtime/events.js";
+import { CALL_RECORDING_RETENTION_MS, deleteMeetingRecordingObjects } from "./call-recordings.js";
 
 async function leadingCandidate(meetingId: string) {
   const candidates = await prisma.placeCandidate.findMany({
@@ -57,8 +58,18 @@ function nextKoreanMidnight(scheduledAt: Date) {
   ) - 9 * 60 * 60 * 1000);
 }
 
-export async function processMeetingLifecycle() {
-  const now = new Date();
+export async function processMeetingLifecycle(now = new Date()) {
+  const expiredMeetings = await prisma.meeting.findMany({
+    where: { scheduledAt: { lte: new Date(now.getTime() - CALL_RECORDING_RETENTION_MS) } },
+    select: { id: true },
+    take: 20,
+  });
+  for (const meeting of expiredMeetings) {
+    const recordingsDeleted = await deleteMeetingRecordingObjects(meeting.id, now);
+    if (!recordingsDeleted) continue;
+    await prisma.meeting.delete({ where: { id: meeting.id } });
+  }
+
   const dueVotes = await prisma.meeting.findMany({
     where: { confirmedPlaceId: null, voteCountdownEndsAt: { lte: now } },
     select: { id: true },

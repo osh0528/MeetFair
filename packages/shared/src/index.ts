@@ -354,6 +354,8 @@ export interface MeetingChatMessageSummary {
   meetingId: string;
   senderId: string;
   content: string;
+  messageType: "TEXT" | "VIDEO";
+  callId: string | null;
   createdAt: string;
   deletedAt: string | null;
 }
