@@ -2,14 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PublicUser } from "@meetfair/shared";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { apiRequest, setApiAccessToken } from "./api";
+import { getStoredAccessToken, removeStoredAccessToken, setStoredAccessToken } from "./authStorage";
 
-const TOKEN_KEY = "meetfair.access-token";
+const LEGACY_TOKEN_KEY = "meetfair.access-token";
+const REMEMBER_LOGIN_KEY = "meetfair.remember-login";
+const SAVED_EMAIL_KEY = "meetfair.saved-email";
 
 interface SessionContextValue {
   user: PublicUser | null;
   accessToken: string | null;
   loading: boolean;
-  login(email: string, password: string): Promise<void>;
+  rememberLogin: boolean;
+  savedEmail: string;
+  login(email: string, password: string, rememberLogin?: boolean): Promise<void>;
   register(input: {
     email: string;
     password: string;
@@ -30,9 +35,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rememberLogin, setRememberLogin] = useState(true);
+  const [savedEmail, setSavedEmail] = useState("");
 
   useEffect(() => {
-    void AsyncStorage.getItem(TOKEN_KEY).then(async (token) => {
+    void Promise.all([
+      getStoredAccessToken(),
+      AsyncStorage.getItem(REMEMBER_LOGIN_KEY),
+      AsyncStorage.getItem(SAVED_EMAIL_KEY),
+    ]).then(async ([storedToken, rememberValue, storedEmail]) => {
+      const shouldRemember = rememberValue !== "false";
+      setRememberLogin(shouldRemember);
+      setSavedEmail(storedEmail ?? "");
+      let token = storedToken;
+      if (!token) {
+        const legacyToken = await AsyncStorage.getItem(LEGACY_TOKEN_KEY);
+        if (legacyToken) {
+          token = legacyToken;
+          await setStoredAccessToken(legacyToken);
+          await AsyncStorage.removeItem(LEGACY_TOKEN_KEY);
+        }
+      }
       if (!token) return;
       setApiAccessToken(token);
       setAccessToken(token);
@@ -42,15 +65,35 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       } catch {
         setApiAccessToken(null);
         setAccessToken(null);
-        await AsyncStorage.removeItem(TOKEN_KEY);
+        await removeStoredAccessToken();
       }
     }).finally(() => setLoading(false));
   }, []);
 
-  async function saveAuth(data: { user: PublicUser; accessToken: string }) {
+  async function saveAuth(
+    data: { user: PublicUser; accessToken: string },
+    persist = true,
+    loginEmail = data.user.email,
+  ) {
     setApiAccessToken(data.accessToken);
     setAccessToken(data.accessToken);
-    await AsyncStorage.setItem(TOKEN_KEY, data.accessToken);
+    setRememberLogin(persist);
+    if (persist) {
+      const normalizedEmail = loginEmail.trim().toLowerCase();
+      setSavedEmail(normalizedEmail);
+      await Promise.all([
+        setStoredAccessToken(data.accessToken),
+        AsyncStorage.setItem(REMEMBER_LOGIN_KEY, "true"),
+        AsyncStorage.setItem(SAVED_EMAIL_KEY, normalizedEmail),
+      ]);
+    } else {
+      setSavedEmail("");
+      await Promise.all([
+        removeStoredAccessToken(),
+        AsyncStorage.setItem(REMEMBER_LOGIN_KEY, "false"),
+        AsyncStorage.removeItem(SAVED_EMAIL_KEY),
+      ]);
+    }
     setUser(data.user);
   }
 
@@ -58,12 +101,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     user,
     accessToken,
     loading,
-    async login(email, password) {
+    rememberLogin,
+    savedEmail,
+    async login(email, password, shouldRemember = true) {
       const data = await apiRequest<{ user: PublicUser; accessToken: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      await saveAuth(data);
+      await saveAuth(data, shouldRemember, email);
     },
     async register(input) {
       const data = await apiRequest<{ user: PublicUser; accessToken: string }>("/auth/register", {
@@ -87,9 +132,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setApiAccessToken(null);
       setAccessToken(null);
       setUser(null);
-      await AsyncStorage.removeItem(TOKEN_KEY);
+      await removeStoredAccessToken();
     },
-  }), [accessToken, loading, user]);
+  }), [accessToken, loading, rememberLogin, savedEmail, user]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

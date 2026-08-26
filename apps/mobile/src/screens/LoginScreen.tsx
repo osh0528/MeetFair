@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, LogoMark } from "../components/ui";
@@ -16,12 +16,19 @@ export function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [rememberLogin, setRememberLogin] = useState(true);
+
+  useEffect(() => {
+    if (session.loading) return;
+    setRememberLogin(session.rememberLogin);
+    if (session.savedEmail) setEmail(session.savedEmail);
+  }, [session.loading, session.rememberLogin, session.savedEmail]);
 
   async function submit() {
     setSubmitting(true);
     setError("");
     try {
-      await session.login(email.trim(), password);
+      await session.login(email.trim(), password, rememberLogin);
       navigation.replace("Home");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "로그인하지 못했습니다.");
@@ -62,6 +69,20 @@ export function LoginScreen({ navigation }: Props) {
           style={styles.input}
           value={password}
         />
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: rememberLogin }}
+          onPress={() => setRememberLogin((current) => !current)}
+          style={styles.rememberRow}
+        >
+          <View style={[styles.checkbox, rememberLogin && styles.checkboxChecked]}>
+            {rememberLogin ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <View style={styles.rememberCopy}>
+            <Text style={styles.rememberLabel}>로그인 정보 저장</Text>
+            <Text style={styles.rememberHelp}>이메일과 로그인 상태만 저장하며 비밀번호는 저장하지 않습니다.</Text>
+          </View>
+        </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button disabled={submitting || !email || password.length < 8} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
         <GoogleAuthButton
@@ -86,5 +107,12 @@ const styles = StyleSheet.create({
   brand: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   title: { color: colors.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
   input: { height: 54, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },
+  rememberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
+  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
+  checkmark: { color: colors.surface, fontSize: 14, fontWeight: "900" },
+  rememberCopy: { flex: 1, gap: 2 },
+  rememberLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  rememberHelp: { color: colors.muted, fontSize: 10, lineHeight: 14 },
   error: { color: colors.red, fontSize: 12 },
 });
