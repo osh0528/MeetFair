@@ -45,6 +45,110 @@ function runPrisma(args) {
   );
 }
 
+async function alignRecordingSchema() {
+  const alignmentClient = new Client({ connectionString: databaseUrl });
+  try {
+    await alignmentClient.connect();
+    await alignmentClient.query("BEGIN");
+    await alignmentClient.query(`
+      ALTER TABLE public."MeetingChatMessage"
+      ADD COLUMN IF NOT EXISTS "messageType" TEXT NOT NULL DEFAULT 'TEXT',
+      ADD COLUMN IF NOT EXISTS "callId" TEXT
+    `);
+
+    const duplicateCallIds = await alignmentClient.query(`
+      SELECT "callId"
+      FROM public."MeetingChatMessage"
+      WHERE "callId" IS NOT NULL
+      GROUP BY "callId"
+      HAVING COUNT(*) > 1
+      LIMIT 1
+    `);
+    if (duplicateCallIds.rowCount) {
+      throw new Error(
+        "MeetingChatMessage.callId contains duplicate values; refusing to create its unique index.",
+      );
+    }
+
+    await alignmentClient.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MeetingChatMessage_callId_key"
+      ON public."MeetingChatMessage"("callId")
+    `);
+    await alignmentClient.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'MeetingChatMessage_callId_fkey'
+            AND conrelid = 'public."MeetingChatMessage"'::regclass
+        ) THEN
+          ALTER TABLE public."MeetingChatMessage"
+          ADD CONSTRAINT "MeetingChatMessage_callId_fkey"
+          FOREIGN KEY ("callId") REFERENCES public."MeetingCall"("id")
+          ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END
+      $$
+    `);
+
+    await alignmentClient.query(`
+      ALTER TABLE public."Meeting"
+      ADD COLUMN IF NOT EXISTS "retentionWarningSentAt" TIMESTAMP(3)
+    `);
+    await alignmentClient.query(`
+      ALTER TABLE public."MeetingCall"
+      ADD COLUMN IF NOT EXISTS "recordingDeleteAttempts" INTEGER NOT NULL DEFAULT 0
+    `);
+    await alignmentClient.query(`
+      CREATE TABLE IF NOT EXISTS public."RecordingAccessLog" (
+        "id" TEXT NOT NULL,
+        "meetingId" TEXT NOT NULL,
+        "callId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "outcome" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "RecordingAccessLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await alignmentClient.query(`
+      CREATE INDEX IF NOT EXISTS "RecordingAccessLog_callId_createdAt_idx"
+      ON public."RecordingAccessLog"("callId", "createdAt")
+    `);
+    await alignmentClient.query(`
+      CREATE INDEX IF NOT EXISTS "RecordingAccessLog_userId_createdAt_idx"
+      ON public."RecordingAccessLog"("userId", "createdAt")
+    `);
+    await alignmentClient.query(`
+      CREATE INDEX IF NOT EXISTS "RecordingAccessLog_createdAt_idx"
+      ON public."RecordingAccessLog"("createdAt")
+    `);
+    await alignmentClient.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'RecordingAccessLog_userId_fkey'
+            AND conrelid = 'public."RecordingAccessLog"'::regclass
+        ) THEN
+          ALTER TABLE public."RecordingAccessLog"
+          ADD CONSTRAINT "RecordingAccessLog_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES public."User"("id")
+          ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END
+      $$
+    `);
+    await alignmentClient.query("COMMIT");
+  } catch (error) {
+    await alignmentClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    await alignmentClient.end().catch(() => undefined);
+  }
+}
+
 try {
   await client.connect();
   const existingSchema = await client.query(
@@ -137,6 +241,8 @@ if (shouldAlignExistingSchema) {
     console.log(`Failed ${recordingSafeguardsMigrationName} attempt detected; marking it rolled back.`);
     runPrisma(["migrate", "resolve", "--rolled-back", recordingSafeguardsMigrationName]);
   }
+  console.log("Safely preparing recording-related columns, indexes, and constraints.");
+  await alignRecordingSchema();
   console.log("Aligning the existing MeetFair database with the current schema.");
   runPrisma(["db", "push"]);
   if (shouldResolvePhotoMigration) {

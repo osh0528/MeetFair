@@ -23,7 +23,7 @@ import { colors } from "../theme/colors";
 registerGlobals();
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean }
 interface SwitchableMediaStreamTrack {
   applyConstraints(constraints: { facingMode: "user" | "environment" }): Promise<void>;
 }
@@ -166,6 +166,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [credentials, setCredentials] = useState<CallToken | null>(null);
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
+  const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
 
   async function connect() {
     setConnecting(true);
@@ -186,6 +187,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       await AudioSession.startAudioSession();
+      setRecordingEnabled(token.recordingEnabled);
       setCredentials(token);
       setMessage("");
     } catch (error) {
@@ -210,7 +212,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader title="지각 확인 통화" onBack={() => void leave()} />
-        <Text style={styles.recordingNotice}>이 통화는 녹화되며 통화 종료 후 24시간 뒤 자동 삭제됩니다.</Text>
+        <Text style={styles.recordingPendingNotice}>녹화 가능 여부를 확인하고 있습니다.</Text>
         <View style={styles.center}>
           <Text style={styles.waiting}>{message}</Text>
           {!connecting ? <Button label="다시 연결" onPress={() => void connect()} /> : null}
@@ -223,7 +225,11 @@ export function VideoCallScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="지각 확인 통화" />
-      <Text style={styles.recordingNotice}>이 통화는 녹화되며 통화 종료 후 24시간 뒤 자동 삭제됩니다.</Text>
+      <Text style={recordingEnabled ? styles.recordingNotice : styles.recordingDisabledNotice}>
+        {recordingEnabled
+          ? "이 통화는 녹화되며 모임 시작 24시간 후 자동 삭제됩니다."
+          : "녹화 저장소를 사용할 수 없어 녹화 없이 통화가 연결되었습니다."}
+      </Text>
       <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio video onError={(error) => setMessage(error.message)}>
         <CallContent onError={setMessage} onLeave={() => void leave()} />
         {message ? <Text style={styles.error}>{message}</Text> : null}
@@ -242,6 +248,8 @@ const styles = StyleSheet.create({
   waiting: { color: colors.surface, textAlign: "center", padding: 24 },
   error: { color: colors.red, textAlign: "center", padding: 8 },
   recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
   statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
   controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },

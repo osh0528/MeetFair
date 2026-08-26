@@ -9,7 +9,7 @@ import { apiRequest } from "../services/api";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean }
 interface TrackEntry { id: string; name: string; track: LocalTrack | RemoteTrack }
 
 function BrowserTrack({ entry }: { entry: TrackEntry }) {
@@ -47,6 +47,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [connecting, setConnecting] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     let activeRoom: Room | null = null;
@@ -78,6 +79,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
           body: "{}",
         });
         if (cancelled) return;
+        setRecordingEnabled(credentials.recordingEnabled);
 
         const nextRoom = new Room({ adaptiveStream: true, dynacast: true });
         activeRoom = nextRoom;
@@ -173,7 +175,18 @@ export function VideoCallScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="지각 확인 통화" onBack={() => void leave()} />
-      <Text style={styles.recordingNotice}>이 통화는 녹화되며 통화 종료 후 24시간 뒤 자동 삭제됩니다.</Text>
+      <Text style={recordingEnabled === null
+        ? styles.recordingPendingNotice
+        : recordingEnabled
+          ? styles.recordingNotice
+          : styles.recordingDisabledNotice}
+      >
+        {recordingEnabled === null
+          ? "녹화 가능 여부를 확인하고 있습니다."
+          : recordingEnabled
+            ? "이 통화는 녹화되며 모임 시작 24시간 후 자동 삭제됩니다."
+            : "녹화 저장소를 사용할 수 없어 녹화 없이 통화가 연결되었습니다."}
+      </Text>
       {!room ? (
         <View style={styles.center}>
           <Text style={styles.waiting}>{message}</Text>
@@ -224,6 +237,8 @@ const styles = StyleSheet.create({
   waiting: { color: colors.surface, textAlign: "center", padding: 24 },
   error: { color: colors.red, textAlign: "center", padding: 8 },
   recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   controls: { flexDirection: "row", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
   controlButton: { minHeight: 44, minWidth: "28%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   dangerButton: { backgroundColor: colors.red },
