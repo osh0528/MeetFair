@@ -67,6 +67,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState("");
   const watcher = useRef<Location.LocationSubscription | null>(null);
+  const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
 
   async function load() {
     const [meetingData, locationData] = await Promise.all([
@@ -80,11 +81,37 @@ export function TrackingScreen({ navigation, route }: Props) {
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "위치를 불러오지 못했습니다."));
     const timer = setInterval(() => void load().catch(() => undefined), 5000);
+    if (accessToken) {
+      const socket = createMeetingSocket(accessToken);
+      socketRef.current = socket;
+      socket.on("participant:location", (payload) => {
+        setLocations((current) => current.map((item) => item.userId === payload.userId ? {
+          ...item,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          accuracy: payload.accuracy,
+          updatedAt: payload.sentAt,
+          sharingStatus: "SHARING",
+        } : item));
+      });
+      socket.on("participant:status", (payload) => {
+        if (payload.meetingId !== meetingId) return;
+        setLocations((current) => current.map((item) => item.userId === payload.userId ? {
+          ...item,
+          sharingStatus: payload.status,
+          arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt,
+        } : item));
+      });
+      socket.connect();
+      socket.once("connect", () => socket.emit("meeting:join", { meetingId }));
+    }
     return () => {
       clearInterval(timer);
       watcher.current?.remove();
+      socketRef.current?.disconnect();
+      socketRef.current = null;
     };
-  }, [meetingId]);
+  }, [accessToken, meetingId]);
 
   const mapCenter = useMemo(() => {
     const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
@@ -102,21 +129,13 @@ export function TrackingScreen({ navigation, route }: Props) {
       method: "PATCH",
       body: JSON.stringify({ consent: true }),
     });
-    const socket = createMeetingSocket(accessToken);
-    socket.connect();
-    socket.once("connect", () => {
-      socket.emit("meeting:join", { meetingId });
-      socket.emit("sharing:status", { meetingId, status: "SHARING" });
-    });
-    socket.on("participant:location", (payload) => {
-      setLocations((current) => current.map((item) => item.userId === payload.userId ? {
-        ...item,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        accuracy: payload.accuracy,
-        updatedAt: payload.sentAt,
-      } : item));
-    });
+    const socket = socketRef.current;
+    if (!socket) {
+      setMessage("실시간 위치 연결을 준비하지 못했습니다.");
+      return;
+    }
+    socket.emit("meeting:join", { meetingId });
+    socket.emit("sharing:status", { meetingId, status: "SHARING" });
     watcher.current = await Location.watchPositionAsync({
       accuracy: Location.Accuracy.High,
       timeInterval: 5000,
@@ -150,6 +169,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   async function stopSharing() {
     watcher.current?.remove();
     watcher.current = null;
+    socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
     if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
     await AsyncStorage.removeItem(TASK_STATE_KEY);
     await apiRequest(`/meetings/${meetingId}/location-consent`, {

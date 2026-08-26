@@ -49,12 +49,26 @@ export function TrackingScreen({ navigation, route }: Props) {
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "위치를 불러오지 못했습니다."));
     const timer = setInterval(() => void load().catch(() => undefined), 5000);
+    const socket = accessToken ? createMeetingSocket(accessToken) : null;
+    if (socket) {
+      socketRef.current = socket;
+      socket.on("participant:location", (payload) => {
+        setLocations((current) => current.map((item) => item.userId === payload.userId ? { ...item, latitude: payload.latitude, longitude: payload.longitude, accuracy: payload.accuracy, updatedAt: payload.sentAt, sharingStatus: "SHARING" } : item));
+      });
+      socket.on("participant:status", (payload) => {
+        if (payload.meetingId !== meetingId) return;
+        setLocations((current) => current.map((item) => item.userId === payload.userId ? { ...item, sharingStatus: payload.status, arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt } : item));
+      });
+      socket.connect();
+      socket.once("connect", () => socket.emit("meeting:join", { meetingId }));
+    }
     return () => {
       clearInterval(timer);
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-      socketRef.current?.disconnect();
+      socket?.disconnect();
+      socketRef.current = null;
     };
-  }, [load]);
+  }, [accessToken, load, meetingId]);
 
   async function startSharing() {
     if (!accessToken || !navigator.geolocation) {
@@ -66,16 +80,10 @@ export function TrackingScreen({ navigation, route }: Props) {
         navigator.geolocation.getCurrentPosition(() => resolve(), (error) => reject(new Error(error.message)), { enableHighAccuracy: true });
       });
       await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: true }) });
-      const socket = createMeetingSocket(accessToken);
-      socketRef.current = socket;
-      socket.on("participant:location", (payload) => {
-        setLocations((current) => current.map((item) => item.userId === payload.userId ? { ...item, latitude: payload.latitude, longitude: payload.longitude, accuracy: payload.accuracy, updatedAt: payload.sentAt } : item));
-      });
-      socket.connect();
-      socket.once("connect", () => {
-        socket.emit("meeting:join", { meetingId });
-        socket.emit("sharing:status", { meetingId, status: "SHARING" });
-      });
+      const socket = socketRef.current;
+      if (!socket) throw new Error("실시간 위치 연결을 준비하지 못했습니다.");
+      socket.emit("meeting:join", { meetingId });
+      socket.emit("sharing:status", { meetingId, status: "SHARING" });
       watchIdRef.current = navigator.geolocation.watchPosition((position) => {
         socket.emit("location:update", { meetingId, latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, sentAt: new Date(position.timestamp).toISOString() });
       }, (error) => setMessage(`위치 갱신에 실패했습니다: ${error.message}`), { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
@@ -90,8 +98,6 @@ export function TrackingScreen({ navigation, route }: Props) {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
-    socketRef.current?.disconnect();
-    socketRef.current = null;
     await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: false }) });
     setSharing(false);
     setMessage("실시간 위치 공유를 중지했습니다.");
