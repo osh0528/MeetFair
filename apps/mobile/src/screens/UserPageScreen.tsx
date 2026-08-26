@@ -428,6 +428,15 @@ export function UserPageScreen({ navigation, route }: Props) {
         title={page ? page.user.nickname + "의 미니홈피" : "미니홈피"}
         subtitle={page ? "@" + page.user.accountId : undefined}
         onBack={() => navigation.goBack()}
+        right={page?.isOwner && isCompactLayout ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setEditing(true)}
+            style={styles.headerEditButton}
+          >
+            <Text style={styles.headerEditButtonText}>홈피 편집</Text>
+          </Pressable>
+        ) : undefined}
       />
       {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
       <ScrollView contentContainerStyle={styles.content}>
@@ -509,10 +518,6 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
-            {page.isOwner && isCompactLayout ? (
-              <Button label="홈피 편집" onPress={() => setEditing(true)} variant="soft" />
-            ) : null}
-
             {page && false ? <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
               <Pressable
                 disabled={!page!.hasMusic}
@@ -548,7 +553,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card> : null}
             <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
-              <Card style={styles.aboutPhotoPanel}>
+              <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel]}>
                 <View style={styles.introSection}>
                   <SectionHeading title="About me" />
                   <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
@@ -617,7 +622,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 </View>
               </Card>
 
-              <Card style={styles.guestbookPanel}>
+              <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel]}>
                 <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
                 <View style={styles.guestbookComposer}>
                   <TextInput
@@ -731,6 +736,18 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   loader: { marginTop: 40 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
+  headerEditButton: {
+    minWidth: 72,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerEditButtonText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   editModalSafeArea: { flex: 1 },
   editModalHeader: { paddingHorizontal: 4 },
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
@@ -771,9 +788,10 @@ const styles = StyleSheet.create({
   musicTime: { color: colors.muted, fontSize: 10 },
   musicError: { color: colors.red, fontSize: 10 },
   pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-  pageColumnsMobile: { flexDirection: "column" },
+  pageColumnsMobile: { flexDirection: "column", alignItems: "stretch", width: "100%" },
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
+  mobilePanel: { flex: 0, width: "100%", alignSelf: "stretch" },
   introSection: { gap: 12 },
   panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
