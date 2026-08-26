@@ -117,12 +117,12 @@ export function UserPageScreen({ navigation, route }: Props) {
         body: JSON.stringify({ targetUserId: page.user.id, clientRequestId: createClientRequestId() }),
       });
       setMessage("찌르기 알림을 보냈습니다.");
-      setPokeCooldown(60);
+      setPokeCooldown(2);
     } catch (caught) {
       const msg = caught instanceof Error ? caught.message : "찌르기를 보내지 못했습니다.";
       if (msg.includes("POKE_COOLDOWN") || msg.includes("Please wait")) {
         const match = msg.match(/(\d+)s/);
-        setPokeCooldown(match ? Number(match[1]) : 60);
+        setPokeCooldown(match ? Number(match[1]) : 2);
       }
       setMessage(msg);
     } finally {

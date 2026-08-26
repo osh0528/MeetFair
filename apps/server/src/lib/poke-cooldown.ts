@@ -1,5 +1,5 @@
-export const CASUAL_COOLDOWN_MS = 60_000;
-export const MEETING_COOLDOWN_MS = 120_000;
+export const CASUAL_COOLDOWN_MS = 2_000;
+export const MEETING_COOLDOWN_MS = 2_000;
 
 const cooldowns = new Map<string, number>();
 

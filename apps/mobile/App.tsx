@@ -23,6 +23,7 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { UserPageScreen } from "./src/screens/UserPageScreen";
 import { SessionProvider, useSession } from "./src/services/session";
 import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge";
+import { WebNotificationToast } from "./src/components/WebNotificationToast";
 import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
@@ -99,6 +100,7 @@ function AppNavigator() {
     >
       <StatusBar style="dark" />
       <PokeNotificationBridge />
+      <WebNotificationToast />
       <View style={styles.appShell}>
         <Stack.Navigator
           initialRouteName="Login"
