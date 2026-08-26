@@ -337,7 +337,10 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
                 placeholderTextColor={colors.subtle}
                 style={styles.input}
                 maxLength={2000}
-                multiline
+                multiline={Platform.OS !== "web"}
+                onSubmitEditing={() => void handleSend()}
+                returnKeyType="send"
+                blurOnSubmit={false}
               />
               <Pressable
                 accessibilityRole="button"
