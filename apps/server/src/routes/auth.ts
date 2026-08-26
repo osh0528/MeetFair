@@ -25,7 +25,7 @@ authRouter.post("/register", async (request, response, next) => {
     if (exists) throw new AppError(409, "EMAIL_ALREADY_USED", "This email is already registered.");
     const accountIdExists = await prisma.user.findUnique({ where: { accountId } });
     if (accountIdExists) throw new AppError(409, "ACCOUNT_ID_ALREADY_USED", "This account ID is already in use.");
-    const user = await prisma.user.create({ data: { email, accountId, nickname, passwordHash: await hashPassword(password) } });
+    const user = await prisma.user.create({ data: { email, accountId, nickname, passwordHash: await hashPassword(password), casualPokesEnabled: true } });
     response.status(201).json({ success: true, data: { user: toPublicUser(user), accessToken: createAccessToken(user.id) } });
   } catch (error) {
     next(error);
@@ -94,6 +94,7 @@ authRouter.post("/google", async (request, response, next) => {
           nickname: input.nickname,
           passwordHash: null,
           googleSubject: payload.sub,
+          casualPokesEnabled: true,
         },
       });
     } else if (!user.googleSubject) {

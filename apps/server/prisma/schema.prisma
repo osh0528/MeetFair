@@ -110,7 +110,7 @@ model User {
   currentLongitude Float?
   currentAccuracy  Float?
   currentLocationUpdatedAt DateTime?
-  casualPokesEnabled Boolean            @default(false)
+  casualPokesEnabled Boolean            @default(true)
   pokeQuietStartMinutes Int?
   pokeQuietEndMinutes Int?
   timezone          String              @default("Asia/Seoul")

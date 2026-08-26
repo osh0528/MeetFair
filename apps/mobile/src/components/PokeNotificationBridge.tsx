@@ -2,7 +2,7 @@ import * as Notifications from "expo-notifications";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, Vibration } from "react-native";
 import { isPokeSoundEnabled } from "../services/poke-sound";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
@@ -86,6 +86,7 @@ export function PokeNotificationBridge() {
         playWebPokeAlert();
         return;
       }
+      Vibration.vibrate([0, 180, 100, 180]);
       const permission = await Notifications.getPermissionsAsync();
       const granted = permission.granted ? permission : await Notifications.requestPermissionsAsync();
       if (!granted.granted) return;
