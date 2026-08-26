@@ -142,6 +142,12 @@ model User {
   blocksReceived    Block[]          @relation("Blocked")
   reports           UserReport[]
   favoritePlaces    FavoritePlace[]
+  miniHome          MiniHome?
+  chatMessages      MeetingChatMessage[]
+  posts             MeetingPost[]
+  postComments      MeetingPostComment[]
+  visitsMade        MiniHomeVisit[] @relation("VisitsMade")
+  visitsReceived    MiniHomeVisit[] @relation("VisitsReceived")
 }
 
 model ProfilePhoto {
@@ -224,6 +230,8 @@ model Meeting {
   votes            Vote[]
   pokes            Poke[]
   calls            MeetingCall[]
+  chatMessages     MeetingChatMessage[]
+  posts            MeetingPost[]
 
   @@index([hostId])
   @@index([scheduledAt])
@@ -507,4 +515,81 @@ model FavoritePlace {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+model MiniHome {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  profileStatus         String?
+  profileBio            String?
+  profileEmoji          String   @default("🌟")
+  profileTheme          String   @default("PURPLE")
+  profileMusicTitle     String?
+  profileMusicData      Bytes?
+  profileMusicMimeType  String?
+  profileMusicUpdatedAt DateTime?
+  profileUpdatedAt      DateTime?
+  createdAt             DateTime @default(now())
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MiniHomeVisit {
+  id        String   @id @default(uuid())
+  ownerId   String
+  visitorId String
+  visitedAt DateTime @default(now())
+  owner     User     @relation("VisitsReceived", fields: [ownerId], references: [id], onDelete: Cascade)
+  visitor   User     @relation("VisitsMade", fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, visitorId, visitedAt])
+  @@index([ownerId, visitedAt])
+  @@index([visitorId, visitedAt])
+}
+
+model MeetingChatMessage {
+  id              String    @id @default(uuid())
+  meetingId       String
+  senderId        String
+  content         String
+  clientMessageId String?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+  meeting         Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  sender          User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, clientMessageId])
+  @@index([meetingId, createdAt])
+  @@index([senderId])
+}
+
+model MeetingPost {
+  id        String    @id @default(uuid())
+  meetingId String
+  authorId  String
+  title     String
+  content   String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  MeetingPostComment[]
+
+  @@index([meetingId, createdAt])
+  @@index([authorId])
+}
+
+model MeetingPostComment {
+  id        String      @id @default(uuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime    @default(now())
+  deletedAt DateTime?
+  post      MeetingPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
 }

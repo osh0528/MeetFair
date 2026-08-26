@@ -349,6 +349,39 @@ export interface MeetingInvitationRespondedPayload {
   invitation: MeetingInvitationSummary;
 }
 
+export interface MeetingChatMessageSummary {
+  id: string;
+  meetingId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface MeetingChatReceivedPayload {
+  message: MeetingChatMessageSummary;
+}
+
+export interface MeetingPostSummary {
+  id: string;
+  meetingId: string;
+  authorId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  deletedAt: string | null;
+  commentCount?: number;
+}
+
+export interface MeetingPostCommentSummary {
+  id: string;
+  postId: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
 export interface MeetingErrorPayload {
   code: string;
   message: string;
@@ -375,4 +408,5 @@ export interface ServerToClientEvents {
   "meeting:error": (payload: MeetingErrorPayload) => void;
   "direct-message:received": (payload: DirectMessageReceivedPayload) => void;
   "direct-message:read": (payload: DirectMessageReadPayload) => void;
+  "meeting:chat:received": (payload: MeetingChatReceivedPayload) => void;
 }

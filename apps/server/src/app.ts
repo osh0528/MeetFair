@@ -16,6 +16,9 @@ import { meetingCallsRouter } from "./routes/meeting-calls.js";
 import { directMessagesRouter } from "./routes/direct-messages.js";
 import { blocksRouter, reportsRouter } from "./routes/safety.js";
 import { favoritePlacesRouter } from "./routes/favorite-places.js";
+import { meetingChatRouter } from "./routes/meeting-chat.js";
+import { meetingBoardRouter } from "./routes/meeting-board.js";
+import { miniHomeRouter } from "./routes/mini-home.js";
 
 export function createApp() {
   const app = express();
@@ -46,6 +49,9 @@ export function createApp() {
   app.use("/api/pokes", pokesRouter);
   app.use("/api/direct-messages", directMessagesRouter);
   app.use("/api/meeting-calls", meetingCallsRouter);
+  app.use("/api/meetings", meetingChatRouter);
+  app.use("/api/meetings", meetingBoardRouter);
+  app.use("/api/users", miniHomeRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

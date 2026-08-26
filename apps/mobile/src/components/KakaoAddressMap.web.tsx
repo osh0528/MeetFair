@@ -32,6 +32,14 @@ function dedupeCandidates(items: AddressCandidate[]): AddressCandidate[] {
   return unique.slice(0, 5);
 }
 
+function currentOrigin(): string {
+  try {
+    return window.location.origin;
+  } catch {
+    return "(unknown origin)";
+  }
+}
+
 function loadKakaoMaps(appKey: string): Promise<void> {
   if (window.kakao?.maps) return Promise.resolve();
   if (window.meetfairKakaoMapsLoader) return window.meetfairKakaoMapsLoader;
@@ -42,12 +50,21 @@ function loadKakaoMaps(appKey: string): Promise<void> {
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services`;
     script.onload = () => {
       if (!window.kakao?.maps?.load) {
-        reject(new Error("카카오 지도 SDK가 정상적으로 로드되지 않았어요."));
+        reject(
+          new Error(
+            `카카오 지도 SDK가 정상적으로 로드되지 않았어요. (origin=${currentOrigin()}) — Kakao Developers 콘솔 > 내 애플리케이션 > 플랫폼 > Web에 ${currentOrigin()} 도메인이 등록되어 있는지 확인하세요.`,
+          ),
+        );
         return;
       }
       window.kakao.maps.load(() => resolve());
     };
-    script.onerror = () => reject(new Error("카카오 지도 스크립트를 불러오지 못했습니다."));
+    script.onerror = () =>
+      reject(
+        new Error(
+          `카카오 지도 스크립트를 불러오지 못했습니다. (origin=${currentOrigin()}) — Vercel/배포 환경변수에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY가 설정되어 있고, Kakao Developers 콘솔에 ${currentOrigin()} 도메인이 등록되어 있는지 확인하세요.`,
+        ),
+      );
     document.head.appendChild(script);
   });
 
@@ -83,7 +100,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
 
   useEffect(() => {
     if (!appConfig.kakaoMapJsKey) {
-      setMessage(".env에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정해주세요.");
+      setMessage(
+        `카카오 지도 키가 없어요. 배포 환경(Vercel 등) 환경변수에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정하고 재배포하세요. (현재 origin=${currentOrigin()})`,
+      );
       return;
     }
 

@@ -419,6 +419,8 @@ export function MeetingScreen({ navigation, route }: Props) {
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button label="도착 처리" onPress={arrive} /> : null}
         {meeting.status !== "CANCELLED" ? <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" /> : null}
+        {meeting.status !== "CANCELLED" ? <Button label="채팅" onPress={() => navigation.navigate("MeetingChat", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
+        {meeting.status !== "CANCELLED" ? <Button label="게시판" onPress={() => navigation.navigate("MeetingBoard", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
         {isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
           <Button disabled={busyAction === "cancel"} label={busyAction === "cancel" ? "취소 처리 중..." : "모임 취소"} onPress={cancelMeeting} variant="secondary" />
         ) : null}
