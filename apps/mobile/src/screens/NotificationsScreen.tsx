@@ -1,16 +1,19 @@
 import type { NotificationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
+import { useSession } from "../services/session";
+import { navigateForNotification } from "../services/notification-navigation";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
 
 export function NotificationsScreen({ navigation }: Props) {
+  const { user } = useSession();
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,11 +45,13 @@ export function NotificationsScreen({ navigation }: Props) {
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
         {notifications.map((item) => (
-          <Card key={item.id} style={styles.card}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.body}>{item.body}</Text>
-            <Text style={styles.date}>{new Date(item.createdAt).toLocaleString("ko-KR")}</Text>
-          </Card>
+          <Pressable key={item.id} onPress={() => navigateForNotification(item, navigation, user?.id)}>
+            <Card style={styles.card}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.body}>{item.body}</Text>
+              <Text style={styles.date}>{new Date(item.createdAt).toLocaleString("ko-KR")}</Text>
+            </Card>
+          </Pressable>
         ))}
         {!loading && !error && !notifications.length ? <Text style={styles.empty}>알림이 없습니다.</Text> : null}
       </ScrollView>

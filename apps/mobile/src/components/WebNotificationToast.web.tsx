@@ -6,14 +6,15 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { RootStackParamList } from "../../App";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
+import { navigateForNotification } from "../services/notification-navigation";
 import { colors } from "../theme/colors";
 
 const TOAST_DURATION_MS = 6_000;
 const MAX_TOASTS = 3;
 
 export function WebNotificationToast() {
-  const { accessToken } = useSession();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { accessToken, user } = useSession();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, keyof RootStackParamList>>();
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
   const seenNotificationIds = useRef(new Set<string>());
 
@@ -52,7 +53,7 @@ export function WebNotificationToast() {
             accessibilityLabel={`${notification.title} 알림 열기`}
             onPress={() => {
               dismiss(notification.id);
-              navigation.navigate("Notifications");
+              navigateForNotification(notification, navigation, user?.id);
             }}
             style={styles.copy}
           >
