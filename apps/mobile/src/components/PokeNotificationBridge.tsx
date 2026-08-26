@@ -18,8 +18,8 @@ if (Platform.OS !== "web") {
     }),
   });
   if (Platform.OS === "android") {
-    void Notifications.setNotificationChannelAsync("pokes", {
-      name: "찌르기",
+    void Notifications.setNotificationChannelAsync("pokes-v2", {
+      name: "찌르기 알림",
       importance: Notifications.AndroidImportance.HIGH,
       sound: "default",
       vibrationPattern: [0, 180, 100, 180],
@@ -65,7 +65,7 @@ export function PokeNotificationBridge() {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as { meetingId?: string | null };
       if (data?.meetingId) {
-        navigation.navigate("Tracking", { meetingId: data.meetingId as string });
+        navigation.navigate("Tracking", { meetingId: data.meetingId });
       } else {
         navigation.navigate("Notifications");
       }
@@ -81,11 +81,11 @@ export function PokeNotificationBridge() {
       seenPokeIds.current.add(poke.pokeId);
       setTimeout(() => seenPokeIds.current.delete(poke.pokeId), 5 * 60_000);
       const soundEnabled = await isPokeSoundEnabled();
-      if (!soundEnabled) return;
       if (Platform.OS === "web") {
-        playWebPokeAlert();
+        if (soundEnabled) playWebPokeAlert();
         return;
       }
+      // 진동은 효과음 설정과 별개로 동작시켜 무음 설정에서도 수신을 알립니다.
       Vibration.vibrate([0, 180, 100, 180]);
       const permission = await Notifications.getPermissionsAsync();
       const granted = permission.granted ? permission : await Notifications.requestPermissionsAsync();
@@ -93,9 +93,9 @@ export function PokeNotificationBridge() {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `${poke.senderNickname}님이 찔렀어요`,
-          body: poke.type === "MEETING" ? "모임에 늦고 있어요. 확인해 주세요." : "친구가 기다리고 있어요.",
-          sound: "default",
-          ...(Platform.OS === "android" ? { channelId: "pokes" } : {}),
+          body: poke.type === "MEETING" ? "모임에 늦은 친구가 도착했는지 확인해 주세요." : "친구가 MeetFair에서 찌르기를 보냈습니다.",
+          ...(soundEnabled ? { sound: "default" as const } : {}),
+          ...(Platform.OS === "android" ? { channelId: "pokes-v2" } : {}),
           data: { meetingId: poke.meetingId, pokeId: poke.pokeId },
         },
         trigger: null,
