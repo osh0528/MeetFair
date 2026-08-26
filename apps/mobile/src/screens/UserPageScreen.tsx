@@ -438,7 +438,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
                 <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
-                  <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={92} />
+                  <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={80} />
                   <View style={styles.profileText}>
                     <Text style={styles.nickname}>{page.user.nickname}</Text>
                     <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
