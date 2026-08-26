@@ -70,11 +70,11 @@ export function WebNotificationToast() {
 }
 
 const styles = StyleSheet.create({
-  container: { position: "absolute", right: 24, bottom: 28, width: 340, gap: 10, zIndex: 1000 },
-  toast: { flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(32,34,38,0.97)", paddingVertical: 14, paddingLeft: 16, paddingRight: 10, shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  container: { position: "absolute", right: 24, bottom: 28, width: 380, gap: 10, zIndex: 1000 },
+  toast: { flexDirection: "row", alignItems: "flex-start", gap: 14, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(32,34,38,0.97)", paddingVertical: 17, paddingLeft: 19, paddingRight: 12, shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   copy: { flex: 1, gap: 4 },
-  title: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  body: { color: "#D4D7DA", fontSize: 12, lineHeight: 18, fontWeight: "600" },
-  closeButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.1)" },
-  closeText: { color: colors.surface, fontSize: 21, lineHeight: 23, fontWeight: "500" },
+  title: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  body: { color: "#D4D7DA", fontSize: 13, lineHeight: 20, fontWeight: "600" },
+  closeButton: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.1)" },
+  closeText: { color: colors.surface, fontSize: 22, lineHeight: 24, fontWeight: "500" },
 });
