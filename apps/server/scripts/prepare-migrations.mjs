@@ -14,6 +14,7 @@ const client = new Client({ connectionString: databaseUrl });
 let shouldResolveBaseline = false;
 let shouldRollbackFailedBaseline = false;
 let shouldAlignExistingSchema = false;
+let shouldResolvePhotoMigration = false;
 let shouldRollbackFailedPhotoMigration = false;
 
 function migrationState(rows, migrationName) {
@@ -43,9 +44,15 @@ try {
   const migrationsTableExists = Boolean(existingSchema.rows[0]?.migrationsTable);
 
   if (userTableExists) {
+    // This database predates the squashed migration history. Even when a
+    // migration is recorded as applied, some newer tables can still be absent.
+    // `db push` is intentionally run without --accept-data-loss so startup
+    // fails instead of making a destructive schema change.
+    shouldAlignExistingSchema = true;
+
     if (!migrationsTableExists) {
       shouldResolveBaseline = true;
-      shouldAlignExistingSchema = true;
+      shouldResolvePhotoMigration = true;
     } else {
       const migrations = await client.query(
         `SELECT migration_name, finished_at, rolled_back_at
@@ -58,8 +65,8 @@ try {
       const photoMigration = migrationState(migrations.rows, photoMigrationName);
       shouldResolveBaseline = !baseline.applied;
       shouldRollbackFailedBaseline = shouldResolveBaseline && baseline.failed;
-      shouldAlignExistingSchema = !photoMigration.applied;
-      shouldRollbackFailedPhotoMigration = shouldAlignExistingSchema && photoMigration.failed;
+      shouldResolvePhotoMigration = !photoMigration.applied;
+      shouldRollbackFailedPhotoMigration = shouldResolvePhotoMigration && photoMigration.failed;
     }
   }
 } finally {
@@ -82,5 +89,7 @@ if (shouldAlignExistingSchema) {
   }
   console.log("Aligning the existing MeetFair database with the current schema.");
   runPrisma(["db", "push"]);
-  runPrisma(["migrate", "resolve", "--applied", photoMigrationName]);
+  if (shouldResolvePhotoMigration) {
+    runPrisma(["migrate", "resolve", "--applied", photoMigrationName]);
+  }
 }
