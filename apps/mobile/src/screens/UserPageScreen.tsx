@@ -386,7 +386,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   }, {})) : [];
 
   const musicPlayerCard = page ? (
-    <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
+    <Card style={[styles.musicCard, styles.heroMusicCard]}>
       <Pressable
         disabled={!page.hasMusic}
         onPress={() => void toggleMusic()}
@@ -436,15 +436,15 @@ export function UserPageScreen({ navigation, route }: Props) {
           <>
             <Card style={[styles.heroCard, { borderColor: palette.soft }]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
-              <View style={styles.heroRow}>
-                <View style={styles.profileIdentity}>
+              <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
+                <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
                   <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={92} />
                   <View style={styles.profileText}>
                     <Text style={styles.nickname}>{page.user.nickname}</Text>
                     <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
                   </View>
                 </View>
-                <View style={styles.heroMusic}>{musicPlayerCard}</View>
+                <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
               </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
@@ -727,8 +727,10 @@ const styles = StyleSheet.create({
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   heroCard: { gap: 12, overflow: "hidden" },
-  heroRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 },
+  heroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
+  heroRowMobile: { gap: 10 },
+  profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 0.9, minWidth: 0 },
+  profileIdentityMobile: { flex: 1 },
   profileText: { flex: 1, minWidth: 0 },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
   nickname: { color: colors.text, fontSize: 23, fontWeight: "900" },
@@ -743,10 +745,12 @@ const styles = StyleSheet.create({
   themeChoice: { minWidth: 66, padding: 9, borderRadius: 13, borderWidth: 2, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
   themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
-  heroMusic: { flex: 1, minWidth: 0 },
+  heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
+  heroMusicMobile: { flex: 1, paddingLeft: 12 },
+  heroMusicCard: { padding: 0, borderWidth: 0, borderRadius: 0, backgroundColor: "transparent" },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
-  musicControl: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
-  musicControlText: { color: colors.surface, fontSize: 17, fontWeight: "900", marginLeft: 2 },
+  musicControl: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  musicControlText: { color: colors.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
   musicCopy: { flex: 1, gap: 3 },
   musicLabel: { fontSize: 10, fontWeight: "900" },
   musicTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
