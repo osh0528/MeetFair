@@ -1,6 +1,10 @@
 import { prisma } from "../lib/prisma.js";
+import { createNotification } from "../lib/notifications.js";
 import { emitMeetingUpdated } from "../realtime/events.js";
 import { CALL_RECORDING_RETENTION_MS, deleteMeetingRecordingObjects } from "./call-recordings.js";
+
+const RETENTION_WARNING_LEAD_MS = 60 * 60 * 1000;
+const RECORDING_AUDIT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 async function leadingCandidate(meetingId: string) {
   const candidates = await prisma.placeCandidate.findMany({
@@ -70,6 +74,43 @@ export async function processMeetingLifecycle(now = new Date()) {
     await prisma.meeting.delete({ where: { id: meeting.id } });
   }
 
+  const warningMeetings = await prisma.meeting.findMany({
+    where: {
+      retentionWarningSentAt: null,
+      scheduledAt: {
+        gt: new Date(now.getTime() - CALL_RECORDING_RETENTION_MS),
+        lte: new Date(now.getTime() - CALL_RECORDING_RETENTION_MS + RETENTION_WARNING_LEAD_MS),
+      },
+    },
+    select: {
+      id: true,
+      title: true,
+      hostId: true,
+      participants: { select: { userId: true } },
+    },
+    take: 20,
+  });
+  for (const meeting of warningMeetings) {
+    const claim = await prisma.meeting.updateMany({
+      where: { id: meeting.id, retentionWarningSentAt: null },
+      data: { retentionWarningSentAt: now },
+    });
+    if (!claim.count) continue;
+    const recipientIds = [...new Set([meeting.hostId, ...meeting.participants.map(({ userId }) => userId)])];
+    for (const userId of recipientIds) {
+      await createNotification({
+        userId,
+        type: "MEETING_RETENTION_WARNING",
+        title: "모임이 1시간 후 삭제됩니다",
+        body: `${meeting.title} 모임과 채팅, 녹화 영상이 1시간 후 자동 삭제됩니다.`,
+        data: { meetingId: meeting.id },
+        important: true,
+      }).catch((error) => {
+        console.error("Meeting retention warning failed", { meetingId: meeting.id, userId, error });
+      });
+    }
+  }
+
   const dueVotes = await prisma.meeting.findMany({
     where: { confirmedPlaceId: null, voteCountdownEndsAt: { lte: now } },
     select: { id: true },
@@ -123,4 +164,8 @@ export async function processMeetingLifecycle(now = new Date()) {
       prisma.meeting.update({ where: { id: meeting.id }, data: { locationPurgeAt: null } }),
     ]);
   }
+
+  await prisma.recordingAccessLog.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - RECORDING_AUDIT_RETENTION_MS) } },
+  });
 }

@@ -289,7 +289,10 @@ export async function deleteMeetingRecordingObjects(meetingId: string, now = new
     } catch (error) {
       await prisma.meetingCall.update({
         where: { id: call.id },
-        data: { recordingError: errorMessage(error) },
+        data: {
+          recordingError: errorMessage(error),
+          recordingDeleteAttempts: { increment: 1 },
+        },
       });
       return false;
     }
@@ -358,7 +361,10 @@ export async function processCallRecordingRetention(now = new Date()) {
     } catch (error) {
       await prisma.meetingCall.update({
         where: { id: call.id },
-        data: { recordingError: errorMessage(error) },
+        data: {
+          recordingError: errorMessage(error),
+          recordingDeleteAttempts: { increment: 1 },
+        },
       });
     }
   }

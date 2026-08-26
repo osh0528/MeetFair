@@ -22,6 +22,35 @@ async function requireParticipant(meetingId: string, userId: string) {
   return participant;
 }
 
+async function recordRecordingAccess(input: {
+  meetingId: string;
+  callId: string;
+  userId: string;
+  outcome: "ALLOWED" | "DENIED" | "EXPIRED" | "ERROR";
+}) {
+  await prisma.recordingAccessLog.create({ data: input }).catch((error) => {
+    console.error("Recording access audit failed", error);
+  });
+}
+
+async function requireRecordingMessage(meetingId: string, messageId: string, userId: string) {
+  const message = await prisma.meetingChatMessage.findFirst({
+    where: { id: messageId, meetingId, messageType: "VIDEO", deletedAt: null, callId: { not: null } },
+    select: { callId: true },
+  });
+  if (!message?.callId) {
+    throw new AppError(404, "RECORDING_NOT_FOUND", "Call recording was not found.");
+  }
+  const participant = await prisma.meetingParticipant.findUnique({
+    where: { meetingId_userId: { meetingId, userId } },
+  });
+  if (!participant) {
+    await recordRecordingAccess({ meetingId, callId: message.callId, userId, outcome: "DENIED" });
+    throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant of this meeting.");
+  }
+  return message.callId;
+}
+
 function toChatMessageSummary(message: {
   id: string;
   meetingId: string;
@@ -87,19 +116,61 @@ meetingChatRouter.get("/:meetingId/chat/messages/:messageId/video", async (req, 
     const { meetingId, messageId } = z
       .object({ meetingId: z.string().uuid(), messageId: z.string().uuid() })
       .parse(req.params);
-    await requireParticipant(meetingId, userId);
-    const message = await prisma.meetingChatMessage.findFirst({
-      where: { id: messageId, meetingId, messageType: "VIDEO", deletedAt: null, callId: { not: null } },
-      select: { callId: true },
-    });
-    if (!message?.callId) {
-      throw new AppError(404, "RECORDING_NOT_FOUND", "Call recording was not found.");
+    const callId = await requireRecordingMessage(meetingId, messageId, userId);
+    let url: string | null;
+    try {
+      url = await createCallRecordingPlaybackUrl(callId);
+    } catch (error) {
+      await recordRecordingAccess({ meetingId, callId, userId, outcome: "ERROR" });
+      throw error;
     }
-    const url = await createCallRecordingPlaybackUrl(message.callId);
     if (!url) {
+      await recordRecordingAccess({ meetingId, callId, userId, outcome: "EXPIRED" });
       throw new AppError(410, "RECORDING_EXPIRED", "Call recording has expired.");
     }
+    await recordRecordingAccess({ meetingId, callId, userId, outcome: "ALLOWED" });
     res.json({ success: true, data: { url } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /:meetingId/chat/messages/:messageId/video/status
+meetingChatRouter.get("/:meetingId/chat/messages/:messageId/video/status", async (req, res, next) => {
+  try {
+    const userId = currentUserId(req as AuthenticatedRequest);
+    const { meetingId, messageId } = z
+      .object({ meetingId: z.string().uuid(), messageId: z.string().uuid() })
+      .parse(req.params);
+    const callId = await requireRecordingMessage(meetingId, messageId, userId);
+    const call = await prisma.meetingCall.findUnique({
+      where: { id: callId },
+      select: {
+        recordingStatus: true,
+        recordingStartedAt: true,
+        recordingEndedAt: true,
+        recordingExpiresAt: true,
+        recordingDeletedAt: true,
+        recordingDeleteAttempts: true,
+      },
+    });
+    if (!call) throw new AppError(404, "RECORDING_NOT_FOUND", "Call recording was not found.");
+    const available = call.recordingStatus === "STORED"
+      && !call.recordingDeletedAt
+      && !!call.recordingExpiresAt
+      && call.recordingExpiresAt > new Date();
+    res.json({
+      success: true,
+      data: {
+        status: call.recordingStatus,
+        available,
+        startedAt: call.recordingStartedAt?.toISOString() ?? null,
+        endedAt: call.recordingEndedAt?.toISOString() ?? null,
+        expiresAt: call.recordingExpiresAt?.toISOString() ?? null,
+        deletedAt: call.recordingDeletedAt?.toISOString() ?? null,
+        deletionRetrying: call.recordingDeleteAttempts > 0 && !call.recordingDeletedAt,
+      },
+    });
   } catch (error) {
     next(error);
   }

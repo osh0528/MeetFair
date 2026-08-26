@@ -103,7 +103,10 @@ describe("call recording retention", () => {
 
     expect(vi.mocked(prisma.meetingCall.update)).toHaveBeenCalledWith({
       where: { id: "call-2" },
-      data: { recordingError: "storage unavailable" },
+      data: {
+        recordingError: "storage unavailable",
+        recordingDeleteAttempts: { increment: 1 },
+      },
     });
   });
 

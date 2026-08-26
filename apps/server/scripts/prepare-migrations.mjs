@@ -8,6 +8,7 @@ const photoMigrationName = "20260825170000_profile_photo_groups";
 const chatMigrationName = "20260826010000_chat_board_visit_profile";
 const recordingMigrationName = "20260826053000_call_recording_retention";
 const chatRecordingMigrationName = "20260826062000_meeting_chat_recordings";
+const recordingSafeguardsMigrationName = "20260826070000_recording_backend_safeguards";
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required before preparing migrations.");
@@ -25,6 +26,8 @@ let shouldResolveRecordingMigration = false;
 let shouldRollbackFailedRecordingMigration = false;
 let shouldResolveChatRecordingMigration = false;
 let shouldRollbackFailedChatRecordingMigration = false;
+let shouldResolveRecordingSafeguardsMigration = false;
+let shouldRollbackFailedRecordingSafeguardsMigration = false;
 
 function migrationState(rows, migrationName) {
   const matchingRows = rows.filter((migration) => migration.migration_name === migrationName);
@@ -65,19 +68,27 @@ try {
       shouldResolveChatMigration = true;
       shouldResolveRecordingMigration = true;
       shouldResolveChatRecordingMigration = true;
+      shouldResolveRecordingSafeguardsMigration = true;
     } else {
       const migrations = await client.query(
         `SELECT migration_name, finished_at, rolled_back_at
          FROM public._prisma_migrations
-         WHERE migration_name IN ('0_init', $1, $2, $3, $4)
+         WHERE migration_name IN ('0_init', $1, $2, $3, $4, $5)
          ORDER BY started_at DESC`,
-        [photoMigrationName, chatMigrationName, recordingMigrationName, chatRecordingMigrationName],
+        [
+          photoMigrationName,
+          chatMigrationName,
+          recordingMigrationName,
+          chatRecordingMigrationName,
+          recordingSafeguardsMigrationName,
+        ],
       );
       const baseline = migrationState(migrations.rows, "0_init");
       const photoMigration = migrationState(migrations.rows, photoMigrationName);
       const chatMigration = migrationState(migrations.rows, chatMigrationName);
       const recordingMigration = migrationState(migrations.rows, recordingMigrationName);
       const chatRecordingMigration = migrationState(migrations.rows, chatRecordingMigrationName);
+      const recordingSafeguardsMigration = migrationState(migrations.rows, recordingSafeguardsMigrationName);
       shouldResolveBaseline = !baseline.applied;
       shouldRollbackFailedBaseline = shouldResolveBaseline && baseline.failed;
       shouldResolvePhotoMigration = !photoMigration.applied;
@@ -88,6 +99,8 @@ try {
       shouldRollbackFailedRecordingMigration = shouldResolveRecordingMigration && recordingMigration.failed;
       shouldResolveChatRecordingMigration = !chatRecordingMigration.applied;
       shouldRollbackFailedChatRecordingMigration = shouldResolveChatRecordingMigration && chatRecordingMigration.failed;
+      shouldResolveRecordingSafeguardsMigration = !recordingSafeguardsMigration.applied;
+      shouldRollbackFailedRecordingSafeguardsMigration = shouldResolveRecordingSafeguardsMigration && recordingSafeguardsMigration.failed;
     }
   }
 } finally {
@@ -120,6 +133,10 @@ if (shouldAlignExistingSchema) {
     console.log(`Failed ${chatRecordingMigrationName} attempt detected; marking it rolled back.`);
     runPrisma(["migrate", "resolve", "--rolled-back", chatRecordingMigrationName]);
   }
+  if (shouldRollbackFailedRecordingSafeguardsMigration) {
+    console.log(`Failed ${recordingSafeguardsMigrationName} attempt detected; marking it rolled back.`);
+    runPrisma(["migrate", "resolve", "--rolled-back", recordingSafeguardsMigrationName]);
+  }
   console.log("Aligning the existing MeetFair database with the current schema.");
   runPrisma(["db", "push"]);
   if (shouldResolvePhotoMigration) {
@@ -133,5 +150,8 @@ if (shouldAlignExistingSchema) {
   }
   if (shouldResolveChatRecordingMigration) {
     runPrisma(["migrate", "resolve", "--applied", chatRecordingMigrationName]);
+  }
+  if (shouldResolveRecordingSafeguardsMigration) {
+    runPrisma(["migrate", "resolve", "--applied", recordingSafeguardsMigrationName]);
   }
 }

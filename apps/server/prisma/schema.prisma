@@ -148,6 +148,7 @@ model User {
   postComments      MeetingPostComment[]
   visitsMade        MiniHomeVisit[] @relation("VisitsMade")
   visitsReceived    MiniHomeVisit[] @relation("VisitsReceived")
+  recordingAccessLogs RecordingAccessLog[]
 }
 
 model ProfilePhoto {
@@ -219,6 +220,7 @@ model Meeting {
   placeFinalizedAt DateTime?
   completedAt      DateTime?
   locationPurgeAt  DateTime?
+  retentionWarningSentAt DateTime?
   confirmedPlaceId String?              @unique
   createdAt        DateTime             @default(now())
   host             User                 @relation("MeetingHost", fields: [hostId], references: [id])
@@ -465,6 +467,7 @@ model MeetingCall {
   recordingExpiresAt    DateTime?
   recordingDeletedAt    DateTime?
   recordingError        String?
+  recordingDeleteAttempts Int       @default(0)
   meeting   Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   participants MeetingCallParticipant[]
   recordingMessage MeetingChatMessage?
@@ -486,6 +489,20 @@ model MeetingCallParticipant {
 
   @@unique([callId, userId])
   @@index([userId, status])
+}
+
+model RecordingAccessLog {
+  id        String   @id @default(uuid())
+  meetingId String
+  callId    String
+  userId    String
+  outcome   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([callId, createdAt])
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model Block {
