@@ -64,12 +64,9 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
   async function createMeeting() {
     setError("");
-    const [camera, microphone] = await Promise.all([
-      Camera.requestCameraPermissionsAsync(),
-      Camera.requestMicrophonePermissionsAsync(),
-    ]);
-    if (!camera.granted || !microphone.granted) {
-      setError("모임 생성과 참여에는 카메라·마이크 권한이 필요합니다.");
+    const camera = await Camera.requestCameraPermissionsAsync();
+    if (!camera.granted) {
+      setError("모임 생성에는 카메라 권한이 필요합니다.");
       return;
     }
     try {

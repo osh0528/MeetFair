@@ -2,6 +2,7 @@ import type { MeetingCallSummary } from "@meetfair/shared";
 import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { emitMeetingCallIncoming } from "../realtime/events.js";
+import { stopCallRecording } from "./call-recordings.js";
 
 function summaryFor(call: {
   id: string;
@@ -27,10 +28,16 @@ export async function endMeetingCallIfInactive(callId: string) {
     where: { callId, status: { in: ["RINGING", "JOINED"] } },
   });
   if (activeParticipantCount > 0) return;
-  await prisma.meetingCall.updateMany({
+  const endedAt = new Date();
+  const result = await prisma.meetingCall.updateMany({
     where: { id: callId, status: { not: "ENDED" } },
-    data: { status: "ENDED", endedAt: new Date() },
+    data: { status: "ENDED", endedAt },
   });
+  if (result.count) {
+    await stopCallRecording(callId, endedAt).catch((error) => {
+      console.error("Call recording stop failed; it will be retried", error);
+    });
+  }
 }
 
 export async function processDueMeetingCalls() {
@@ -116,6 +123,7 @@ export async function processDueMeetingCalls() {
     select: { id: true },
   });
   for (const call of staleCalls) {
+    const endedAt = new Date();
     await prisma.$transaction([
       prisma.meetingCallParticipant.updateMany({
         where: { callId: call.id, status: "RINGING" },
@@ -127,8 +135,11 @@ export async function processDueMeetingCalls() {
       }),
       prisma.meetingCall.update({
         where: { id: call.id },
-        data: { status: "ENDED", endedAt: now },
+        data: { status: "ENDED", endedAt },
       }),
     ]);
+    await stopCallRecording(call.id, endedAt).catch((error) => {
+      console.error("Stale call recording stop failed; it will be retried", error);
+    });
   }
 }

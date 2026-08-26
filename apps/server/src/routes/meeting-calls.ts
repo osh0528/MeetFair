@@ -6,6 +6,7 @@ import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { endMeetingCallIfInactive } from "../services/meeting-calls.js";
+import { ensureCallRecording } from "../services/call-recordings.js";
 
 export const meetingCallsRouter = Router();
 meetingCallsRouter.use(requireAuth);
@@ -63,6 +64,12 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
     }
     if (!env.LIVEKIT_URL || !env.LIVEKIT_API_KEY || !env.LIVEKIT_API_SECRET) {
       throw new AppError(503, "LIVEKIT_NOT_CONFIGURED", "LiveKit is not configured.");
+    }
+    try {
+      await ensureCallRecording(callId, participant.call.roomName);
+    } catch (error) {
+      console.error("Meeting call recording failed to start", error);
+      throw new AppError(503, "CALL_RECORDING_UNAVAILABLE", "Call recording could not be started.");
     }
     const accessToken = new AccessToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {
       identity: currentUserId,

@@ -27,6 +27,12 @@ const envSchema = z.object({
   LIVEKIT_URL: optionalUrl,
   LIVEKIT_API_KEY: optionalSecret,
   LIVEKIT_API_SECRET: optionalSecret,
+  RECORDING_S3_ENDPOINT: optionalUrl,
+  RECORDING_S3_REGION: z.string().default("auto"),
+  RECORDING_S3_BUCKET: optionalSecret,
+  RECORDING_S3_ACCESS_KEY: optionalSecret,
+  RECORDING_S3_SECRET_KEY: optionalSecret,
+  RECORDING_S3_FORCE_PATH_STYLE: z.string().default("false").transform((value) => value === "true"),
   EXPO_PUSH_ACCESS_TOKEN: optionalSecret,
   GOOGLE_CLIENT_IDS: z.string().default("").transform((value) =>
     value.split(",").map((clientId) => clientId.trim()).filter(Boolean)

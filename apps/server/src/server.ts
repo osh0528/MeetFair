@@ -11,6 +11,7 @@ import { setRealtimeServer } from "./realtime/events.js";
 import { processDueMeetingCalls } from "./services/meeting-calls.js";
 import { processMeetingLifecycle } from "./services/meetings.js";
 import { processQuietSummaries } from "./services/poke-summaries.js";
+import { processCallRecordingRetention } from "./services/call-recordings.js";
 
 const app = createApp();
 const httpServer = createServer(app);
@@ -34,11 +35,15 @@ const lifecycleTimer = setInterval(() => {
   void processQuietSummaries().catch((error) => {
     console.error("Quiet summary scheduler failed", error);
   });
+  void processCallRecordingRetention().catch((error) => {
+    console.error("Call recording retention scheduler failed", error);
+  });
 }, 15_000);
 lifecycleTimer.unref();
 void processDueMeetingCalls();
 void processMeetingLifecycle();
 void processQuietSummaries();
+void processCallRecordingRetention();
 
 httpServer.listen(env.PORT, () => {
   console.log(`MeetFair server listening on http://localhost:${env.PORT}`);

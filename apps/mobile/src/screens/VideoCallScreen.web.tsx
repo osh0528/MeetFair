@@ -173,6 +173,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="지각 확인 통화" onBack={() => void leave()} />
+      <Text style={styles.recordingNotice}>이 통화는 녹화되며 통화 종료 후 24시간 뒤 자동 삭제됩니다.</Text>
       {!room ? (
         <View style={styles.center}>
           <Text style={styles.waiting}>{message}</Text>
@@ -222,6 +223,7 @@ const styles = StyleSheet.create({
   participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   waiting: { color: colors.surface, textAlign: "center", padding: 24 },
   error: { color: colors.red, textAlign: "center", padding: 8 },
+  recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   controls: { flexDirection: "row", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
   controlButton: { minHeight: 44, minWidth: "28%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   dangerButton: { backgroundColor: colors.red },

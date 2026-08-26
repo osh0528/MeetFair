@@ -208,7 +208,7 @@ meetingsRouter.post("/", async (request: AuthenticatedRequest, response, next) =
                 create: {
                   userId: hostId,
                   cameraPermissionGranted: true,
-                  microphonePermissionGranted: true,
+                  microphonePermissionGranted: false,
                   originType: input.originType === "CUSTOM" ? "CUSTOM" : "HOME",
                   originAddress: input.originType === "CUSTOM" ? input.customOriginAddress ?? null : null,
                   originLatitude: input.originType === "CUSTOM" ? input.customOriginLatitude ?? null : null,

@@ -25,6 +25,9 @@ type Props = NativeStackScreenProps<RootStackParamList, "MeetingChat">;
 
 type MessagesResponse = { messages: MeetingChatMessageSummary[]; nextCursor: string | null };
 type MessageResponse = { message: MeetingChatMessageSummary };
+type MeetingParticipantsResponse = {
+  participants: Array<{ userId: string; user: { nickname: string } }>;
+};
 
 export function MeetingChatScreen({ navigation, route }: Props) {
   const { meetingId, meetingTitle } = route.params;
@@ -36,6 +39,7 @@ export function MeetingChatScreen({ navigation, route }: Props) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList<MeetingChatMessageSummary>>(null);
 
   const loadMessages = useCallback(
@@ -66,12 +70,22 @@ export function MeetingChatScreen({ navigation, route }: Props) {
   useFocusEffect(
     useCallback(() => {
       void loadMessages(meetingId, null);
+      void apiRequest<MeetingParticipantsResponse>(`/meetings/${meetingId}`)
+        .then((meeting) => {
+          setParticipantNames(Object.fromEntries(
+            meeting.participants.map((participant) => [participant.userId, participant.user.nickname]),
+          ));
+        })
+        .catch(() => {});
     }, [meetingId, loadMessages]),
   );
 
   useEffect(() => {
     if (!accessToken) return;
     const socket = createMeetingSocket(accessToken);
+    socket.on("connect", () => {
+      socket.emit("meeting:join", { meetingId });
+    });
     socket.on("meeting:chat:received", (payload: { message: MeetingChatMessageSummary }) => {
       const msg = payload.message;
       if (msg.meetingId !== meetingId) return;
@@ -155,7 +169,7 @@ export function MeetingChatScreen({ navigation, route }: Props) {
                       {item.content}
                     </Text>
                     <Text style={styles.bubbleTime}>
-                      {isMe ? timeLabel : `${timeLabel} · ${item.senderId.slice(0, 8)}`}
+                      {isMe ? timeLabel : `${timeLabel} · ${participantNames[item.senderId] ?? item.senderId.slice(0, 8)}`}
                     </Text>
                   </View>
                 </View>
@@ -170,7 +184,10 @@ export function MeetingChatScreen({ navigation, route }: Props) {
               placeholderTextColor={colors.subtle}
               style={styles.input}
               maxLength={2000}
-              multiline
+              multiline={Platform.OS !== "web"}
+              onSubmitEditing={() => void handleSend()}
+              returnKeyType="send"
+              blurOnSubmit={false}
             />
             <Pressable
               accessibilityRole="button"

@@ -15,6 +15,7 @@
     "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1118.0",
     "@meetfair/shared": "*",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.0.0",

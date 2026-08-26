@@ -451,19 +451,21 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card>
             {!page.isOwner ? (
-              <Button
-                disabled={pokeBusy || !!pokeCooldown}
-                label={pokeCooldown ? `${pokeCooldown}초 후 가능` : pokeBusy ? "찌르기 중..." : "찌르기"}
-                onPress={() => void handlePoke()}
-                variant="soft"
-              />
-            ) : null}
-            {!page.isOwner ? (
-              <Button
-                label="개인 디엠으로 가기"
-                onPress={() => navigation.navigate("DirectMessages", { friendUserId: page.user.id })}
-                variant="secondary"
-              />
+              <View style={styles.profileActions}>
+                <Button
+                  disabled={pokeBusy || !!pokeCooldown}
+                  label={pokeCooldown ? `${pokeCooldown}초 후 가능` : pokeBusy ? "찌르기 중..." : "찌르기"}
+                  onPress={() => void handlePoke()}
+                  style={styles.profileAction}
+                  variant="soft"
+                />
+                <Button
+                  label="개인 디엠으로 가기"
+                  onPress={() => navigation.navigate("DirectMessages", { friendUserId: page.user.id })}
+                  style={styles.profileAction}
+                  variant="secondary"
+                />
+              </View>
             ) : null}
 
             {page.isOwner && !isCompactLayout ? (
@@ -744,6 +746,8 @@ const styles = StyleSheet.create({
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 14 },
   statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
+  profileActions: { flexDirection: "row", gap: 12 },
+  profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
   label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   input: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12 },

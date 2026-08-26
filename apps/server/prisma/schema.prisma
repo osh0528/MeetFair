@@ -451,16 +451,25 @@ model Notification {
 }
 
 model MeetingCall {
-  id        String            @id @default(uuid())
-  meetingId String            @unique
-  roomName  String            @unique
-  status    MeetingCallStatus @default(RINGING)
-  createdAt DateTime          @default(now())
-  endedAt   DateTime?
+  id                    String            @id @default(uuid())
+  meetingId             String            @unique
+  roomName              String            @unique
+  status                MeetingCallStatus @default(RINGING)
+  createdAt             DateTime          @default(now())
+  endedAt               DateTime?
+  recordingStatus       String            @default("PENDING")
+  recordingEgressId     String?
+  recordingObjectKey    String?
+  recordingStartedAt    DateTime?
+  recordingEndedAt      DateTime?
+  recordingExpiresAt    DateTime?
+  recordingDeletedAt    DateTime?
+  recordingError        String?
   meeting   Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   participants MeetingCallParticipant[]
 
   @@index([meetingId, createdAt])
+  @@index([recordingStatus, recordingExpiresAt])
 }
 
 model MeetingCallParticipant {
