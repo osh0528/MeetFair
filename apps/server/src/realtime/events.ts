@@ -6,6 +6,7 @@ import type {
   FriendRequestAcceptedPayload,
   FriendRequestReceivedPayload,
   MeetingCallIncomingPayload,
+  MeetingChatReceivedPayload,
   MeetingInvitationReceivedPayload,
   MeetingInvitationRespondedPayload,
   MeetingUpdatedPayload,
@@ -82,4 +83,11 @@ export function emitDirectMessageRead(
   payload: DirectMessageReadPayload,
 ) {
   realtimeServer?.to(`user:${targetUserId}`).emit("direct-message:read", payload);
+}
+
+export function emitMeetingChatReceived(
+  meetingId: string,
+  payload: MeetingChatReceivedPayload,
+) {
+  realtimeServer?.to(`meeting:${meetingId}`).emit("meeting:chat:received", payload);
 }

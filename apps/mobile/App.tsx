@@ -30,6 +30,10 @@ import type { AddressSelection } from "./src/types/location";
 import { ThemeProvider } from "./src/services/theme";
 import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
 import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
+import { MeetingChatScreen } from "./src/screens/MeetingChatScreen";
+import { MeetingBoardScreen } from "./src/screens/MeetingBoardScreen";
+import { PostDetailScreen } from "./src/screens/PostDetailScreen";
+import { MiniHomeScreen } from "./src/screens/MiniHomeScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -51,6 +55,10 @@ export type RootStackParamList = {
   VideoCall: { callId: string; meetingId: string };
   DirectMessages: { conversationId?: string; friendUserId?: string } | undefined;
   MiniHomeSearch: undefined;
+  MeetingChat: { meetingId: string; meetingTitle?: string };
+  MeetingBoard: { meetingId: string; meetingTitle?: string };
+  PostDetail: { meetingId: string; postId: string; postTitle: string };
+  MiniHome: { userId: string; nickname?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -127,6 +135,10 @@ function AppNavigator() {
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
           <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} />
           <Stack.Screen name="MiniHomeSearch" component={MiniHomeSearchScreen} />
+          <Stack.Screen name="MeetingChat" component={MeetingChatScreen} />
+          <Stack.Screen name="MeetingBoard" component={MeetingBoardScreen} />
+          <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+          <Stack.Screen name="MiniHome" component={MiniHomeScreen} />
         </Stack.Navigator>
         {user && !bottomNavHidden ? (
           <AppBottomNavigation

@@ -458,6 +458,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 variant="soft"
               />
             ) : null}
+            <Button
+              label="미니홈 방문"
+              onPress={() => {
+                if (!page) return;
+                navigation.navigate("MiniHome", { userId: page.user.id, nickname: page.user.nickname });
+              }}
+              variant="secondary"
+            />
 
             {page.isOwner && !isCompactLayout ? (
               <Card style={styles.editorCard}>

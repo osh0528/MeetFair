@@ -159,6 +159,9 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
 
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
     kakao.maps.load(init);
+    setTimeout(function () {
+      if (!map) post({ type: "load-failed" });
+    }, 6000);
   } else {
     post({ type: "load-failed" });
   }
@@ -226,7 +229,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         return;
       }
       if (data.type === "load-failed") {
-        setMessage("카카오 지도를 불러오지 못했습니다. 키와 도메인 등록을 확인해주세요.");
+        setMessage(
+          "카카오 지도를 불러오지 못했습니다. 키가 유효한지, Kakao Developers 콘솔 > 플랫폼 > Web에 배포 도메인(예: https://your-app.vercel.app)과 https://localhost 가 등록되어 있는지 확인해주세요.",
+        );
         return;
       }
       if (data.type === "results" && Array.isArray(data.items)) {
@@ -249,7 +254,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   if (!appConfig.kakaoMapJsKey) {
     return (
       <View style={[styles.wrapper, styles.fallback]}>
-        <Text style={styles.message}>.env에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정해주세요.</Text>
+        <Text style={styles.message}>
+          카카오 지도 키가 없어요. EAS/Vercel 환경변수에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정하고 다시 빌드/배포하세요.
+        </Text>
       </View>
     );
   }

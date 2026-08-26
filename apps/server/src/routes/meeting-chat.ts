@@ -1,0 +1,138 @@
+import { Router } from "express";
+import { z } from "zod";
+import { AppError } from "../lib/app-error.js";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { emitMeetingChatReceived } from "../realtime/events.js";
+
+export const meetingChatRouter = Router();
+meetingChatRouter.use(requireAuth);
+
+function currentUserId(request: AuthenticatedRequest): string {
+  if (!request.userId) throw new AppError(401, "UNAUTHORIZED", "Authentication is required.");
+  return request.userId;
+}
+
+async function requireParticipant(meetingId: string, userId: string) {
+  const participant = await prisma.meetingParticipant.findUnique({
+    where: { meetingId_userId: { meetingId, userId } },
+  });
+  if (!participant) throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant of this meeting.");
+  return participant;
+}
+
+function toChatMessageSummary(message: {
+  id: string;
+  meetingId: string;
+  senderId: string;
+  content: string;
+  createdAt: Date;
+  deletedAt: Date | null;
+}) {
+  return {
+    id: message.id,
+    meetingId: message.meetingId,
+    senderId: message.senderId,
+    content: message.content,
+    createdAt: message.createdAt.toISOString(),
+    deletedAt: message.deletedAt?.toISOString() ?? null,
+  };
+}
+
+// GET /:meetingId/chat/messages
+meetingChatRouter.get("/:meetingId/chat/messages", async (req, res, next) => {
+  try {
+    const userId = currentUserId(req as AuthenticatedRequest);
+    const { meetingId } = req.params;
+    const { cursor, limit } = z
+      .object({ cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(50).optional() })
+      .parse(req.query);
+
+    await requireParticipant(meetingId, userId);
+
+    const take = limit ?? 20;
+    let createdAtFilter: Record<string, unknown> | undefined;
+    if (cursor) {
+      const cursorMessage = await prisma.meetingChatMessage.findUnique({ where: { id: cursor } });
+      if (cursorMessage) {
+        createdAtFilter = { createdAt: { lt: cursorMessage.createdAt } };
+      }
+    }
+
+    const messages = await prisma.meetingChatMessage.findMany({
+      where: { meetingId, deletedAt: null, ...createdAtFilter },
+      orderBy: { createdAt: "desc" },
+      take: take + 1,
+    });
+
+    const hasMore = messages.length > take;
+    const sliced = hasMore ? messages.slice(0, take) : messages;
+    const nextCursor = hasMore ? sliced[sliced.length - 1]?.id ?? null : null;
+
+    res.json({ success: true, data: { messages: sliced.map(toChatMessageSummary), nextCursor } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /:meetingId/chat/messages
+meetingChatRouter.post("/:meetingId/chat/messages", async (req, res, next) => {
+  try {
+    const userId = currentUserId(req as AuthenticatedRequest);
+    const { meetingId } = req.params;
+    const { content, clientMessageId } = z
+      .object({
+        content: z.string(),
+        clientMessageId: z.string().uuid().optional().nullable(),
+      })
+      .parse(req.body);
+
+    const trimmed = content.trim();
+    if (trimmed.length === 0) {
+      throw new AppError(400, "VALIDATION_ERROR", "Message content must not be empty.");
+    }
+    if (trimmed.length > 2000) {
+      throw new AppError(400, "VALIDATION_ERROR", "Message content must not exceed 2000 characters.");
+    }
+
+    await requireParticipant(meetingId, userId);
+
+    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+
+    const blockBetween = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: meeting.hostId },
+          { blockerId: meeting.hostId, blockedId: userId },
+        ],
+      },
+    });
+    if (blockBetween) throw new AppError(403, "BLOCKED", "You cannot send messages in this meeting.");
+
+    if (clientMessageId) {
+      const existing = await prisma.meetingChatMessage.findFirst({
+        where: { meetingId, clientMessageId },
+      });
+      if (existing) {
+        res.status(201).json({ success: true, data: { message: toChatMessageSummary(existing) } });
+        return;
+      }
+    }
+
+    const result = await prisma.meetingChatMessage.create({
+      data: {
+        meetingId,
+        senderId: userId,
+        content: trimmed,
+        clientMessageId: clientMessageId ?? undefined,
+      },
+    });
+
+    emitMeetingChatReceived(meetingId, { message: toChatMessageSummary(result) });
+
+    res.status(201).json({ success: true, data: { message: toChatMessageSummary(result) } });
+  } catch (error) {
+    next(error);
+  }
+});
