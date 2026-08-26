@@ -33,7 +33,7 @@ export function WebNotificationToast() {
     socket.on("notification:created", ({ notification }) => {
       if (seenNotificationIds.current.has(notification.id)) return;
       seenNotificationIds.current.add(notification.id);
-      setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, MAX_TOASTS));
+      setNotifications((current) => [...current.filter((item) => item.id !== notification.id), notification].slice(-MAX_TOASTS));
       setTimeout(() => dismiss(notification.id), TOAST_DURATION_MS);
     });
     socket.connect();
