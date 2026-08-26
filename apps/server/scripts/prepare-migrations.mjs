@@ -11,6 +11,7 @@ if (!databaseUrl) {
 
 const client = new Client({ connectionString: databaseUrl });
 let shouldResolveBaseline = false;
+let shouldRollbackFailedBaseline = false;
 
 try {
   await client.connect();
@@ -27,12 +28,19 @@ try {
       shouldResolveBaseline = true;
     } else {
       const baseline = await client.query(
-        `SELECT 1
+        `SELECT finished_at, rolled_back_at
          FROM public._prisma_migrations
-         WHERE migration_name = '0_init' AND rolled_back_at IS NULL
-         LIMIT 1`,
+         WHERE migration_name = '0_init'
+         ORDER BY started_at DESC`,
       );
-      shouldResolveBaseline = baseline.rowCount === 0;
+      const appliedBaselineExists = baseline.rows.some(
+        (migration) => migration.finished_at && !migration.rolled_back_at,
+      );
+      const failedBaselineExists = baseline.rows.some(
+        (migration) => !migration.finished_at && !migration.rolled_back_at,
+      );
+      shouldResolveBaseline = !appliedBaselineExists;
+      shouldRollbackFailedBaseline = shouldResolveBaseline && failedBaselineExists;
     }
   }
 } finally {
@@ -40,6 +48,14 @@ try {
 }
 
 if (shouldResolveBaseline) {
+  if (shouldRollbackFailedBaseline) {
+    console.log("Failed 0_init attempt detected; marking it rolled back before baselining.");
+    execFileSync(
+      process.platform === "win32" ? "npx.cmd" : "npx",
+      ["prisma", "migrate", "resolve", "--rolled-back", "0_init"],
+      { env: process.env, stdio: "inherit" },
+    );
+  }
   console.log("Existing MeetFair schema detected; recording 0_init as the migration baseline.");
   execFileSync(
     process.platform === "win32" ? "npx.cmd" : "npx",
