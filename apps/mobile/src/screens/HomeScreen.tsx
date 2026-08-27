@@ -2,7 +2,7 @@ import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummar
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
@@ -12,6 +12,78 @@ import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+const MEETING_HIGHLIGHT_WINDOW_MS = 60 * 60_000;
+
+function ScheduledMeetingCard({
+  meeting,
+  onPress,
+}: {
+  meeting: MeetingSummary;
+  onPress: () => void;
+}) {
+  const [now, setNow] = useState(Date.now());
+  const pulse = useRef(new Animated.Value(0)).current;
+  const timeUntilMeeting = new Date(meeting.scheduledAt).getTime() - now;
+  const isUpcomingStatus = meeting.status === "PLANNING" || meeting.status === "CONFIRMED";
+  const isStartingSoon = isUpcomingStatus
+    && timeUntilMeeting > 0
+    && timeUntilMeeting <= MEETING_HIGHLIGHT_WINDOW_MS;
+  const minutesUntilMeeting = Math.max(1, Math.ceil(timeUntilMeeting / 60_000));
+  const progress = Math.min(100, Math.max(0, ((60 - minutesUntilMeeting) / 60) * 100));
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!isStartingSoon) {
+      pulse.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [isStartingSoon, pulse]);
+
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.85] });
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.018] });
+
+  return (
+    <Pressable onPress={onPress} style={styles.meetingPressable}>
+      {isStartingSoon ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.soonGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
+        />
+      ) : null}
+      <Card style={[styles.card, isStartingSoon && styles.startingSoonCard]}>
+        {isStartingSoon ? (
+          <>
+            <View style={styles.soonBanner}>
+              <Text style={styles.soonSparkle}>✦</Text>
+              <Text style={styles.soonBannerText}>곧 시작 · {minutesUntilMeeting}분 전</Text>
+              <Text style={styles.soonSparkle}>✦</Text>
+            </View>
+            <View style={styles.soonProgressTrack}>
+              <View style={[styles.soonProgressFill, { width: `${progress}%` as `${number}%` }]} />
+            </View>
+          </>
+        ) : null}
+        <View style={styles.row}>
+          <Text style={[styles.cardTitle, isStartingSoon && styles.startingSoonTitle]}>{meeting.title}</Text>
+          <Pill label={isStartingSoon ? "SOON" : meeting.status} tone={isStartingSoon ? "red" : "green"} />
+        </View>
+        <Text style={[styles.meta, isStartingSoon && styles.startingSoonMeta]}>
+          {new Date(meeting.scheduledAt).toLocaleString("ko-KR")}
+        </Text>
+      </Card>
+    </Pressable>
+  );
+}
 
 export function HomeScreen({ navigation }: Props) {
   const { accessToken, user } = useSession();
@@ -121,9 +193,39 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
-        <Button label="＋ 새 모임 생성" onPress={() => navigation.navigate("CreateMeeting")} />
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
+
+        <View style={styles.meetingDashboard}>
+          <View style={styles.meetingColumn}>
+            <Button label="＋ 새 모임 생성" onPress={() => navigation.navigate("CreateMeeting")} />
+            <View style={styles.columnSection}>
+              <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
+              {invitations.map((item) => (
+                <Card key={item.id} style={styles.columnCard}>
+                  <Text style={styles.cardTitle}>{item.meetingTitle}</Text>
+                  <Text style={styles.meta}>{item.inviter.nickname}님의 초대 · {new Date(item.scheduledAt).toLocaleString("ko-KR")}</Text>
+                  <Button label="초대 확인" onPress={() => navigation.navigate("MeetingInvitation", { invitation: item })} variant="soft" />
+                </Card>
+              ))}
+              {!invitations.length ? <Text style={styles.empty}>대기 중인 초대가 없습니다.</Text> : null}
+            </View>
+          </View>
+
+          <View style={styles.meetingColumn}>
+            <View style={styles.columnSection}>
+              <SectionHeading title="예정된 모임" action={`${meetings.length}개`} />
+              {meetings.map((meeting) => (
+                <ScheduledMeetingCard
+                  key={meeting.id}
+                  meeting={meeting}
+                  onPress={() => navigation.navigate("Meeting", { meetingId: meeting.id })}
+                />
+              ))}
+              {!meetings.length ? <Text style={styles.empty}>예정된 모임이 없습니다.</Text> : null}
+            </View>
+          </View>
+        </View>
 
         {calls.length ? <SectionHeading title="영상통화 요청" action={`${calls.length}개`} /> : null}
         {calls.map((call) => (
@@ -141,26 +243,6 @@ export function HomeScreen({ navigation }: Props) {
             />
             {call.participantStatus === "RINGING" ? <Button label="거절" onPress={() => void declineCall(call.id)} variant="secondary" /> : null}
           </Card>
-        ))}
-
-        <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
-        {invitations.map((item) => (
-          <Card key={item.id} style={styles.card}>
-            <Text style={styles.cardTitle}>{item.meetingTitle}</Text>
-            <Text style={styles.meta}>{item.inviter.nickname}님의 초대 · {new Date(item.scheduledAt).toLocaleString("ko-KR")}</Text>
-            <Button label="초대 확인" onPress={() => navigation.navigate("MeetingInvitation", { invitation: item })} variant="soft" />
-          </Card>
-        ))}
-        {!invitations.length ? <Text style={styles.empty}>대기 중인 초대가 없습니다.</Text> : null}
-
-        <SectionHeading title="예정된 모임" action={`${meetings.length}개`} />
-        {meetings.map((meeting) => (
-          <Pressable key={meeting.id} onPress={() => navigation.navigate("Meeting", { meetingId: meeting.id })}>
-            <Card style={styles.card}>
-              <View style={styles.row}><Text style={styles.cardTitle}>{meeting.title}</Text><Pill label={meeting.status} tone="green" /></View>
-              <Text style={styles.meta}>{new Date(meeting.scheduledAt).toLocaleString("ko-KR")}</Text>
-            </Card>
-          </Pressable>
         ))}
 
         <SectionHeading title="친구들의 공개 모임" />
@@ -194,6 +276,49 @@ const styles = StyleSheet.create({
   hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
   accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
   card: { gap: 9 },
+  meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
+  columnSection: { gap: 10 },
+  columnCard: { gap: 9, padding: 14, borderRadius: 18 },
+  meetingPressable: { position: "relative" },
+  soonGlow: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    bottom: -4,
+    left: -4,
+    borderRadius: 26,
+    backgroundColor: "#FF3B6B",
+  },
+  startingSoonCard: {
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#FF3B6B",
+    backgroundColor: colors.surface,
+    shadowColor: "#FF3B6B",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  soonBanner: {
+    marginHorizontal: -18,
+    marginTop: -18,
+    marginBottom: 12,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#FF3B6B",
+  },
+  soonBannerText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
+  soonSparkle: { color: "#FFE36E", fontSize: 17, fontWeight: "900" },
+  soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: "#FFD7E1" },
+  soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: "#FF3B6B" },
+  startingSoonTitle: { color: colors.text, fontSize: 17 },
+  startingSoonMeta: { color: colors.red, fontWeight: "800" },
   callCard: { gap: 9, borderColor: colors.red },
   callCopy: { flex: 1, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
