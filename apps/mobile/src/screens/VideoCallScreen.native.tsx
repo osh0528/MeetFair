@@ -37,7 +37,7 @@ function ParticipantGrid() {
       contentContainerStyle={styles.grid}
       renderItem={({ item }) => (
         <View style={styles.videoTile}>
-          <VideoTrack trackRef={item} style={styles.video} objectFit="cover" />
+          <VideoTrack trackRef={item} style={styles.video} objectFit="contain" />
           <Text style={styles.participantName}>{item.participant.name || item.participant.identity}</Text>
         </View>
       )}
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.charcoal },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   grid: { flexGrow: 1, padding: 6 },
-  videoTile: { flex: 1, minWidth: "47%", height: 280, margin: 4, borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
+  videoTile: { width: "47%", flexGrow: 0, aspectRatio: 16 / 9, margin: 4, borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
   video: { flex: 1 },
   participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   waiting: { color: colors.surface, textAlign: "center", padding: 24 },
@@ -282,3 +282,4 @@ const styles = StyleSheet.create({
   controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   dangerText: { color: colors.surface },
 });
+

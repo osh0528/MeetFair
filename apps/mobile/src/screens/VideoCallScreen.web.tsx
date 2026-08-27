@@ -29,7 +29,7 @@ function BrowserTrack({ entry }: { entry: TrackEntry }) {
     element.autoplay = true;
     element.style.width = "100%";
     element.style.height = "100%";
-    element.style.objectFit = "cover";
+    element.style.objectFit = "contain";
     if (entry.track.kind === Track.Kind.Audio) element.style.display = "none";
     container.appendChild(element);
     return () => {
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
   statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
   grid: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", padding: 6 },
-  videoTile: { width: "48%", height: 280, margin: "1%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
+  videoTile: { width: "48%", aspectRatio: 16 / 9, margin: "1%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
   video: { flex: 1 },
   hiddenTrack: { width: 0, height: 0, overflow: "hidden" },
   participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
@@ -290,3 +290,4 @@ const styles = StyleSheet.create({
   controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   dangerText: { color: colors.surface },
 });
+
