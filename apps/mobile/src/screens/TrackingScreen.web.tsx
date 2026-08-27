@@ -61,6 +61,7 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const hasFitInitialBoundsRef = useRef(false);
   const [error, setError] = useState("");
   const mappedLocations = locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null);
   const homeLocations = locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null);
@@ -110,11 +111,16 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
         content.append(icon, label);
         markersRef.current.push(new kakao.maps.CustomOverlay({ map: mapRef.current, position, content, yAnchor: 0.8 }));
       }
-      const bounds = new kakao.maps.LatLngBounds();
-      for (const item of mappedLocations) bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
-      for (const item of homeLocations) bounds.extend(new kakao.maps.LatLng(item.homeLatitude, item.homeLongitude));
-      if (meeting?.confirmedPlace) bounds.extend(new kakao.maps.LatLng(meeting.confirmedPlace.latitude, meeting.confirmedPlace.longitude));
-      if (!bounds.isEmpty()) mapRef.current.setBounds(bounds, 48, 48, 48, 48);
+      if (!hasFitInitialBoundsRef.current) {
+        const bounds = new kakao.maps.LatLngBounds();
+        for (const item of mappedLocations) bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
+        for (const item of homeLocations) bounds.extend(new kakao.maps.LatLng(item.homeLatitude, item.homeLongitude));
+        if (meeting?.confirmedPlace) bounds.extend(new kakao.maps.LatLng(meeting.confirmedPlace.latitude, meeting.confirmedPlace.longitude));
+        if (!bounds.isEmpty()) {
+          mapRef.current.setBounds(bounds, 48, 48, 48, 48);
+          hasFitInitialBoundsRef.current = true;
+        }
+      }
     }).catch((caught) => {
       if (!cancelled) setError(caught instanceof Error ? caught.message : "지도를 불러오지 못했습니다.");
     });

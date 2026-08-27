@@ -220,25 +220,31 @@ export function TrackingScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
-      <NaverMapView
-        style={styles.map}
-        region={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
-        isShowLocationButton
-      >
-        {meeting?.confirmedPlace ? (
-          <NaverMapMarkerOverlay
-            latitude={meeting.confirmedPlace.latitude}
-            longitude={meeting.confirmedPlace.longitude}
-            caption={{ text: `약속 장소 · ${meeting.confirmedPlace.name}` }}
-          />
-        ) : null}
-        {locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null).map((item) => (
-          <HomeLocationMarker item={item} key={`home:${item.userId}`} />
-        ))}
-        {locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).map((item) => (
-          <LiveLocationMarker item={item} key={`live:${item.userId}`} mine={item.userId === user?.id} />
-        ))}
-      </NaverMapView>
+      {meeting ? (
+        <NaverMapView
+          style={styles.map}
+          initialRegion={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
+          isShowLocationButton
+        >
+          {meeting.confirmedPlace ? (
+            <NaverMapMarkerOverlay
+              latitude={meeting.confirmedPlace.latitude}
+              longitude={meeting.confirmedPlace.longitude}
+              caption={{ text: `약속 장소 · ${meeting.confirmedPlace.name}` }}
+            />
+          ) : null}
+          {locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null).map((item) => (
+            <HomeLocationMarker item={item} key={`home:${item.userId}`} />
+          ))}
+          {locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).map((item) => (
+            <LiveLocationMarker item={item} key={`live:${item.userId}`} mine={item.userId === user?.id} />
+          ))}
+        </NaverMapView>
+      ) : (
+        <View style={[styles.map, styles.mapLoading]}>
+          <Text style={styles.meta}>지도를 준비하고 있습니다.</Text>
+        </View>
+      )}
       <View style={styles.panel}>
         <View style={styles.row}>
           <Text style={styles.title}>{locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).length}명 위치 공유</Text>
@@ -263,6 +269,7 @@ export function TrackingScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   map: { flex: 1, minHeight: 300 },
+  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: colors.text, fontSize: 18, fontWeight: "900" },
