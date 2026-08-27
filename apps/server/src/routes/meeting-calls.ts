@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { endMeetingCallIfInactive } from "../services/meeting-calls.js";
 import { callRecordingConfigured, ensureCallRecording } from "../services/call-recordings.js";
+import { callLeaveLockedUntil, callLeaveLockRemainingMs } from "../services/call-lock.js";
 
 export const meetingCallsRouter = Router();
 meetingCallsRouter.use(requireAuth);
@@ -56,6 +57,9 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
     if (!participant || participant.call.status === "ENDED") {
       throw new AppError(404, "MEETING_CALL_NOT_FOUND", "Meeting call was not found.");
     }
+    if (participant.status !== "JOINED") {
+      throw new AppError(409, "MEETING_CALL_NOT_ACCEPTED", "Accept the meeting call before joining the room.");
+    }
     const meetingParticipant = await prisma.meetingParticipant.findUnique({
       where: { meetingId_userId: { meetingId: participant.call.meetingId, userId: currentUserId } },
     });
@@ -64,6 +68,13 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
     }
     if (!env.LIVEKIT_URL || !env.LIVEKIT_API_KEY || !env.LIVEKIT_API_SECRET) {
       throw new AppError(503, "LIVEKIT_NOT_CONFIGURED", "LiveKit is not configured.");
+    }
+    const joinedAt = participant.joinedAt ?? new Date();
+    if (!participant.joinedAt) {
+      await prisma.meetingCallParticipant.update({
+        where: { id: participant.id },
+        data: { joinedAt },
+      });
     }
     let recordingEnabled = false;
     if (callRecordingConfigured()) {
@@ -101,6 +112,7 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
         token: await accessToken.toJwt(),
         roomName: participant.call.roomName,
         recordingEnabled,
+        leaveLockedUntil: callLeaveLockedUntil(joinedAt).toISOString(),
       },
     });
   } catch (error) { next(error); }
@@ -118,13 +130,23 @@ meetingCallsRouter.patch("/:callId", async (request: AuthenticatedRequest, respo
     if (!participant || participant.call.status === "ENDED") {
       throw new AppError(404, "MEETING_CALL_NOT_FOUND", "Meeting call was not found.");
     }
+    if (action !== "accept" && participant.joinedAt) {
+      const remainingMs = callLeaveLockRemainingMs(participant.joinedAt);
+      if (remainingMs > 0) {
+        throw new AppError(
+          409,
+          "CALL_MINIMUM_DURATION_NOT_MET",
+          `통화 연결 후 5분 동안 종료할 수 없습니다. ${Math.ceil(remainingMs / 1000)}초 남았습니다.`,
+        );
+      }
+    }
     const status = action === "accept" ? "JOINED" : action === "decline" ? "DECLINED" : "LEFT";
     await prisma.meetingCallParticipant.update({
       where: { id: participant.id },
       data: {
         status,
         respondedAt: action === "leave" ? undefined : new Date(),
-        joinedAt: action === "accept" ? new Date() : undefined,
+        joinedAt: participant.joinedAt ?? undefined,
         leftAt: action === "leave" ? new Date() : undefined,
       },
     });

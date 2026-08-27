@@ -23,7 +23,7 @@ import { colors } from "../theme/colors";
 registerGlobals();
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string }
 interface SwitchableMediaStreamTrack {
   applyConstraints(constraints: { facingMode: "user" | "environment" }): Promise<void>;
 }
@@ -54,7 +54,18 @@ function connectionLabel(state: ConnectionState) {
   return "연결 끊김";
 }
 
-function CallControls({ onLeave, onError }: { onLeave(): void; onError(message: string): void }) {
+function formatRemainingTime(remainingMs: number) {
+  const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
+  leaveLockRemainingMs: number;
+  onLeave(): void;
+  onError(message: string): void;
+}) {
   const {
     cameraTrack,
     isCameraEnabled,
@@ -118,7 +129,12 @@ function CallControls({ onLeave, onError }: { onLeave(): void; onError(message: 
       <ControlButton disabled={busy} label={isCameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={toggleCamera} />
       <ControlButton disabled={busy || !isCameraEnabled} label="카메라 전환" onPress={switchCamera} />
       <ControlButton disabled={busy} label={speakerEnabled ? "이어폰 모드" : "스피커 모드"} onPress={toggleSpeaker} />
-      <ControlButton danger label="통화 종료" onPress={onLeave} />
+      <ControlButton
+        danger
+        disabled={busy || leaveLockRemainingMs > 0}
+        label={leaveLockRemainingMs > 0 ? `종료까지 ${formatRemainingTime(leaveLockRemainingMs)}` : "통화 종료"}
+        onPress={onLeave}
+      />
     </View>
   );
 }
@@ -146,7 +162,11 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   );
 }
 
-function CallContent({ onError, onLeave }: { onError(message: string): void; onLeave(): void }) {
+function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
+  leaveLockRemainingMs: number;
+  onError(message: string): void;
+  onLeave(): void;
+}) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
   return (
@@ -156,7 +176,7 @@ function CallContent({ onError, onLeave }: { onError(message: string): void; onL
         <Text style={styles.statusText}>{participants.length}명 참여</Text>
       </View>
       <ParticipantGrid />
-      <CallControls onError={onError} onLeave={onLeave} />
+      <CallControls leaveLockRemainingMs={leaveLockRemainingMs} onError={onError} onLeave={onLeave} />
     </>
   );
 }
@@ -167,6 +187,8 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
+  const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
+  const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
 
   async function connect() {
     setConnecting(true);
@@ -188,6 +210,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       await AudioSession.startAudioSession();
       setRecordingEnabled(token.recordingEnabled);
+      setLeaveLockedUntil(new Date(token.leaveLockedUntil).getTime());
       setCredentials(token);
       setMessage("");
     } catch (error) {
@@ -202,8 +225,34 @@ export function VideoCallScreen({ navigation, route }: Props) {
     return () => { void AudioSession.stopAudioSession(); };
   }, [callId, meetingId]);
 
+  useEffect(() => {
+    if (leaveLockedUntil === null) {
+      setLeaveLockRemainingMs(0);
+      return;
+    }
+    const updateRemaining = () => setLeaveLockRemainingMs(Math.max(0, leaveLockedUntil - Date.now()));
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [leaveLockedUntil]);
+
+  useEffect(() => navigation.addListener("beforeRemove", (event) => {
+    if (leaveLockRemainingMs <= 0) return;
+    event.preventDefault();
+    setMessage(`통화 연결 후 5분 동안 종료할 수 없습니다. ${formatRemainingTime(leaveLockRemainingMs)} 남았습니다.`);
+  }), [leaveLockRemainingMs, navigation]);
+
   async function leave() {
-    await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "leave" }) }).catch(() => undefined);
+    if (leaveLockRemainingMs > 0) {
+      setMessage(`통화 연결 후 5분 동안 종료할 수 없습니다. ${formatRemainingTime(leaveLockRemainingMs)} 남았습니다.`);
+      return;
+    }
+    try {
+      await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "leave" }) });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "통화를 종료하지 못했습니다.");
+      return;
+    }
     await AudioSession.stopAudioSession();
     navigation.goBack();
   }
@@ -230,8 +279,11 @@ export function VideoCallScreen({ navigation, route }: Props) {
           ? "이 통화는 녹화되며 모임 시작 24시간 후 자동 삭제됩니다."
           : "녹화 저장소를 사용할 수 없어 녹화 없이 통화가 연결되었습니다."}
       </Text>
+      {leaveLockRemainingMs > 0 ? (
+        <Text style={styles.leaveLockNotice}>최소 통화 시간 · 종료까지 {formatRemainingTime(leaveLockRemainingMs)}</Text>
+      ) : null}
       <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio video onError={(error) => setMessage(error.message)}>
-        <CallContent onError={setMessage} onLeave={() => void leave()} />
+        <CallContent leaveLockRemainingMs={leaveLockRemainingMs} onError={setMessage} onLeave={() => void leave()} />
         {message ? <Text style={styles.error}>{message}</Text> : null}
       </LiveKitRoom>
     </SafeAreaView>
@@ -250,6 +302,7 @@ const styles = StyleSheet.create({
   recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
   statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
   statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
   controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
