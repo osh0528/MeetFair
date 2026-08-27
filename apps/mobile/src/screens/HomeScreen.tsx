@@ -14,6 +14,14 @@ import { colors } from "../theme/colors";
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 const MEETING_HIGHLIGHT_WINDOW_MS = 60 * 60_000;
 
+function meetingSortGroup(meeting: MeetingSummary, now: number) {
+  const timeUntilMeeting = new Date(meeting.scheduledAt).getTime() - now;
+  const isUpcomingStatus = meeting.status === "PLANNING" || meeting.status === "CONFIRMED";
+  if (isUpcomingStatus && timeUntilMeeting > 0 && timeUntilMeeting <= MEETING_HIGHLIGHT_WINDOW_MS) return 0;
+  if (isUpcomingStatus && timeUntilMeeting > 0) return 1;
+  return 2;
+}
+
 function ScheduledMeetingCard({
   meeting,
   onPress,
@@ -177,6 +185,16 @@ export function HomeScreen({ navigation }: Props) {
     setCalls((current) => current.filter((call) => call.id !== callId));
   }
 
+  const meetingSortTime = Date.now();
+  const orderedMeetings = [...meetings].sort((left, right) => {
+    const leftGroup = meetingSortGroup(left, meetingSortTime);
+    const rightGroup = meetingSortGroup(right, meetingSortTime);
+    if (leftGroup !== rightGroup) return leftGroup - rightGroup;
+    const leftTime = new Date(left.scheduledAt).getTime();
+    const rightTime = new Date(right.scheduledAt).getTime();
+    return leftGroup === 2 ? rightTime - leftTime : leftTime - rightTime;
+  });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -215,7 +233,7 @@ export function HomeScreen({ navigation }: Props) {
           <View style={styles.meetingColumn}>
             <View style={styles.columnSection}>
               <SectionHeading title="예정된 모임" action={`${meetings.length}개`} />
-              {meetings.map((meeting) => (
+              {orderedMeetings.map((meeting) => (
                 <ScheduledMeetingCard
                   key={meeting.id}
                   meeting={meeting}
