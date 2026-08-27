@@ -77,7 +77,6 @@ meetingSocialRouter.post("/:meetingId/join-requests", async (request: Authentica
     const requesterId = userId(request);
     const permissions = z.object({
       cameraPermissionGranted: z.literal(true),
-      microphonePermissionGranted: z.literal(true),
     }).parse(request.body);
     const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!meeting || meeting.visibility !== "PUBLIC_FRIENDS") {
@@ -148,7 +147,7 @@ meetingSocialRouter.patch("/:meetingId/join-requests/:requestId", async (request
             meetingId,
             userId: joinRequest.requesterId,
             cameraPermissionGranted: true,
-            microphonePermissionGranted: true,
+            microphonePermissionGranted: false,
           },
         });
         await tx.meeting.update({
@@ -176,12 +175,11 @@ meetingSocialRouter.patch("/:meetingId/permissions", async (request: Authenticat
     const meetingId = idSchema.parse(request.params.meetingId);
     const input = z.object({
       cameraPermissionGranted: z.boolean(),
-      microphonePermissionGranted: z.boolean(),
     }).parse(request.body);
     const participant = await requireParticipant(meetingId, userId(request));
     const updated = await prisma.meetingParticipant.update({
       where: { id: participant.id },
-      data: input,
+      data: { cameraPermissionGranted: input.cameraPermissionGranted, microphonePermissionGranted: false },
     });
     response.json({ success: true, data: { participant: updated } });
   } catch (error) { next(error); }

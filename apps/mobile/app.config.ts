@@ -33,6 +33,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       "expo-camera",
       {
         cameraPermission: "Camera access is required to take and share photos.",
+        microphonePermission: false,
         recordAudioAndroid: false,
       },
     ],
@@ -50,7 +51,15 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       },
     ],
     "expo-status-bar",
-    "expo-audio",
+    [
+      "expo-audio",
+      {
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        enableBackgroundRecording: false,
+        enableBackgroundPlayback: true,
+      },
+    ],
     "expo-web-browser",
     "expo-secure-store",
     [
@@ -78,5 +87,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
         },
       },
     ],
+    "@livekit/react-native-expo-plugin",
+    "./plugins/with-video-only-webrtc",
   ],
 });

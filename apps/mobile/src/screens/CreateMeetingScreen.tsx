@@ -1,6 +1,5 @@
 import type { FriendSummary, LocationShareMode, MeetingSummary, MeetingVisibility, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Camera } from "expo-camera";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,6 +7,7 @@ import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest } from "../services/api";
+import { requestCameraAccess } from "../services/camera-permission";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection } from "../types/location";
 
@@ -64,8 +64,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
   async function createMeeting() {
     setError("");
-    const camera = await Camera.requestCameraPermissionsAsync();
-    if (!camera.granted) {
+    if (!await requestCameraAccess()) {
       setError("모임 생성에는 카메라 권한이 필요합니다.");
       return;
     }
@@ -191,7 +190,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
             </Card>
           </Pressable>
         ))}
-        <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라·마이크와 위치 공유 조건을 확인합니다.</Text>
+        <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라와 위치 공유 조건을 확인합니다.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button disabled={!title.trim() || categories.length === 0} label="모임 만들기" onPress={createMeeting} />
       </ScrollView>

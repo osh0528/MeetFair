@@ -1,12 +1,12 @@
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Camera } from "expo-camera";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
+import { requestCameraAccess } from "../services/camera-permission";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MeetingInvitation">;
@@ -19,15 +19,11 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
     setError("");
     let permissions = {};
     if (action === "accept") {
-      const [camera, microphone] = await Promise.all([
-        Camera.requestCameraPermissionsAsync(),
-        Camera.requestMicrophonePermissionsAsync(),
-      ]);
-      if (!camera.granted || !microphone.granted) {
-        setError("모임 참여에는 카메라와 마이크 권한이 모두 필요합니다.");
+      if (!await requestCameraAccess()) {
+        setError("모임 참여에는 카메라 권한이 필요합니다.");
         return;
       }
-      permissions = { cameraPermissionGranted: true, microphonePermissionGranted: true };
+      permissions = { cameraPermissionGranted: true };
     }
     await apiRequest(`/meeting-invitations/${invitation.id}`, {
       method: "PATCH",
@@ -48,10 +44,10 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
           <Text style={styles.title}>{invitation.meetingTitle}</Text>
           <Text style={styles.meta}>{invitation.inviter.nickname}님의 초대</Text>
           <Text style={styles.meta}>{new Date(invitation.scheduledAt).toLocaleString("ko-KR")}</Text>
-          <Text style={styles.notice}>지각자가 있으면 방장과 지각자에게 그룹 영상통화가 발신됩니다. 참여하려면 카메라·마이크 권한이 필요합니다.</Text>
+          <Text style={styles.notice}>지각자가 있으면 방장과 지각자에게 그룹 영상통화가 발신됩니다. 참여하려면 카메라 권한이 필요합니다.</Text>
         </Card>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button label="권한 확인 후 수락" onPress={() => respond("accept")} />
+        <Button label="카메라 확인 후 수락" onPress={() => respond("accept")} />
         <Button label="거절" onPress={() => respond("reject")} variant="secondary" />
       </View>
     </SafeAreaView>

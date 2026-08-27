@@ -12,8 +12,8 @@
     "plugins": [
       ["expo-camera", {
         "cameraPermission": "모임 영상 통화와 지각 확인을 위해 카메라 접근을 허용해 주세요.",
-        "microphonePermission": "모임 영상 통화를 위해 마이크 접근을 허용해 주세요.",
-        "recordAudioAndroid": true
+        "microphonePermission": false,
+        "recordAudioAndroid": false
       }],
       "expo-location",
       ["expo-image-picker", {
@@ -21,17 +21,18 @@
         "cameraPermission": false
       }],
       "@livekit/react-native-expo-plugin",
-      "@config-plugins/react-native-webrtc"
+      "./plugins/with-video-only-webrtc"
     ],
     "ios": {
       "bundleIdentifier": "com.meetfair.app",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "audio"]
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
       "package": "com.meetfair.app",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"]
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
     }
   }
 }

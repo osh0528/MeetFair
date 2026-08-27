@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { AppError } from "../lib/app-error.js";
@@ -63,8 +63,8 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
     const meetingParticipant = await prisma.meetingParticipant.findUnique({
       where: { meetingId_userId: { meetingId: participant.call.meetingId, userId: currentUserId } },
     });
-    if (!meetingParticipant?.cameraPermissionGranted || !meetingParticipant.microphonePermissionGranted) {
-      throw new AppError(403, "MEDIA_PERMISSIONS_REQUIRED", "Camera and microphone permissions are required.");
+    if (!meetingParticipant?.cameraPermissionGranted) {
+      throw new AppError(403, "CAMERA_PERMISSION_REQUIRED", "Camera permission is required.");
     }
     if (!env.LIVEKIT_URL || !env.LIVEKIT_API_KEY || !env.LIVEKIT_API_SECRET) {
       throw new AppError(503, "LIVEKIT_NOT_CONFIGURED", "LiveKit is not configured.");
@@ -103,6 +103,7 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
       room: participant.call.roomName,
       roomJoin: true,
       canPublish: true,
+      canPublishSources: [TrackSource.CAMERA],
       canSubscribe: true,
     });
     response.json({

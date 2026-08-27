@@ -1,5 +1,4 @@
 import {
-  AudioSession,
   isTrackReference,
   LiveKitRoom,
   registerGlobals,
@@ -69,12 +68,10 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   const {
     cameraTrack,
     isCameraEnabled,
-    isMicrophoneEnabled,
     localParticipant,
   } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
-  const [speakerEnabled, setSpeakerEnabled] = useState(true);
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
@@ -86,12 +83,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
     } finally {
       setBusy(false);
     }
-  }
-
-  function toggleMicrophone() {
-    void run(async () => {
-      await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
-    });
   }
 
   function toggleCamera() {
@@ -110,25 +101,10 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
     });
   }
 
-  function toggleSpeaker() {
-    void run(async () => {
-      const outputs = await AudioSession.getAudioOutputs();
-      const nextEnabled = !speakerEnabled;
-      const output = nextEnabled
-        ? outputs.includes("speaker") ? "speaker" : "force_speaker"
-        : outputs.includes("earpiece") ? "earpiece" : "default";
-      if (!outputs.includes(output)) throw new Error("선택할 수 있는 오디오 출력이 없습니다.");
-      await AudioSession.selectAudioOutput(output);
-      setSpeakerEnabled(nextEnabled);
-    });
-  }
-
   return (
     <View style={styles.controls}>
-      <ControlButton disabled={busy} label={isMicrophoneEnabled ? "음소거" : "마이크 켜기"} onPress={toggleMicrophone} />
       <ControlButton disabled={busy} label={isCameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={toggleCamera} />
       <ControlButton disabled={busy || !isCameraEnabled} label="카메라 전환" onPress={switchCamera} />
-      <ControlButton disabled={busy} label={speakerEnabled ? "이어폰 모드" : "스피커 모드"} onPress={toggleSpeaker} />
       <ControlButton
         danger
         disabled={busy || leaveLockRemainingMs > 0}
@@ -194,21 +170,16 @@ export function VideoCallScreen({ navigation, route }: Props) {
     setConnecting(true);
     setMessage("통화 연결 준비 중...");
     try {
-      const [camera, microphone] = await Promise.all([
-        Camera.requestCameraPermissionsAsync(),
-        Camera.requestMicrophonePermissionsAsync(),
-      ]);
-      if (!camera.granted || !microphone.granted) throw new Error("카메라와 마이크 권한이 모두 필요합니다.");
+      const camera = await Camera.requestCameraPermissionsAsync();
+      if (!camera.granted) throw new Error("카메라 권한이 필요합니다.");
       await apiRequest(`/meetings/${meetingId}/permissions`, {
         method: "PATCH",
         body: JSON.stringify({
           cameraPermissionGranted: true,
-          microphonePermissionGranted: true,
         }),
       });
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
-      await AudioSession.startAudioSession();
       setRecordingEnabled(token.recordingEnabled);
       setLeaveLockedUntil(new Date(token.leaveLockedUntil).getTime());
       setCredentials(token);
@@ -222,7 +193,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     void connect();
-    return () => { void AudioSession.stopAudioSession(); };
   }, [callId, meetingId]);
 
   useEffect(() => {
@@ -253,7 +223,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
       setMessage(error instanceof Error ? error.message : "통화를 종료하지 못했습니다.");
       return;
     }
-    await AudioSession.stopAudioSession();
     navigation.goBack();
   }
 
@@ -282,7 +251,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       {leaveLockRemainingMs > 0 ? (
         <Text style={styles.leaveLockNotice}>최소 통화 시간 · 종료까지 {formatRemainingTime(leaveLockRemainingMs)}</Text>
       ) : null}
-      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio video onError={(error) => setMessage(error.message)}>
+      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio={false} video onError={(error) => setMessage(error.message)}>
         <CallContent leaveLockRemainingMs={leaveLockRemainingMs} onError={setMessage} onLeave={() => void leave()} />
         {message ? <Text style={styles.error}>{message}</Text> : null}
       </LiveKitRoom>

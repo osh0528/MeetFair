@@ -1,8 +1,7 @@
 import type { FriendSummary, MeetingMemberStatusEntry } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Camera } from "expo-camera";
 import { useEffect, useState } from "react";
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
@@ -28,7 +27,6 @@ interface MeetingDetail {
     arrivedAt: string | null;
     sharingStatus: string;
     cameraPermissionGranted: boolean;
-    microphonePermissionGranted: boolean;
     user: { id: string; nickname: string; accountId: string; homeLatitude?: number | null; homeLongitude?: number | null };
   }>;
   memberStatuses: MeetingMemberStatusEntry[];
@@ -59,7 +57,6 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [editTitle, setEditTitle] = useState("");
   const [editScheduledAt, setEditScheduledAt] = useState("");
   const [busyAction, setBusyAction] = useState("");
-  const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
   const [showPlacePicker, setShowPlacePicker] = useState(false);
@@ -89,16 +86,7 @@ export function MeetingScreen({ navigation, route }: Props) {
   }
 
   useEffect(() => {
-    void Promise.all([Camera.getCameraPermissionsAsync(), Camera.getMicrophonePermissionsAsync()])
-      .then(async ([camera, microphone]) => {
-        const allowed = camera.granted && microphone.granted;
-        setLocked(!allowed);
-        await apiRequest(`/meetings/${meetingId}/permissions`, {
-          method: "PATCH",
-          body: JSON.stringify({ cameraPermissionGranted: camera.granted, microphonePermissionGranted: microphone.granted }),
-        });
-        if (allowed) await load();
-      }).catch((error) => setMessage(error instanceof Error ? error.message : "모임을 불러오지 못했습니다."));
+    void load().catch((error) => setMessage(error instanceof Error ? error.message : "모임을 불러오지 못했습니다."));
   }, [meetingId]);
 
   useEffect(() => {
@@ -142,18 +130,6 @@ export function MeetingScreen({ navigation, route }: Props) {
     return () => clearInterval(timer);
   }, [pokeCooldowns]);
 
-  if (locked) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader title="모임 접근 잠김" onBack={() => navigation.goBack()} />
-        <View style={styles.locked}>
-          <Text style={styles.title}>카메라·마이크 권한이 필요합니다</Text>
-          <Text style={styles.meta}>권한을 다시 허용할 때까지 모임 상세와 참여 기능을 이용할 수 없습니다.</Text>
-          <Button label="시스템 설정 열기" onPress={() => Linking.openSettings()} />
-        </View>
-      </SafeAreaView>
-    );
-  }
   if (!meeting) {
     return <SafeAreaView style={styles.safeArea}><ScreenHeader title="모임" onBack={() => navigation.goBack()} /><Text style={styles.loading}>{message || "불러오는 중..."}</Text></SafeAreaView>;
   }
@@ -551,7 +527,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12, paddingBottom: 40 },
   loading: { padding: 20, color: colors.muted },
-  locked: { padding: 20, gap: 14 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
   placePickerCard: { gap: 10 },

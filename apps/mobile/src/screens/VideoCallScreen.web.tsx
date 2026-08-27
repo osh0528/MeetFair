@@ -53,7 +53,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
   const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
@@ -64,19 +63,18 @@ export function VideoCallScreen({ navigation, route }: Props) {
 
     async function connect() {
       setConnecting(true);
-      setMessage("카메라와 마이크 권한 확인 중...");
+      setMessage("카메라 권한 확인 중...");
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("이 브라우저는 카메라·마이크 영상통화를 지원하지 않습니다.");
+          throw new Error("이 브라우저는 카메라 영상통화를 지원하지 않습니다.");
         }
-        const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         permissionStream.getTracks().forEach((track) => track.stop());
 
         await apiRequest(`/meetings/${meetingId}/permissions`, {
           method: "PATCH",
           body: JSON.stringify({
             cameraPermissionGranted: true,
-            microphonePermissionGranted: true,
           }),
         });
         await apiRequest(`/meeting-calls/${callId}`, {
@@ -129,8 +127,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
 
         setMessage("통화 연결 중...");
         await nextRoom.connect(credentials.url, credentials.token);
-        await nextRoom.localParticipant.enableCameraAndMicrophone();
-        await nextRoom.startAudio();
+        await nextRoom.localParticipant.setCameraEnabled(true);
         refreshTracks();
         setRoom(nextRoom);
         setMessage("");
@@ -176,17 +173,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
       setCameraEnabled(next);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "카메라 설정을 변경하지 못했습니다.");
-    }
-  }
-
-  async function toggleMicrophone() {
-    if (!room) return;
-    const next = !microphoneEnabled;
-    try {
-      await room.localParticipant.setMicrophoneEnabled(next);
-      setMicrophoneEnabled(next);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "마이크 설정을 변경하지 못했습니다.");
     }
   }
 
@@ -241,11 +227,9 @@ export function VideoCallScreen({ navigation, route }: Props) {
           <View style={styles.grid}>
             {tracks.filter((entry) => entry.track.kind === Track.Kind.Video).map((entry) => <BrowserTrack key={entry.id} entry={entry} />)}
             {!tracks.some((entry) => entry.track.kind === Track.Kind.Video) ? <Text style={styles.waiting}>카메라 화면을 준비하는 중입니다.</Text> : null}
-            {tracks.filter((entry) => entry.track.kind === Track.Kind.Audio).map((entry) => <BrowserTrack key={entry.id} entry={entry} />)}
           </View>
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <View style={styles.controls}>
-            <ControlButton label={microphoneEnabled ? "음소거" : "마이크 켜기"} onPress={() => void toggleMicrophone()} />
             <ControlButton label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={() => void toggleCamera()} />
             <ControlButton
               danger
