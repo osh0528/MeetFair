@@ -4,7 +4,7 @@ const naverMapClientId = process.env.NAVER_MAP_CLIENT_ID ?? "";
 
 export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ...config,
-  name: "MeetFair",
+  name: "Meet World",
   slug: "meetfair",
   scheme: "meetfair",
   version: "0.1.0",

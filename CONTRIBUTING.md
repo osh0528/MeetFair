@@ -1,4 +1,4 @@
-# MeetFair 2인 GitHub 협업 방법
+# Meet World 2인 GitHub 협업 방법
 
 ## 담당 영역
 
@@ -15,7 +15,7 @@ GitHub에서 빈 저장소를 만든 뒤 Collaborators에 친구 계정을 추�
 ```powershell
 git init -b main
 git add .
-git commit -m "chore: initialize MeetFair project"
+git commit -m "chore: initialize Meet World project"
 git remote add origin 저장소주소
 git push -u origin main
 
@@ -27,7 +27,7 @@ git push -u origin suhyeok
 
 ```powershell
 git clone 저장소주소
-cd MeetFair
+cd Meet World
 git checkout -b friend origin/main
 git push -u origin friend
 ```

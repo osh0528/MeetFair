@@ -216,7 +216,7 @@ if (shouldResolveBaseline) {
     console.log("Failed 0_init attempt detected; marking it rolled back before baselining.");
     runPrisma(["migrate", "resolve", "--rolled-back", "0_init"]);
   }
-  console.log("Existing MeetFair schema detected; recording 0_init as the migration baseline.");
+  console.log("Existing Meet World schema detected; recording 0_init as the migration baseline.");
   runPrisma(["migrate", "resolve", "--applied", "0_init"]);
 }
 
@@ -243,7 +243,7 @@ if (shouldAlignExistingSchema) {
   }
   console.log("Safely preparing recording-related columns, indexes, and constraints.");
   await alignRecordingSchema();
-  console.log("Aligning the existing MeetFair database with the current schema.");
+  console.log("Aligning the existing Meet World database with the current schema.");
   runPrisma(["db", "push"]);
   if (shouldResolvePhotoMigration) {
     runPrisma(["migrate", "resolve", "--applied", photoMigrationName]);

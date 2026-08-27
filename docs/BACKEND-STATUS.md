@@ -1,4 +1,4 @@
-# MeetFair 백엔드 개발 진행 현황
+# Meet World 백엔드 개발 진행 현황
 
 > 기준일: 2026-08-24 / 기준 커밋: `f41b078` + 계약 구현 (미커밋)
 > 대상: `apps/server` (@meetfair/server) · `packages/shared`

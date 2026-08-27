@@ -49,7 +49,7 @@ export function LoginScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <LogoMark />
-        <Text style={styles.brand}>MeetFair</Text>
+        <Text style={styles.brand}>Meet World</Text>
         <Text style={styles.title}>친구들과 공평하게 만나요</Text>
         <TextInput
           autoCapitalize="none"

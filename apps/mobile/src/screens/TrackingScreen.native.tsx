@@ -189,7 +189,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         timeInterval: 10000,
         distanceInterval: 20,
         foregroundService: {
-          notificationTitle: "MeetFair 위치 공유 중",
+          notificationTitle: "Meet World 위치 공유 중",
           notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
         },
       });

@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "MeetFair",
+    "name": "Meet World",
     "slug": "meetfair",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "web": {
       "favicon": "./assets/favicon.png",
-      "name": "MeetFair"
+      "name": "Meet World"
     },
     "plugins": [
       ["expo-camera", {

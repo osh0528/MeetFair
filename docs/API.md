@@ -1,4 +1,4 @@
-# MeetFair API (2026-08-24 계약 반영)
+# Meet World API (2026-08-24 계약 반영)
 
 모든 응답은 `ApiResponse<T> { success, data?, error? }` 형태. 인증은 `Authorization: Bearer <accessToken>`.
 
