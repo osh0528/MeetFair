@@ -165,12 +165,12 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...meeting.memberStatuses.map((member) => member.userId),
   ]);
   const availableFriends = friends.filter((friend) => !unavailableUserIds.has(friend.userId));
-  const recommendedCandidate = meeting.placeCandidates.find((candidate) => candidate.providerPlaceId?.startsWith("meetfair:center:"));
+  const recommendedCandidate = meeting.placeCandidates.find((candidate) => candidate.recommendationRank === 1 && candidate.providerPlaceId?.startsWith("kakao:"));
   const placeMapMarkers = recommendedCandidate ? [
     ...homeMapMarkers,
     {
       id: recommendedCandidate.id,
-      label: "공평 중심 추천",
+      label: "이동시간 BEST",
       kind: "RECOMMENDED" as const,
       address: recommendedCandidate.address,
       latitude: recommendedCandidate.latitude,
@@ -245,7 +245,7 @@ export function MeetingScreen({ navigation, route }: Props) {
     try {
       await apiRequest(`/recommendations?meetingId=${meetingId}`);
       await load();
-      setMessage("참여자 위치의 내접원 중심을 추천 후보에 추가했습니다.");
+      setMessage("이동시간 차이가 가장 적은 장소들을 추천 후보에 추가했습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "추천 장소를 계산하지 못했습니다.");
     } finally {
@@ -407,8 +407,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? "중심을 계산하는 중..." : "추천장소 받기"}</Text>
-                <Text style={styles.recommendDescription}>참여자 위치로 만든 다각형의 내접원 중심을 찾아요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? "후보 이동시간 계산 중..." : "추천장소 받기"}</Text>
+                <Text style={styles.recommendDescription}>중심 근처 실제 장소를 검색하고 이동시간 차이를 비교해요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
@@ -416,9 +416,9 @@ export function MeetingScreen({ navigation, route }: Props) {
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
             {meeting.placeCandidates.map((candidate) => (
               <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
-                <Card style={[styles.card, candidate.providerPlaceId?.startsWith("meetfair:center:") && styles.recommendedCard]}>
-                  {candidate.providerPlaceId?.startsWith("meetfair:center:") ? <Text style={styles.recommendedBadge}>✦ 공평 중심 추천</Text> : null}
-                  <View style={styles.row}><Text style={[styles.cardTitle, candidate.providerPlaceId?.startsWith("meetfair:center:") && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
+                  {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ 이동시간 BEST</Text> : null}
+                  <View style={styles.row}><Text style={[styles.cardTitle, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
                   <Text style={styles.meta}>{candidate.address}</Text>
                 </Card>
               </Pressable>
