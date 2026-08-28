@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
+import { createNotification } from "../lib/notifications.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitMeetingChatReceived } from "../realtime/events.js";
 import { createCallRecordingPlaybackUrl } from "../services/call-recordings.js";
@@ -230,9 +231,25 @@ meetingChatRouter.post("/:meetingId/chat/messages", async (req, res, next) => {
       },
     });
 
-    emitMeetingChatReceived(meetingId, { message: toChatMessageSummary(result) });
+    const messageSummary = toChatMessageSummary(result);
+    emitMeetingChatReceived(meetingId, { message: messageSummary });
 
-    res.status(201).json({ success: true, data: { message: toChatMessageSummary(result) } });
+    const recipients = await prisma.meetingParticipant.findMany({
+      where: { meetingId, userId: { not: userId } },
+      select: { userId: true },
+    });
+    const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+    const preview = trimmed.length > 80 ? trimmed.slice(0, 80) + "…" : trimmed;
+    await Promise.allSettled(recipients.map(({ userId: recipientId }) => createNotification({
+      userId: recipientId,
+      type: "MEETING_CHAT",
+      title: (sender?.nickname || "\uce5c\uad6c") + "\ub2d8\uc758 \ubaa8\uc784 \ucc44\ud305",
+      body: preview,
+      data: { meetingId, messageId: result.id, senderId: userId },
+      push: false,
+    })));
+
+    res.status(201).json({ success: true, data: { message: messageSummary } });
   } catch (error) {
     next(error);
   }
