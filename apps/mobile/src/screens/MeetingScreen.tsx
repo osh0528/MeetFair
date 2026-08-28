@@ -35,6 +35,10 @@ interface MeetingDetail {
     name: string;
     address: string;
     category: string;
+    latitude: number;
+    longitude: number;
+    providerPlaceId: string | null;
+    recommendationRank: number | null;
     votes: Array<{ userId: string }>;
   }>;
 }
@@ -161,6 +165,18 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...meeting.memberStatuses.map((member) => member.userId),
   ]);
   const availableFriends = friends.filter((friend) => !unavailableUserIds.has(friend.userId));
+  const recommendedCandidate = meeting.placeCandidates.find((candidate) => candidate.providerPlaceId?.startsWith("meetfair:center:"));
+  const placeMapMarkers = recommendedCandidate ? [
+    ...homeMapMarkers,
+    {
+      id: recommendedCandidate.id,
+      label: "공평 중심 추천",
+      kind: "RECOMMENDED" as const,
+      address: recommendedCandidate.address,
+      latitude: recommendedCandidate.latitude,
+      longitude: recommendedCandidate.longitude,
+    },
+  ] : homeMapMarkers;
 
   async function vote(placeCandidateId: string) {
     try {
@@ -223,6 +239,20 @@ export function MeetingScreen({ navigation, route }: Props) {
       setBusyAction("");
     }
   }
+  async function receiveRecommendedPlace() {
+    setBusyAction("recommendation");
+    setMessage("");
+    try {
+      await apiRequest(`/recommendations?meetingId=${meetingId}`);
+      await load();
+      setMessage("참여자 위치의 내접원 중심을 추천 후보에 추가했습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "추천 장소를 계산하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function arrive() {
     await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
     await load();
@@ -367,12 +397,28 @@ export function MeetingScreen({ navigation, route }: Props) {
           </Card>
         ) : (
           <>
+            <SectionHeading title="모임 장소 추천하기" action={`${meeting.participants.length}명 기준`} />
+            <Pressable
+              disabled={busyAction === "recommendation"}
+              onPress={() => void receiveRecommendedPlace()}
+              style={({ pressed }) => [styles.recommendButton, pressed && styles.recommendButtonPressed]}
+            >
+              <View style={styles.recommendGlow} />
+              <Text style={styles.recommendSparkle}>✦</Text>
+              <View style={styles.recommendCopy}>
+                <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? "중심을 계산하는 중..." : "추천장소 받기"}</Text>
+                <Text style={styles.recommendDescription}>참여자 위치로 만든 다각형의 내접원 중심을 찾아요</Text>
+              </View>
+              <Text style={styles.recommendArrow}>→</Text>
+            </Pressable>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
             {meeting.placeCandidates.map((candidate) => (
               <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
-                <Card style={styles.card}>
-                  <View style={styles.row}><Text style={styles.cardTitle}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                <Card style={[styles.card, candidate.providerPlaceId?.startsWith("meetfair:center:") && styles.recommendedCard]}>
+                  {candidate.providerPlaceId?.startsWith("meetfair:center:") ? <Text style={styles.recommendedBadge}>✦ 공평 중심 추천</Text> : null}
+                  <View style={styles.row}><Text style={[styles.cardTitle, candidate.providerPlaceId?.startsWith("meetfair:center:") && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
                   <Text style={styles.meta}>{candidate.address}</Text>
                 </Card>
               </Pressable>
@@ -401,7 +447,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   <KakaoAddressMap
                     focusTarget={placeFocusTarget}
                     interactive
-                    mapMarkers={homeMapMarkers}
+                    mapMarkers={placeMapMarkers}
                     onResolved={handlePlaceResolved}
                     onResults={handlePlaceResults}
                     query={placeQuery}
@@ -529,6 +575,18 @@ const styles = StyleSheet.create({
   loading: { padding: 20, color: colors.muted },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
+  recommendButton: { minHeight: 104, borderRadius: 22, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  recommendButtonPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  recommendGlow: { position: "absolute", width: 150, height: 150, borderRadius: 75, right: -35, top: -70, backgroundColor: "rgba(96,165,250,0.32)" },
+  recommendSparkle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 25, lineHeight: 46, textAlign: "center", fontWeight: "900", borderWidth: 1, borderColor: "#93C5FD" },
+  recommendCopy: { flex: 1, gap: 3 },
+  recommendEyebrow: { color: "#93C5FD", fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
+  recommendTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
+  recommendDescription: { color: "#DBEAFE", fontSize: 10, lineHeight: 15 },
+  recommendArrow: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
+  recommendedCard: { borderWidth: 2, borderColor: "#3B82F6", backgroundColor: "#EFF6FF", shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 7 },
+  recommendedBadge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, overflow: "hidden", backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  recommendedCardTitle: { color: "#1D4ED8", fontSize: 16 },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },

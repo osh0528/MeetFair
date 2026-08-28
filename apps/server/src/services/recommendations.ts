@@ -1,8 +1,8 @@
 import { AppError } from "../lib/app-error.js";
-import { searchLocalPlaces } from "../lib/naver-search.js";
-import { getDrivingDirections } from "../lib/naver-maps.js";
+import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
 import { prisma } from "../lib/prisma.js";
 import type { MeetingRecommendation } from "@meetfair/shared";
+import { meetingIncenter } from "./meeting-center.js";
 
 export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const meeting = await prisma.meeting.findUnique({
@@ -61,11 +61,16 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     }
   }
   if (origins.length < 2) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "At least two participants need origins for recommendations.");
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "추천을 받으려면 위치를 설정한 참가자가 2명 이상 필요합니다.");
+  }
+  if (origins.length !== meeting.participants.length) {
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "모든 참가자가 출발 위치를 설정한 뒤 추천을 받아주세요.");
   }
 
-  const query = meeting.title || "맛집";
-  const places = await searchLocalPlaces(query);
+  const center = meetingIncenter(origins);
+  const centerAddress = await reverseGeocode(center.latitude, center.longitude)
+    .then((result) => result.roadAddress || result.address)
+    .catch(() => `위도 ${center.latitude.toFixed(5)}, 경도 ${center.longitude.toFixed(5)}`);
 
   const candidates: Array<{
     name: string;
@@ -77,7 +82,15 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
   }> = [];
 
-  for (const place of places.slice(0, 5)) {
+  const centerPlaces = [{
+    title: `✨ ${origins.length}명 공평 중심지`,
+    address: centerAddress,
+    latitude: center.latitude,
+    longitude: center.longitude,
+    category: "내접원 중심 추천",
+  }];
+
+  for (const place of centerPlaces) {
     const travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }> = [];
     for (const origin of origins) {
       try {
@@ -119,7 +132,7 @@ export async function generateRecommendations(meetingId: string, requesterId: st
       latitude: place.latitude,
       longitude: place.longitude,
       category: place.category,
-      providerPlaceId: null,
+      providerPlaceId: `meetfair:center:${center.latitude.toFixed(6)}:${center.longitude.toFixed(6)}`,
       travelTimes,
     });
   }
@@ -131,7 +144,9 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   });
 
   const persisted = await prisma.$transaction(async (tx) => {
-    await tx.placeCandidate.deleteMany({ where: { meetingId, votes: { none: {} } } });
+    await tx.placeCandidate.deleteMany({
+      where: { meetingId, providerPlaceId: { startsWith: "meetfair:center:" }, votes: { none: {} } },
+    });
     const created: Array<{
       id: string;
       name: string;

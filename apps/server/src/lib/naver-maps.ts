@@ -92,12 +92,19 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   if (data.status.code !== 0 || data.results.length === 0) {
     throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", `Reverse geocode failed for ${latitude},${longitude}`);
   }
-  const road = data.results[0];
-  const addr = data.results[1] ?? road;
-  if (!road || !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+  const road = data.results.find((result) => result.name === "roadaddr");
+  const addr = data.results.find((result) => result.name === "addr") ?? road;
+  if (!road && !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+
+  const formatAddress = (result: NaverReverseResponse["results"][number] | undefined) => {
+    if (!result) return "";
+    const region = [result.region.area1.name, result.region.area2.name, result.region.area3.name].filter(Boolean);
+    const landNumber = [result.land.number1, result.land.number2].filter(Boolean).join("-");
+    return [...region, result.land.name, landNumber].filter(Boolean).join(" ");
+  };
   return {
-    roadAddress: road.name ?? "",
-    address: addr.name ?? road.name ?? "",
+    roadAddress: formatAddress(road),
+    address: formatAddress(addr),
   };
 }
 

@@ -223,11 +223,15 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       const content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       const icon = document.createElement("div");
-      icon.textContent = "🏠";
-      icon.style.cssText = "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
+      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : "🏠";
+      icon.style.cssText = item.kind === "RECOMMENDED"
+        ? "width:44px;height:44px;border-radius:22px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:0 0 0 8px rgba(59,130,246,.2),0 8px 20px rgba(37,99,235,.45);"
+        : "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
       const label = document.createElement("div");
       label.textContent = item.label;
-      label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      label.style.cssText = item.kind === "RECOMMENDED"
+        ? "padding:5px 10px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#172554);color:white;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(37,99,235,.35);"
+        : "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
       content.append(icon, label);
       return new window.kakao.maps.CustomOverlay({
         map: mapRef.current,
