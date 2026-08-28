@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
@@ -89,6 +89,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [sharing, setSharing] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const [message, setMessage] = useState("");
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
@@ -222,9 +223,10 @@ export function TrackingScreen({ navigation, route }: Props) {
       <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
       {meeting ? (
         <NaverMapView
-          style={styles.map}
+          style={[styles.map, mapExpanded && styles.mapExpanded]}
           initialRegion={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
           isShowLocationButton
+          onTapMap={() => setMapExpanded(true)}
         >
           {meeting.confirmedPlace ? (
             <NaverMapMarkerOverlay
@@ -245,7 +247,17 @@ export function TrackingScreen({ navigation, route }: Props) {
           <Text style={styles.meta}>지도를 준비하고 있습니다.</Text>
         </View>
       )}
-      <View style={styles.panel}>
+      {mapExpanded ? (
+        <Pressable
+          accessibilityLabel="지도 축소"
+          accessibilityRole="button"
+          onPress={() => setMapExpanded(false)}
+          style={styles.collapseMapButton}
+        >
+          <Text style={styles.collapseMapButtonText}>지도 닫기</Text>
+        </Pressable>
+      ) : null}
+      {!mapExpanded ? <View style={styles.panel}>
         <View style={styles.row}>
           <Text style={styles.title}>{locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).length}명 위치 공유</Text>
           <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "gray"} />
@@ -261,7 +273,7 @@ export function TrackingScreen({ navigation, route }: Props) {
           <Button label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
           <Button label="도착 처리" onPress={arrive} variant="soft" />
         </View>
-      </View>
+      </View> : null}
     </SafeAreaView>
   );
 }
@@ -269,7 +281,10 @@ export function TrackingScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   map: { flex: 1, minHeight: 300 },
+  mapExpanded: { minHeight: 0 },
   mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  collapseMapButton: { position: "absolute", top: 78, right: 14, zIndex: 10, borderRadius: 18, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
+  collapseMapButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: colors.text, fontSize: 18, fontWeight: "900" },
