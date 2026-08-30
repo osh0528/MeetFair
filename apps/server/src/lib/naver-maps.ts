@@ -26,13 +26,25 @@ function naverHeaders(): Record<string, string> {
   };
 }
 
-async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new AppError(502, "MAP_API_ERROR", `Naver Maps API failed: ${response.status} ${body.slice(0, 500)}`);
+async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = 5_000): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new AppError(502, "MAP_API_ERROR", `Naver Maps API failed: ${response.status} ${body.slice(0, 500)}`);
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new AppError(504, "MAP_API_TIMEOUT", "Naver Maps API 응답 시간이 초과됐습니다.");
+    }
+    throw new AppError(502, "MAP_API_ERROR", "Naver Maps API 요청에 실패했습니다.");
+  } finally {
+    clearTimeout(timeout);
   }
-  return (await response.json()) as T;
 }
 
 // ── Geocoding ──
@@ -139,7 +151,7 @@ export async function getDrivingDirections(
     `start=${origin.longitude},${origin.latitude}` +
     `&goal=${destination.longitude},${destination.latitude}` +
     `&option=${option}`;
-  const data = await fetchJson<NaverDirectionResponse>(url, { headers: naverHeaders() });
+  const data = await fetchJson<NaverDirectionResponse>(url, { headers: naverHeaders() }, 3_500);
   if (data.code !== 0 || !data.route) {
     throw new AppError(502, "DIRECTION_FAILED", data.message || "Directions API failed");
   }

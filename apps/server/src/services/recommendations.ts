@@ -22,6 +22,16 @@ interface CandidateWithTravel extends KakaoPlace {
   }>;
 }
 
+interface CachedDrivingResult {
+  expiresAt: number;
+  value: { durationMinutes: number; distanceMeters: number };
+}
+
+const drivingCache = new Map<string, CachedDrivingResult>();
+const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
+const DRIVING_CACHE_TTL_MS = 2 * 60_000;
+const MAX_ROUTE_CANDIDATES = 3;
+
 function distanceMeters(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
@@ -38,6 +48,27 @@ function distanceMeters(
         ),
       ),
   );
+}
+
+function drivingCacheKey(origin: Origin, destination: KakaoPlace): string {
+  return [origin.latitude, origin.longitude, destination.latitude, destination.longitude]
+    .map((coordinate) => coordinate.toFixed(5))
+    .join(":");
+}
+
+async function cachedDrivingDirections(origin: Origin, destination: KakaoPlace) {
+  const key = drivingCacheKey(origin, destination);
+  const cached = drivingCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) drivingCache.delete(key);
+  const value = await getDrivingDirections(origin, destination);
+  drivingCache.set(key, { expiresAt: Date.now() + DRIVING_CACHE_TTL_MS, value });
+  if (drivingCache.size > 500) {
+    for (const [cacheKey, entry] of drivingCache) {
+      if (entry.expiresAt <= Date.now()) drivingCache.delete(cacheKey);
+    }
+  }
+  return value;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -122,7 +153,7 @@ function summarizeExistingCandidate(candidate: {
   };
 }
 
-export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
+async function generateRecommendationsInternal(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
     include: {
@@ -185,15 +216,15 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   }
   const nearbyPlaces = [...uniquePlaces.values()]
     .sort((a, b) => a.distanceMeters - b.distanceMeters)
-    .slice(0, 5);
+    .slice(0, MAX_ROUTE_CANDIDATES);
   if (!nearbyPlaces.length) {
     throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "중심 위치 주변에서 추천할 장소를 찾지 못했습니다.");
   }
 
   const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
-  const estimates = await mapWithConcurrency(tasks, 5, async ({ place, origin }) => {
+  const estimates = await mapWithConcurrency(tasks, 6, async ({ place, origin }) => {
     try {
-      const route = await getDrivingDirections(origin, place);
+      const route = await cachedDrivingDirections(origin, place);
       return {
         placeId: place.id,
         userId: origin.userId,
@@ -265,4 +296,17 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   });
 
   return persisted.map(summarizeExistingCandidate);
+}
+
+export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
+  const existingJob = recommendationJobs.get(meetingId);
+  if (existingJob) return existingJob;
+
+  const job = generateRecommendationsInternal(meetingId, requesterId);
+  recommendationJobs.set(meetingId, job);
+  try {
+    return await job;
+  } finally {
+    if (recommendationJobs.get(meetingId) === job) recommendationJobs.delete(meetingId);
+  }
 }

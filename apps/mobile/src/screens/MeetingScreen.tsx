@@ -94,9 +94,10 @@ export function MeetingScreen({ navigation, route }: Props) {
   }, [meetingId]);
 
   useEffect(() => {
+    if (busyAction) return;
     const timer = setInterval(() => void load().catch(() => undefined), 5_000);
     return () => clearInterval(timer);
-  }, [meetingId, user?.id]);
+  }, [busyAction, meetingId, user?.id]);
 
   useEffect(() => {
     if (!meeting?.voteCountdownEndsAt) {
