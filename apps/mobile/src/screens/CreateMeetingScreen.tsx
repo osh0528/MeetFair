@@ -13,11 +13,84 @@ import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateMeeting">;
 const categoryOptions = ["카페", "음식점", "술집", "문화시설"];
+const timeOptions = ["12:00", "15:00", "18:00", "19:00", "20:00"];
+const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"];
+
+function toLocalDateValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromOffset(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return toLocalDateValue(date);
+}
+
+function upcomingSaturday(): string {
+  const date = new Date();
+  const daysUntilSaturday = (6 - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + daysUntilSaturday);
+  return toLocalDateValue(date);
+}
+
+function dateValueToDate(dateValue: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const result = new Date(year, month - 1, day);
+  return result.getFullYear() === year && result.getMonth() === month - 1 && result.getDate() === day
+    ? result
+    : null;
+}
+
+function calendarDates(month: Date): Array<Date | null> {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const dayCount = new Date(year, monthIndex + 1, 0).getDate();
+  return [
+    ...Array.from<Date | null>({ length: firstWeekday }).fill(null),
+    ...Array.from({ length: dayCount }, (_, index) => new Date(year, monthIndex, index + 1)),
+  ];
+}
+
+function isPastDate(date: Date): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date.getTime() < today.getTime();
+}
+
+function parseSchedule(dateValue: string, timeValue: string): Date | null {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue.trim());
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeValue.trim());
+  if (!dateMatch || !timeMatch) return null;
+  const [, year, month, day] = dateMatch.map(Number);
+  const [, hour, minute] = timeMatch.map(Number);
+  const result = new Date(year!, month! - 1, day!, hour!, minute!);
+  if (
+    result.getFullYear() !== year
+    || result.getMonth() !== month! - 1
+    || result.getDate() !== day
+    || result.getHours() !== hour
+    || result.getMinutes() !== minute
+  ) return null;
+  return result;
+}
 
 export function CreateMeetingScreen({ navigation }: Props) {
-  const defaultDate = useMemo(() => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16), []);
+  const defaultDate = useMemo(() => dateFromOffset(1), []);
   const [title, setTitle] = useState("");
-  const [scheduledAt, setScheduledAt] = useState(defaultDate);
+  const [scheduledDate, setScheduledDate] = useState(defaultDate);
+  const [scheduledTime, setScheduledTime] = useState("18:00");
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const initial = dateValueToDate(defaultDate) ?? new Date();
+    return new Date(initial.getFullYear(), initial.getMonth(), 1);
+  });
   const [visibility, setVisibility] = useState<MeetingVisibility>("PRIVATE");
   const [travelMetric, setTravelMetric] = useState<TravelMetric>("DISTANCE");
   const [shareMode, setShareMode] = useState<LocationShareMode>("BEFORE_START");
@@ -32,6 +105,18 @@ export function CreateMeetingScreen({ navigation }: Props) {
   const [selectedPlace, setSelectedPlace] = useState<AddressCandidate | null>(null);
   const [placeFocusTarget, setPlaceFocusTarget] = useState<AddressSelection | null>(null);
   const [error, setError] = useState("");
+  const scheduledAt = useMemo(() => parseSchedule(scheduledDate, scheduledTime), [scheduledDate, scheduledTime]);
+  const visibleCalendarDates = useMemo(() => calendarDates(calendarMonth), [calendarMonth]);
+
+  function selectDate(dateValue: string) {
+    setScheduledDate(dateValue);
+    const selected = dateValueToDate(dateValue);
+    if (selected) setCalendarMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
+  }
+
+  function moveCalendarMonth(offset: number) {
+    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  }
 
   useEffect(() => {
     void apiRequest<{ friends: FriendSummary[] }>("/friends").then((data) => setFriends(data.friends));
@@ -64,6 +149,14 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
   async function createMeeting() {
     setError("");
+    if (!scheduledAt) {
+      setError("날짜는 YYYY-MM-DD, 시간은 HH:MM 형식으로 입력해 주세요.");
+      return;
+    }
+    if (scheduledAt.getTime() <= Date.now()) {
+      setError("현재보다 이후 날짜와 시간을 선택해 주세요.");
+      return;
+    }
     if (!await requestCameraAccess()) {
       setError("모임 생성에는 카메라 권한이 필요합니다.");
       return;
@@ -73,7 +166,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         method: "POST",
         body: JSON.stringify({
           title: title.trim(),
-          scheduledAt: new Date(scheduledAt).toISOString(),
+          scheduledAt: scheduledAt.toISOString(),
           inviteeUserIds: invitees,
           visibility,
           categories,
@@ -107,7 +200,57 @@ export function CreateMeetingScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>언제, 누구와 만날까요?</Text>
         <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={title} />
-        <TextInput autoCapitalize="none" onChangeText={setScheduledAt} placeholder="2026-08-22T14:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledAt} />
+
+        <SectionHeading title="날짜와 시간" action={scheduledAt ? scheduledAt.toLocaleString("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "확인 필요"} />
+        <View style={styles.wrap}>
+          <Chip label="오늘" selected={scheduledDate === dateFromOffset(0)} onPress={() => selectDate(dateFromOffset(0))} />
+          <Chip label="내일" selected={scheduledDate === dateFromOffset(1)} onPress={() => selectDate(dateFromOffset(1))} />
+          <Chip label="이번 토요일" selected={scheduledDate === upcomingSaturday()} onPress={() => selectDate(upcomingSaturday())} />
+        </View>
+        <Card style={styles.calendarCard}>
+          <View style={styles.calendarHeader}>
+            <Pressable accessibilityLabel="이전 달" onPress={() => moveCalendarMonth(-1)} style={styles.monthButton}>
+              <Text style={styles.monthButtonText}>‹</Text>
+            </Pressable>
+            <Text style={styles.monthTitle}>{calendarMonth.getFullYear()}년 {calendarMonth.getMonth() + 1}월</Text>
+            <Pressable accessibilityLabel="다음 달" onPress={() => moveCalendarMonth(1)} style={styles.monthButton}>
+              <Text style={styles.monthButtonText}>›</Text>
+            </Pressable>
+          </View>
+          <View style={styles.calendarGrid}>
+            {weekdayLabels.map((weekday, index) => (
+              <View key={weekday} style={styles.calendarCell}>
+                <Text style={[styles.weekdayText, index === 0 && styles.sundayText, index === 6 && styles.saturdayText]}>{weekday}</Text>
+              </View>
+            ))}
+            {visibleCalendarDates.map((date, index) => {
+              if (!date) return <View key={`empty-${index}`} style={styles.calendarCell} />;
+              const value = toLocalDateValue(date);
+              const selected = value === scheduledDate;
+              const today = value === dateFromOffset(0);
+              const disabled = isPastDate(date);
+              return (
+                <View key={value} style={styles.calendarCell}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled, selected }}
+                    disabled={disabled}
+                    onPress={() => selectDate(value)}
+                    style={[styles.dayButton, today && styles.todayButton, selected && styles.selectedDayButton]}
+                  >
+                    <Text style={[styles.dayText, date.getDay() === 0 && styles.sundayText, date.getDay() === 6 && styles.saturdayText, disabled && styles.disabledDayText, selected && styles.selectedDayText]}>{date.getDate()}</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        </Card>
+        <View style={styles.timeInputGroup}>
+          <Text style={styles.fieldLabel}>시간</Text>
+          <TextInput autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={5} onChangeText={setScheduledTime} placeholder="18:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledTime} />
+        </View>
+        <View style={styles.wrap}>{timeOptions.map((time) => <Chip key={time} label={time} selected={scheduledTime === time} onPress={() => setScheduledTime(time)} />)}</View>
+        {!scheduledAt ? <Text style={styles.error}>날짜 또는 시간 형식을 확인해 주세요.</Text> : scheduledAt.getTime() <= Date.now() ? <Text style={styles.error}>현재보다 이후 시간을 선택해 주세요.</Text> : null}
 
         <SectionHeading title="모임 공개 범위" />
         <View style={styles.visibilityRow}>
@@ -192,7 +335,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         ))}
         <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라와 위치 공유 조건을 확인합니다.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button disabled={!title.trim() || categories.length === 0} label="모임 만들기" onPress={createMeeting} />
+        <Button disabled={!title.trim() || categories.length === 0 || !scheduledAt || scheduledAt.getTime() <= Date.now()} label="모임 만들기" onPress={createMeeting} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -240,6 +383,24 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 13, paddingBottom: 40 },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  calendarCard: { padding: 12, gap: 10 },
+  calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  monthButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  monthButtonText: { color: colors.text, fontSize: 27, lineHeight: 30, fontWeight: "800" },
+  monthTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  calendarCell: { width: "14.2857%", minHeight: 42, alignItems: "center", justifyContent: "center" },
+  weekdayText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  sundayText: { color: colors.red },
+  saturdayText: { color: "#2563EB" },
+  dayButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  todayButton: { borderWidth: 1, borderColor: colors.primary },
+  selectedDayButton: { backgroundColor: colors.primary },
+  dayText: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  disabledDayText: { color: colors.subtle, opacity: 0.45 },
+  selectedDayText: { color: colors.surface },
+  timeInputGroup: { gap: 6 },
+  fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginLeft: 3 },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   placeSearchInput: { flex: 1 },
   searchButton: { height: 50, borderRadius: 15, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
