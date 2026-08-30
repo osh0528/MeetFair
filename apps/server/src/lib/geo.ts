@@ -27,3 +27,28 @@ export function nextProximityCount(previous: number, withinRadius: boolean): num
 export function hasConsecutivelyArrived(proximityCount: number): boolean {
   return proximityCount >= REQUIRED_PROXIMITY_HITS;
 }
+
+export interface GeoPoint {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * Midpoint uses average; accurate within meters for spans <500km (Korea scope).
+ * Unwraps longitudes when points straddle the antimeridian.
+ */
+export function midpointOf(a: GeoPoint, b: GeoPoint): GeoPoint {
+  const lat = (a.latitude + b.latitude) / 2;
+  let lng = (a.longitude + b.longitude) / 2;
+  if (Math.abs(a.longitude - b.longitude) > 180) {
+    const aLng = a.longitude < 0 ? a.longitude + 360 : a.longitude;
+    const bLng = b.longitude < 0 ? b.longitude + 360 : b.longitude;
+    lng = (aLng + bLng) / 2;
+    if (lng > 180) lng -= 360;
+  }
+  return { latitude: lat, longitude: lng };
+}
+
+export function haversineDistance(a: GeoPoint, b: GeoPoint): number {
+  return distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
+}

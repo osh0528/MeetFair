@@ -18,7 +18,7 @@ import {
 } from "../realtime/events.js";
 import { createNotification } from "../lib/notifications.js";
 import { evaluateMeetingVote } from "../services/meetings.js";
-import { generateRecommendations } from "../services/recommendations.js";
+import { generateMidpointRecommendations, generateRecommendations } from "../services/recommendations.js";
 import { canInviteToMeeting } from "../services/invitation-policy.js";
 import { approximateHomeCoordinate, friendIdsAmong } from "../services/friend-home-locations.js";
 
@@ -597,6 +597,15 @@ meetingsRouter.post("/:meetingId/recommendations", async (request: Authenticated
     const candidates = await prisma.placeCandidate.findMany({ where: { meetingId }, include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } } });
     const recommendations = candidates.map(recommendationSummary).sort((a, b) => a.maximumDurationMinutes - b.maximumDurationMinutes || a.timeGapMinutes - b.timeGapMinutes || a.averageDurationMinutes - b.averageDurationMinutes);
     response.status(201).json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.get("/:meetingId/midpoint-recommendations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await participantFor(meetingId, userId(request));
+    const { midpoint, recommendations } = await generateMidpointRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: { midpoint, recommendations } });
   } catch (error) { next(error); }
 });
 
