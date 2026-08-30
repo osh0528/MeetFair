@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd apps/mobile && npx expo export --platform web --output-dir ../../public",
-  "outputDirectory": "public",
+  "buildCommand": "npx expo export --platform web --output-dir dist",
+  "outputDirectory": "dist",
   "installCommand": "npm install"
 }
