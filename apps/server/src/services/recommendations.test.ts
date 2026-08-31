@@ -12,7 +12,7 @@ const searchMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../lib/naver-maps.js", () => naverMocks);
-vi.mock("../lib/odsay.js", () => odsayMocks);
+vi.mock("../lib/kakao-transit.js", () => odsayMocks);
 vi.mock("../lib/naver-search.js", () => searchMocks);
 vi.mock("../lib/prisma.js", () => ({
   prisma: {

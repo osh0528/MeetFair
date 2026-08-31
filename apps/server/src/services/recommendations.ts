@@ -1,7 +1,7 @@
 import { AppError } from "../lib/app-error.js";
 import { haversineDistance, midpointOf } from "../lib/geo.js";
 import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
-import { getTransitDirections } from "../lib/odsay.js";
+import { getTransitDirections } from "../lib/kakao-transit.js";
 import { searchLocalPlaces } from "../lib/naver-search.js";
 import { prisma } from "../lib/prisma.js";
 import type { MeetingRecommendation } from "@meetfair/shared";
