@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
-import { createMeetingSocket } from "../services/socket";
+import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -103,6 +103,37 @@ export function TrackingScreen({ navigation, route }: Props) {
     setLocations(locationData.locations);
   }
 
+  function updateMyLocation(position: Location.LocationObject) {
+    setLocations((current) => current.map((item) => item.userId === user?.id ? {
+      ...item,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? 0,
+      updatedAt: new Date(position.timestamp).toISOString(),
+      sharingStatus: "SHARING",
+    } : item));
+  }
+
+  async function waitForSharingStatus() {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      if (data.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING")) return;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error("위치 공유 상태를 서버에 저장하지 못했습니다. 다시 시도해 주세요.");
+  }
+
+  async function waitForFirstLocation(sentAt: string) {
+    const sentTime = new Date(sentAt).getTime();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      const mine = data.locations.find((item) => item.userId === user?.id);
+      if (mine?.updatedAt && new Date(mine.updatedAt).getTime() >= sentTime) return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error("서버가 현재 위치를 저장하지 않았습니다. 모임의 위치 공유 시간 설정을 확인해 주세요.");
+  }
+
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "위치를 불러오지 못했습니다."));
     const timer = setInterval(() => void load().catch(() => undefined), 5000);
@@ -127,6 +158,16 @@ export function TrackingScreen({ navigation, route }: Props) {
           arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt,
         } : item));
       });
+      socket.on("meeting:error", (payload) => {
+        const messageByCode: Record<string, string> = {
+          MEETING_LOCATION_SHARE_OFF: "이 모임은 위치 공유가 꺼져 있습니다.",
+          SHARING_TOO_EARLY: "아직 위치 공유를 시작할 수 있는 시간이 아닙니다.",
+          LOCATION_NOT_ALLOWED: "위치 공유 동의 또는 공유 상태를 확인해 주세요.",
+          INVALID_LOCATION_TIME: "현재 위치의 시간이 올바르지 않습니다. 기기 시간을 확인해 주세요.",
+        };
+        setMessage(messageByCode[payload.code] ?? payload.message);
+      });
+      socket.on("connect_error", (error) => setMessage(`실시간 서버 연결 실패: ${error.message}`));
       socket.connect();
       socket.once("connect", () => socket.emit("meeting:join", { meetingId }));
     }
@@ -154,58 +195,81 @@ export function TrackingScreen({ navigation, route }: Props) {
 
   async function startSharing() {
     if (!accessToken) return;
-    const foreground = await Location.requestForegroundPermissionsAsync();
-    if (!foreground.granted) {
-      Alert.alert("위치 권한 필요", "실시간 위치 공유를 위해 위치 권한을 허용해 주세요.");
-      return;
-    }
-    await apiRequest(`/meetings/${meetingId}/location-consent`, {
-      method: "PATCH",
-      body: JSON.stringify({ consent: true }),
-    });
-    const socket = socketRef.current;
-    if (!socket) {
-      setMessage("실시간 위치 연결을 준비하지 못했습니다.");
-      return;
-    }
-    socket.emit("meeting:join", { meetingId });
-    socket.emit("sharing:status", { meetingId, status: "SHARING" });
-    watcher.current = await Location.watchPositionAsync({
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-      distanceInterval: 10,
-    }, (position) => {
+    setMessage("");
+    try {
+      const foreground = await Location.requestForegroundPermissionsAsync();
+      if (!foreground.granted) {
+        Alert.alert("위치 권한 필요", "실시간 위치 공유를 위해 위치 권한을 허용해 주세요.");
+        return;
+      }
+      const socket = socketRef.current;
+      if (!socket) throw new Error("실시간 위치 연결을 준비하지 못했습니다.");
+      await waitForSocketConnection(socket);
+      const firstPosition = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: true }),
+      });
+      socket.emit("meeting:join", { meetingId });
+      socket.emit("sharing:status", { meetingId, status: "SHARING" });
+      await waitForSharingStatus();
+      const sentAt = new Date(firstPosition.timestamp).toISOString();
       socket.emit("location:update", {
         meetingId,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy ?? 0,
-        sentAt: new Date(position.timestamp).toISOString(),
+        latitude: firstPosition.coords.latitude,
+        longitude: firstPosition.coords.longitude,
+        accuracy: firstPosition.coords.accuracy ?? 0,
+        sentAt,
       });
-      setLocations((current) => current.map((item) => item.userId === user?.id ? {
-        ...item,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy ?? 0,
-        updatedAt: new Date(position.timestamp).toISOString(),
-        sharingStatus: "SHARING",
-      } : item));
-    });
-    await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
-    const background = await Location.requestBackgroundPermissionsAsync();
-    if (background.granted && !await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
-      await Location.startLocationUpdatesAsync(TASK_NAME, {
+      await waitForFirstLocation(sentAt);
+      updateMyLocation(firstPosition);
+      watcher.current?.remove();
+      watcher.current = await Location.watchPositionAsync({
         accuracy: Location.Accuracy.High,
-        timeInterval: 10000,
-        distanceInterval: 20,
-        foregroundService: {
-          notificationTitle: "MeetFair 위치 공유 중",
-          notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
-        },
+        timeInterval: 5000,
+        distanceInterval: 10,
+      }, (position) => {
+        socket.emit("location:update", {
+          meetingId,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy ?? 0,
+          sentAt: new Date(position.timestamp).toISOString(),
+        });
+        updateMyLocation(position);
       });
+      await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
+      setSharing(true);
+      setMessage("실시간 위치 공유를 시작했습니다.");
+
+      try {
+        const background = await Location.requestBackgroundPermissionsAsync();
+        if (background.granted && !await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
+          await Location.startLocationUpdatesAsync(TASK_NAME, {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 10000,
+            distanceInterval: 20,
+            foregroundService: {
+              notificationTitle: "MeetFair 위치 공유 중",
+              notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
+            },
+          });
+        }
+      } catch {
+        setMessage("위치 공유를 시작했습니다. 백그라운드에서는 앱 설정에 따라 갱신이 제한될 수 있습니다.");
+      }
+    } catch (error) {
+      watcher.current?.remove();
+      watcher.current = null;
+      socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
+      await AsyncStorage.removeItem(TASK_STATE_KEY);
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: false }),
+      }).catch(() => undefined);
+      setSharing(false);
+      setMessage(error instanceof Error ? error.message : "위치 공유를 시작하지 못했습니다.");
     }
-    setSharing(true);
-    setMessage("실시간 위치 공유를 시작했습니다.");
   }
 
   async function stopSharing() {
