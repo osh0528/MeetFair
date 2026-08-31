@@ -222,6 +222,7 @@ export interface MeetingRecommendation {
   averageDurationMinutes: number;
   maximumDurationMinutes: number;
   timeGapMinutes: number;
+  fairnessScore: number;
   participantTravelTimes: ParticipantTravelTime[];
 }
 

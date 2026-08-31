@@ -18,7 +18,7 @@ export async function searchLocalPlaces(query: string): Promise<PlaceSearchResul
   if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
     throw new AppError(503, "PLACE_SEARCH_NOT_CONFIGURED", "Naver place search is not configured.");
   }
-  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&sort=random`;
+  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=15&sort=random`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {

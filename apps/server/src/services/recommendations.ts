@@ -85,6 +85,11 @@ async function estimateRoute(
   }
 }
 
+function fairnessScore(gap: number, max: number): number {
+  if (max === 0) return 100;
+  return Math.max(0, Math.round(100 * (1 - gap / max)));
+}
+
 export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
@@ -116,6 +121,7 @@ export async function generateRecommendations(meetingId: string, requesterId: st
         averageDurationMinutes: avg,
         maximumDurationMinutes: max,
         timeGapMinutes: gap,
+        fairnessScore: fairnessScore(gap, max),
         participantTravelTimes: candidate.travelEstimates.map((e) => ({
           userId: e.userId,
           nickname: e.user.nickname,
@@ -158,7 +164,7 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
   }> = [];
 
-  for (const place of places.slice(0, 3)) {
+  for (const place of places.slice(0, 12)) {
     const originTasks = origins.map((origin) => async () => {
       if (meeting.travelMetric === "DISTANCE") {
         const dist = Math.round(
@@ -223,6 +229,8 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     return avgA - avgB;
   });
 
+  const topCandidates = candidates.slice(0, 3);
+
   const persisted = await prisma.$transaction(async (tx) => {
     await tx.placeCandidate.deleteMany({ where: { meetingId, votes: { none: {} } } });
     const created: Array<{
@@ -236,8 +244,8 @@ export async function generateRecommendations(meetingId: string, requesterId: st
       recommendationRank: number;
       travelTimes: typeof candidates[number]["travelTimes"];
     }> = [];
-    for (let i = 0; i < candidates.length; i += 1) {
-      const c = candidates[i]!;
+    for (let i = 0; i < topCandidates.length; i += 1) {
+      const c = topCandidates[i]!;
       const candidate = await tx.placeCandidate.create({
         data: {
           meetingId,
@@ -280,6 +288,8 @@ export async function generateRecommendations(meetingId: string, requesterId: st
 
   return persisted.map((c) => {
     const times = c.travelTimes.map((t) => t.durationMinutes);
+    const gap = Math.max(...times) - Math.min(...times);
+    const max = Math.max(...times);
     return {
       id: c.id,
       providerPlaceId: c.providerPlaceId,
@@ -290,8 +300,9 @@ export async function generateRecommendations(meetingId: string, requesterId: st
       category: c.category,
       recommendationRank: c.recommendationRank,
       averageDurationMinutes: Math.round(times.reduce((a, b) => a + b, 0) / times.length),
-      maximumDurationMinutes: Math.max(...times),
-      timeGapMinutes: Math.max(...times) - Math.min(...times),
+      maximumDurationMinutes: max,
+      timeGapMinutes: gap,
+      fairnessScore: fairnessScore(gap, max),
       participantTravelTimes: c.travelTimes,
     };
   });
@@ -356,7 +367,7 @@ export async function generateMidpointRecommendations(
     travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
   }> = [];
 
-  for (const place of places.slice(0, 3)) {
+  for (const place of places.slice(0, 12)) {
     const originTasks = origins.map((origin) => async () => {
       if (meeting.travelMetric === "DISTANCE") {
         const dist = Math.round(
@@ -421,6 +432,8 @@ export async function generateMidpointRecommendations(
     return avgA - avgB;
   });
 
+  const topCandidates = candidates.slice(0, 3);
+
   const persisted = await prisma.$transaction(async (tx) => {
     await tx.placeCandidate.deleteMany({ where: { meetingId, votes: { none: {} } } });
     const created: Array<{
@@ -434,8 +447,8 @@ export async function generateMidpointRecommendations(
       recommendationRank: number;
       travelTimes: typeof candidates[number]["travelTimes"];
     }> = [];
-    for (let i = 0; i < candidates.length; i += 1) {
-      const c = candidates[i]!;
+    for (let i = 0; i < topCandidates.length; i += 1) {
+      const c = topCandidates[i]!;
       const candidate = await tx.placeCandidate.create({
         data: {
           meetingId,
@@ -490,6 +503,7 @@ export async function generateMidpointRecommendations(
       averageDurationMinutes: Math.round(times.reduce((a, b) => a + b, 0) / times.length),
       maximumDurationMinutes: Math.max(...times),
       timeGapMinutes: Math.max(...times) - Math.min(...times),
+      fairnessScore: fairnessScore(Math.max(...times) - Math.min(...times), Math.max(...times)),
       participantTravelTimes: c.travelTimes,
     };
   });
