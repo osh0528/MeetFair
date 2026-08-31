@@ -220,7 +220,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     webViewRef.current?.injectJavaScript(
       `window.meetfairFocus(${focusTarget.latitude}, ${focusTarget.longitude}); true;`,
     );
-  }, [focusTarget]);
+  }, [focusTarget, ready]);
 
   useEffect(() => {
     if (!readyRef.current) return;

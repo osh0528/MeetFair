@@ -9,10 +9,11 @@ interface ButtonProps {
   variant?: ButtonVariant;
   leftLabel?: string;
   disabled?: boolean;
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-export function Button({ label, onPress, variant = "primary", leftLabel, disabled = false, style }: ButtonProps) {
+export function Button({ label, onPress, variant = "primary", leftLabel, disabled = false, compact = false, style }: ButtonProps) {
   const backgroundStyle = variant === "primary" ? styles.primaryButton : variant === "soft" ? styles.softButton : styles.secondaryButton;
   const textStyle = variant === "primary" ? styles.primaryButtonText : variant === "soft" ? styles.softButtonText : styles.secondaryButtonText;
 
@@ -22,26 +23,28 @@ export function Button({ label, onPress, variant = "primary", leftLabel, disable
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, backgroundStyle, style, pressed && !disabled && styles.pressed, disabled && styles.disabled]}
+      style={({ pressed }) => [styles.button, compact && styles.compactButton, backgroundStyle, style, pressed && !disabled && styles.pressed, disabled && styles.disabled]}
     >
       {leftLabel ? (
         <View style={[styles.buttonIcon, variant !== "primary" && styles.buttonIconLight]}>
           <Text style={[styles.buttonIconText, variant !== "primary" && styles.buttonIconTextDark]}>{leftLabel}</Text>
         </View>
       ) : null}
-      <Text style={[styles.buttonText, textStyle]}>{label}</Text>
+      <Text style={[styles.buttonText, compact && styles.compactButtonText, textStyle]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 54, borderRadius: 6, paddingHorizontal: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 9 },
+  button: { minHeight: 46, borderRadius: 6, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
+  compactButton: { minHeight: 38, alignSelf: "flex-start", paddingHorizontal: 12 },
   primaryButton: { backgroundColor: colors.primary },
   secondaryButton: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   softButton: { backgroundColor: colors.primarySoft },
   pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.45 },
   buttonText: { fontSize: 16, fontWeight: "800" },
+  compactButtonText: { fontSize: 13 },
   primaryButtonText: { color: colors.surface },
   secondaryButtonText: { color: colors.text },
   softButtonText: { color: colors.primary },

@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
-import { KakaoAddressMap } from "../components/KakaoAddressMap";
+import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
 import { apiRequest } from "../services/api";
 import { requestCameraAccess } from "../services/camera-permission";
 import { colors } from "../theme/colors";
@@ -301,7 +301,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
           </Pressable>
         </View>
         <View style={styles.placeMap}>
-          <KakaoAddressMap
+          <ExpandableKakaoAddressMap
             focusTarget={placeFocusTarget}
             interactive
             onResolved={handlePlaceResolved}

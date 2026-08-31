@@ -83,8 +83,10 @@ export function FriendRequestsScreen({ navigation }: Props) {
               <Avatar imageUrl={avatarUrl(request.requester.id, request.requester.avatarUpdatedAt)} name={request.requester.nickname} />
               <View><Text style={styles.name}>{request.requester.nickname}</Text><Text style={styles.meta}>@{request.requester.accountId}</Text></View>
             </View>
-            <Button disabled={busyId === request.id} label={busyId === request.id ? "처리 중..." : "수락"} onPress={() => respond(request.id, "accept")} />
-            <Button disabled={busyId === request.id} label="거절" onPress={() => respond(request.id, "reject")} variant="secondary" />
+            <View style={styles.actions}>
+              <Button compact disabled={busyId === request.id} label={busyId === request.id ? "처리 중..." : "수락"} onPress={() => respond(request.id, "accept")} />
+              <Button compact disabled={busyId === request.id} label="거절" onPress={() => respond(request.id, "reject")} variant="secondary" />
+            </View>
           </Card>
         ))}
         {!loading && !received.length ? <Text style={styles.empty}>받은 친구 요청이 없습니다.</Text> : null}
@@ -109,6 +111,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 12, paddingBottom: 40 },
   card: { gap: 9 },
   userRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   name: { color: colors.text, fontWeight: "900" },
   meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   message: { color: colors.red, fontSize: 12 },

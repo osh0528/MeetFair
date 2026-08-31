@@ -230,8 +230,10 @@ export function ProfileScreen({ navigation }: Props) {
             size={96}
           />
           <Text style={styles.sectionTitle}>프로필 사진</Text>
-          <Button disabled={avatarBusy} label={avatarBusy ? "처리 중..." : "사진 선택 및 조절"} onPress={chooseAvatar} variant="soft" />
-          {session.user?.avatarUpdatedAt ? <Button disabled={avatarBusy} label="사진 삭제" onPress={removeAvatar} variant="secondary" /> : null}
+          <View style={styles.inlineActions}>
+            <Button compact disabled={avatarBusy} label={avatarBusy ? "처리 중..." : "사진 선택 및 조절"} onPress={chooseAvatar} variant="soft" />
+            {session.user?.avatarUpdatedAt ? <Button compact disabled={avatarBusy} label="사진 삭제" onPress={removeAvatar} variant="secondary" /> : null}
+          </View>
           <Text style={styles.note}>사진 선택 후 확대·축소와 위치를 조절할 수 있습니다. 적용 이미지는 정사각형 JPEG로 저장됩니다.</Text>
         </Card>
         <Card style={styles.form}>
@@ -249,8 +251,10 @@ export function ProfileScreen({ navigation }: Props) {
           <Text style={styles.sectionTitle}>집 주소</Text>
           <Text style={styles.note}>장소 추천에 사용되며 다른 사용자에게 공개되지 않습니다.</Text>
           <Text style={styles.address}>{homeAddress || "설정된 집 주소가 없습니다."}</Text>
-          <Button label={homeAddress ? "집 주소 변경" : "집 주소 설정"} onPress={() => navigation.navigate("AddressSearch", { returnTo: "Profile" })} variant="soft" />
-          {homeAddress ? <Button label="집 주소 삭제" onPress={() => void removeHomeAddress()} variant="secondary" /> : null}
+          <View style={styles.inlineActions}>
+            <Button compact label={homeAddress ? "집 주소 변경" : "집 주소 설정"} onPress={() => navigation.navigate("AddressSearch", { returnTo: "Profile" })} variant="soft" />
+            {homeAddress ? <Button compact label="집 주소 삭제" onPress={() => void removeHomeAddress()} variant="secondary" /> : null}
+          </View>
         </Card>
         <Card style={styles.form}>
           <Text style={styles.sectionTitle}>비밀번호 변경</Text>
@@ -341,8 +345,8 @@ export function ProfileScreen({ navigation }: Props) {
               <AdjustButton label="↓" onPress={() => moveCrop(0, -18)} />
             </View>
             <View style={styles.editorActions}>
-              <Button disabled={avatarBusy} label="취소" onPress={() => setPendingAvatar(null)} variant="secondary" />
-              <Button disabled={avatarBusy} label={avatarBusy ? "적용 중..." : "이대로 적용"} onPress={() => void applyAvatar()} />
+              <Button compact disabled={avatarBusy} label="취소" onPress={() => setPendingAvatar(null)} variant="secondary" />
+              <Button compact disabled={avatarBusy} label={avatarBusy ? "적용 중..." : "이대로 적용"} onPress={() => void applyAvatar()} />
             </View>
           </SafeAreaView>
         </View>
@@ -395,6 +399,7 @@ const styles = StyleSheet.create({
   dangerCard: { gap: 10, borderColor: colors.red },
   dangerTitle: { color: colors.red, fontSize: 17, fontWeight: "900" },
   avatarCard: { alignItems: "center", gap: 10 },
+  inlineActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(25,26,32,0.55)", justifyContent: "flex-end" },
   editorSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, padding: 22, alignItems: "center", gap: 12 },
   editorTitle: { color: colors.text, fontSize: 20, fontWeight: "900" },
@@ -411,5 +416,5 @@ const styles = StyleSheet.create({
   adjustText: { color: colors.primary, fontSize: 22, fontWeight: "900" },
   resetButton: { width: 72, height: 40, borderRadius: 6, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
   resetText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  editorActions: { alignSelf: "stretch", gap: 8, marginTop: 2 },
+  editorActions: { alignSelf: "stretch", flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 2 },
 });

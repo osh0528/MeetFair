@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
@@ -138,6 +138,15 @@ export function TrackingScreen({ navigation, route }: Props) {
     };
   }, [accessToken, meetingId]);
 
+  useEffect(() => {
+    if (!mapExpanded) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setMapExpanded(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [mapExpanded]);
+
   const mapCenter = useMemo(() => {
     const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
     return meeting?.confirmedPlace ?? (mine ? { latitude: mine.latitude!, longitude: mine.longitude! } : { latitude: 37.5665, longitude: 126.978 });
@@ -220,7 +229,9 @@ export function TrackingScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
+      <View style={mapExpanded && styles.hidden}>
+        <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
+      </View>
       {meeting ? (
         <NaverMapView
           style={[styles.map, mapExpanded && styles.mapExpanded]}
@@ -270,8 +281,8 @@ export function TrackingScreen({ navigation, route }: Props) {
         ))}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
-          <Button label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
-          <Button label="도착 처리" onPress={arrive} variant="soft" />
+          <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
+          <Button compact label="도착 처리" onPress={arrive} variant="soft" />
         </View>
       </View> : null}
     </SafeAreaView>
@@ -283,7 +294,8 @@ const styles = StyleSheet.create({
   map: { flex: 1, minHeight: 300 },
   mapExpanded: { minHeight: 0 },
   mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
-  collapseMapButton: { position: "absolute", top: 78, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
+  hidden: { display: "none" },
+  collapseMapButton: { position: "absolute", top: 14, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
   collapseMapButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -292,7 +304,7 @@ const styles = StyleSheet.create({
   personName: { color: colors.text, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-  actions: { gap: 8 },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   liveMarker: { width: 110, alignItems: "center", gap: 3 },
   liveDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#1677FF", borderWidth: 4, borderColor: "#FFFFFF", shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 5 },
   liveLabel: { maxWidth: 105, borderRadius: 4, overflow: "hidden", backgroundColor: "#1677FF", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },

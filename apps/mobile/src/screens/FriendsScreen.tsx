@@ -249,7 +249,7 @@ export function FriendsScreen({ navigation }: Props) {
                       ? "근처에 있어요"
                       : "공통 친구 " + recommendation.mutualFriendCount + "명"}
                   </Text>
-                  <Button disabled={recommendationBusyId === recommendation.userId} label={recommendationBusyId === recommendation.userId ? "전송 중" : "친구 추가"} onPress={() => void sendRecommendationRequest(recommendation)} variant="soft" />
+                  <Button compact disabled={recommendationBusyId === recommendation.userId} label={recommendationBusyId === recommendation.userId ? "전송 중" : "친구 추가"} onPress={() => void sendRecommendationRequest(recommendation)} variant="soft" />
                 </Card>
               ))}
             </ScrollView>
@@ -272,12 +272,8 @@ export function FriendsScreen({ navigation }: Props) {
               <Switch disabled={busyFriendId === friend.userId} value={friend.allowsPokesFromFriend} onValueChange={(allowed) => void updatePokePermission(friend, allowed)} />
             </View>
             <View style={styles.actionRow}>
-              <View style={styles.actionHalf}>
-                <Button disabled={busyFriendId === friend.userId || !!pokeCooldowns[friend.userId]} label={pokeCooldowns[friend.userId] ? `${pokeCooldowns[friend.userId]}초 후 가능` : "찌르기"} onPress={() => void handlePoke(friend)} variant="soft" />
-              </View>
-              <View style={styles.actionHalf}>
-                <Button label="대화하기" onPress={() => navigation.navigate("DirectMessages", { friendUserId: friend.userId })} variant="secondary" />
-              </View>
+              <Button compact disabled={busyFriendId === friend.userId || !!pokeCooldowns[friend.userId]} label={pokeCooldowns[friend.userId] ? `${pokeCooldowns[friend.userId]}초 후 가능` : "찌르기"} onPress={() => void handlePoke(friend)} variant="soft" />
+              <Button compact label="대화하기" onPress={() => navigation.navigate("DirectMessages", { friendUserId: friend.userId })} variant="secondary" />
             </View>
           </Card>
         ))}
@@ -318,7 +314,6 @@ const styles = StyleSheet.create({
   permissionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   friendHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   friendCopy: { flex: 1, gap: 3 },
-  actionRow: { flexDirection: "row", gap: 8 },
-  actionHalf: { flex: 1 },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   disabled: { opacity: 0.5 },
 });

@@ -199,14 +199,17 @@ export function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>MeetFair</Text></View>
-        <Pressable accessibilityLabel="알림" onPress={() => navigation.navigate("Notifications")} style={styles.notificationButton}>
-          <Text style={styles.bell}>🔔</Text>
-          {unreadNotificationCount > 0 ? (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</Text>
-            </View>
-          ) : null}
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Button compact label="＋ 모임" onPress={() => navigation.navigate("CreateMeeting")} />
+          <Pressable accessibilityLabel="알림" onPress={() => navigation.navigate("Notifications")} style={styles.notificationButton}>
+            <Text style={styles.bell}>🔔</Text>
+            {unreadNotificationCount > 0 ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
@@ -216,14 +219,13 @@ export function HomeScreen({ navigation }: Props) {
 
         <View style={styles.meetingDashboard}>
           <View style={styles.meetingColumn}>
-            <Button label="＋ 새 모임 생성" onPress={() => navigation.navigate("CreateMeeting")} />
             <View style={styles.columnSection}>
               <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
               {invitations.map((item) => (
                 <Card key={item.id} style={styles.columnCard}>
                   <Text style={styles.cardTitle}>{item.meetingTitle}</Text>
                   <Text style={styles.meta}>{item.inviter.nickname}님의 초대 · {new Date(item.scheduledAt).toLocaleString("ko-KR")}</Text>
-                  <Button label="초대 확인" onPress={() => navigation.navigate("MeetingInvitation", { invitation: item })} variant="soft" />
+                  <Button compact label="초대 확인" onPress={() => navigation.navigate("MeetingInvitation", { invitation: item })} variant="soft" />
                 </Card>
               ))}
               {!invitations.length ? <Text style={styles.empty}>대기 중인 초대가 없습니다.</Text> : null}
@@ -255,11 +257,14 @@ export function HomeScreen({ navigation }: Props) {
               </View>
               <Pill label={call.participantStatus === "JOINED" ? "진행 중" : "수신 중"} tone="red" />
             </View>
-            <Button
-              label={call.participantStatus === "JOINED" ? "다시 참여" : "통화 참여"}
-              onPress={() => navigation.navigate("VideoCall", { callId: call.id, meetingId: call.meetingId })}
-            />
-            {call.participantStatus === "RINGING" ? <Button label="거절" onPress={() => void declineCall(call.id)} variant="secondary" /> : null}
+            <View style={styles.cardActions}>
+              <Button
+                compact
+                label={call.participantStatus === "JOINED" ? "다시 참여" : "통화 참여"}
+                onPress={() => navigation.navigate("VideoCall", { callId: call.id, meetingId: call.meetingId })}
+              />
+              {call.participantStatus === "RINGING" ? <Button compact label="거절" onPress={() => void declineCall(call.id)} variant="secondary" /> : null}
+            </View>
           </Card>
         ))}
 
@@ -269,6 +274,7 @@ export function HomeScreen({ navigation }: Props) {
             <Text style={styles.cardTitle}>{activity.friend.nickname}님이 약속을 잡았어요</Text>
             <Text style={styles.meta}>상세 정보는 참가 승인 후 확인할 수 있습니다.</Text>
             <Button
+              compact
               disabled={activity.joinRequestStatus === "PENDING"}
               label={activity.joinRequestStatus === "PENDING" ? "승인 대기 중" : "참가 신청"}
               onPress={() => navigation.navigate("PublicMeetingRequest", { meetingId: activity.meetingId })}
@@ -285,6 +291,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   header: { height: 64, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
   notificationButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center", position: "relative" },
   bell: { fontSize: 25 },
@@ -338,6 +345,7 @@ const styles = StyleSheet.create({
   startingSoonTitle: { color: colors.text, fontSize: 17 },
   startingSoonMeta: { color: colors.red, fontWeight: "800" },
   callCard: { gap: 9, borderColor: colors.red },
+  cardActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   callCopy: { flex: 1, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },

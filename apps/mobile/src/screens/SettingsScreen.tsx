@@ -65,7 +65,11 @@ export function SettingsScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScreenHeader title="설정" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="설정"
+        onBack={() => navigation.goBack()}
+        right={<Button compact label="개인정보" onPress={() => navigation.navigate("Profile")} variant="secondary" />}
+      />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Card style={styles.themeCard}>
           <Text style={styles.title}>화면 테마</Text>
@@ -85,7 +89,6 @@ export function SettingsScreen({ navigation }: Props) {
             ))}
           </View>
         </Card>
-        <Button label="개인정보 관리" onPress={() => navigation.navigate("Profile")} variant="secondary" />
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
            <Switch value={location} onValueChange={(value) => { setLocation(value); void update({ shareExactLocationWithFriends: value }); }} />
@@ -103,10 +106,12 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.note}>이 시간에는 일반 찌르기 푸시를 모아서 나중에 알려줍니다.</Text>
           <TextInput onChangeText={setQuietStart} placeholder="23:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietStart} />
           <TextInput onChangeText={setQuietEnd} placeholder="08:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietEnd} />
-          <Button disabled={saving} label={saving ? "저장 중..." : "방해 금지 시간 저장"} onPress={saveQuietTime} variant="soft" />
+          <Button compact disabled={saving} label={saving ? "저장 중..." : "방해 금지 시간 저장"} onPress={saveQuietTime} variant="soft" />
         </Card>
         {message ? <Text style={styles.message}>{message}</Text> : null}
-        <Button label="로그아웃" onPress={async () => { await session.logout(); navigation.replace("Login"); }} variant="secondary" />
+        <View style={styles.pageActions}>
+          <Button compact label="로그아웃" onPress={async () => { await session.logout(); navigation.replace("Login"); }} variant="secondary" />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -132,6 +137,7 @@ const styles = StyleSheet.create({
   themeOptionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
   themeOptionTextSelected: { color: colors.surface },
   formCard: { gap: 9 },
+  pageActions: { flexDirection: "row", justifyContent: "flex-end" },
   input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 14, color: colors.text },
   title: { flex: 1, color: colors.text, fontWeight: "900", paddingRight: 10 },
   note: { color: colors.muted, fontSize: 11, lineHeight: 17 },

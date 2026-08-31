@@ -47,8 +47,10 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
           <Text style={styles.notice}>지각자가 있으면 방장과 지각자에게 그룹 영상통화가 발신됩니다. 참여하려면 카메라 권한이 필요합니다.</Text>
         </Card>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button label="카메라 확인 후 수락" onPress={() => respond("accept")} />
-        <Button label="거절" onPress={() => respond("reject")} variant="secondary" />
+        <View style={styles.actions}>
+          <Button compact label="카메라 확인 후 수락" onPress={() => respond("accept")} />
+          <Button compact label="거절" onPress={() => respond("reject")} variant="secondary" />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -62,4 +64,5 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted },
   notice: { color: colors.red, fontSize: 12, lineHeight: 19 },
   error: { color: colors.red },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
 });

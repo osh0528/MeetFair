@@ -249,8 +249,8 @@ export function TrackingScreen({ navigation, route }: Props) {
         ))}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
-          <Button label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={() => void (sharing ? stopSharing() : startSharing())} variant={sharing ? "secondary" : "primary"} />
-          <Button label="도착 처리" onPress={() => void arrive()} variant="soft" />
+          <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={() => void (sharing ? stopSharing() : startSharing())} variant={sharing ? "secondary" : "primary"} />
+          <Button compact label="도착 처리" onPress={() => void arrive()} variant="soft" />
         </View>
       </View>
     </SafeAreaView>
@@ -275,5 +275,5 @@ const styles = StyleSheet.create({
   personName: { color: colors.text, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-  actions: { gap: 8 },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
 });
