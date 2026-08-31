@@ -1,7 +1,7 @@
 import type { FriendSummary, MeetingCallSummary, MeetingMemberStatusEntry, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
@@ -98,6 +98,8 @@ function travelStats(
 }
 
 export function MeetingScreen({ navigation, route }: Props) {
+  const { width: windowWidth } = useWindowDimensions();
+  const isWideLayout = windowWidth >= 720;
   const { user } = useSession();
   const meetingId = route.params.meetingId;
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
@@ -482,10 +484,15 @@ export function MeetingScreen({ navigation, route }: Props) {
             </Pressable>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
-            {meeting.placeCandidates.map((candidate) => {
-              const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
-              return (
-                <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
+            <View style={styles.cardGrid}>
+              {meeting.placeCandidates.map((candidate) => {
+                const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
+                return (
+                  <Pressable
+                    key={candidate.id}
+                    onPress={() => vote(candidate.id)}
+                    style={[styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}
+                  >
                   <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
                     {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
                     <View style={styles.row}><Text style={[styles.cardTitle, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
@@ -508,9 +515,10 @@ export function MeetingScreen({ navigation, route }: Props) {
                       </>
                     ) : null}
                   </Card>
-                </Pressable>
-              );
-            })}
+                  </Pressable>
+                );
+              })}
+            </View>
             <Button label="지도에서 장소 직접 추천" onPress={() => setShowPlacePicker((current) => !current)} variant="soft" />
             {showPlacePicker ? (
               <Card style={styles.placePickerCard}>
@@ -565,10 +573,11 @@ export function MeetingScreen({ navigation, route }: Props) {
         )}
 
         <SectionHeading title="참여자" action={`${meeting.participants.length}명`} />
-        {meeting.participants.map((participant) => {
-          const late = started && !participant.arrivedAt;
-          return (
-            <Card key={participant.userId} style={styles.card}>
+        <View style={styles.cardGrid}>
+          {meeting.participants.map((participant) => {
+            const late = started && !participant.arrivedAt;
+            return (
+              <Card key={participant.userId} style={[styles.card, styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}>
               <View style={styles.row}>
                 <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
                 <View style={styles.compactActions}>
@@ -578,9 +587,10 @@ export function MeetingScreen({ navigation, route }: Props) {
                   ) : null}
                 </View>
               </View>
-            </Card>
-          );
-        })}
+              </Card>
+            );
+          })}
+        </View>
 
         {isHost ? <SectionHeading title="친구 추가 초대" action="시작 30분 전까지" /> : null}
         {isHost && canInvite ? (
@@ -590,19 +600,27 @@ export function MeetingScreen({ navigation, route }: Props) {
               onPress={() => setShowInvitePicker((current) => !current)}
               variant="soft"
             />
-            {showInvitePicker ? availableFriends.map((friend) => {
-              const selected = selectedInvitees.includes(friend.userId);
-              return (
-                <Pressable key={friend.userId} onPress={() => toggleInvitee(friend.userId)}>
+            {showInvitePicker ? (
+              <View style={styles.cardGrid}>
+                {availableFriends.map((friend) => {
+                  const selected = selectedInvitees.includes(friend.userId);
+                  return (
+                    <Pressable
+                      key={friend.userId}
+                      onPress={() => toggleInvitee(friend.userId)}
+                      style={[styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}
+                    >
                   <Card style={[styles.card, selected && styles.selectedCard]}>
                     <View style={styles.row}>
                       <Text style={styles.cardTitle}>{friend.nickname} · @{friend.accountId}</Text>
                       <Text style={styles.selection}>{selected ? "선택됨" : "선택"}</Text>
                     </View>
                   </Card>
-                </Pressable>
-              );
-            }) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
             {showInvitePicker && !availableFriends.length ? <Text style={styles.meta}>추가로 초대할 수 있는 친구가 없습니다.</Text> : null}
             {showInvitePicker && selectedInvitees.length ? (
               <Button label={`${selectedInvitees.length}명 초대하기`} onPress={inviteFriends} />
@@ -631,24 +649,26 @@ export function MeetingScreen({ navigation, route }: Props) {
         ))}
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
-        {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button label="도착 처리" onPress={arrive} /> : null}
-        {meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
-          <Button
-            disabled={busyAction === "call"}
-            label={busyAction === "call" ? "통화 연결 중..." : started ? "영상통화 참여" : "사전 영상통화 자유 참여"}
-            onPress={() => void joinMeetingCall()}
-            variant="soft"
-          />
-        ) : null}
-        {meeting.status !== "CANCELLED" ? <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" /> : null}
-        {meeting.status !== "CANCELLED" ? <Button label="채팅" onPress={() => navigation.navigate("MeetingChat", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
-        {meeting.status !== "CANCELLED" ? <Button label="게시판" onPress={() => navigation.navigate("MeetingBoard", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
-        {isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
-          <Button disabled={busyAction === "cancel"} label={busyAction === "cancel" ? "취소 처리 중..." : "모임 취소"} onPress={cancelMeeting} variant="secondary" />
-        ) : null}
-        {isHost && (meeting.status === "COMPLETED" || meeting.status === "CANCELLED") ? (
-          <Button disabled={busyAction === "delete"} label={busyAction === "delete" ? "삭제 중..." : "모임 기록 삭제"} onPress={deleteMeeting} variant="secondary" />
-        ) : null}
+        <View style={styles.actionGrid}>
+          {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button label="도착 처리" onPress={arrive} style={styles.actionButton} /> : null}
+          {meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+            <Button
+              disabled={busyAction === "call"}
+              label={busyAction === "call" ? "통화 연결 중..." : started ? "영상통화 참여" : "사전 영상통화 참여"}
+              onPress={() => void joinMeetingCall()}
+              style={styles.actionButton}
+              variant="soft"
+            />
+          ) : null}
+          {meeting.status !== "CANCELLED" ? <Button label="실시간 위치" onPress={() => navigation.navigate("Tracking", { meetingId })} style={styles.actionButton} variant="secondary" /> : null}
+          {meeting.status !== "CANCELLED" ? <Button label="채팅" onPress={() => navigation.navigate("MeetingChat", { meetingId, meetingTitle: meeting.title })} style={styles.actionButton} variant="secondary" /> : null}
+          {isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+            <Button disabled={busyAction === "cancel"} label={busyAction === "cancel" ? "취소 처리 중..." : "모임 취소"} onPress={cancelMeeting} style={styles.actionButton} variant="secondary" />
+          ) : null}
+          {isHost && (meeting.status === "COMPLETED" || meeting.status === "CANCELLED") ? (
+            <Button disabled={busyAction === "delete"} label={busyAction === "delete" ? "삭제 중..." : "모임 기록 삭제"} onPress={deleteMeeting} style={styles.actionButton} variant="secondary" />
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -671,6 +691,11 @@ const styles = StyleSheet.create({
   loading: { padding: 20, color: colors.muted },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
+  cardGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 10 },
+  cardGridItem: { width: "48%", flexGrow: 1 },
+  cardGridItemNarrow: { width: "100%" },
+  actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  actionButton: { flexGrow: 1, flexBasis: 145, paddingHorizontal: 10 },
   recommendButton: { minHeight: 104, borderRadius: 22, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   recommendButtonPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   recommendGlow: { position: "absolute", width: 150, height: 150, borderRadius: 75, right: -35, top: -70, backgroundColor: "rgba(96,165,250,0.32)" },
