@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   themeOption: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: "center",
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   themeOptionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
   themeOptionTextSelected: { color: colors.surface },
   formCard: { gap: 9 },
-  input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, color: colors.text },
+  input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 14, color: colors.text },
   title: { flex: 1, color: colors.text, fontWeight: "900", paddingRight: 10 },
   note: { color: colors.muted, fontSize: 11, lineHeight: 17 },
   message: { color: colors.primary, fontSize: 12, fontWeight: "700" },

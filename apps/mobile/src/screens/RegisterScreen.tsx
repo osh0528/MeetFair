@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 24, lineHeight: 32, fontWeight: "900", marginBottom: 8 },
   field: { gap: 7 },
   label: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  input: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, color: colors.text },
+  input: { height: 52, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, color: colors.text },
   hint: { color: colors.muted, fontSize: 11 },
   error: { color: colors.red, fontSize: 12 },
 });

@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   container: { padding: 24, gap: 14 },
   brand: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   title: { color: colors.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
-  input: { height: 54, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },
+  input: { height: 54, borderRadius: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },
   rememberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
   checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },

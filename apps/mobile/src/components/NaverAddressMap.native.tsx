@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   pinHalo: { position: "absolute", alignSelf: "center", top: "30%", width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(3,169,77,0.16)", alignItems: "center", justifyContent: "center" },
   pin: { width: 46, height: 46, borderRadius: 17, backgroundColor: "#03A94D", alignItems: "center", justifyContent: "center" },
   pinText: { color: colors.surface, fontSize: 18, fontWeight: "900" },
-  message: { position: "absolute", left: 16, right: 16, bottom: 15, borderRadius: 14, backgroundColor: colors.surface, padding: 12 },
+  message: { position: "absolute", left: 16, right: 16, bottom: 15, borderRadius: 6, backgroundColor: colors.surface, padding: 12 },
   messageTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   messageText: { color: colors.muted, fontSize: 10, marginTop: 4 },
 });

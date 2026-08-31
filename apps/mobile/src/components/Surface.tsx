@@ -72,7 +72,7 @@ export function SectionHeading({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
+    borderRadius: 8,
     padding: 18,
     borderWidth: 1,
     borderColor: colors.border,
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 6,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

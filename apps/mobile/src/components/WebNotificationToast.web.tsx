@@ -71,7 +71,7 @@ export function WebNotificationToast() {
 
 const styles = StyleSheet.create({
   container: { position: "absolute", right: 24, bottom: 28, width: 380, gap: 10, zIndex: 1000 },
-  toast: { flexDirection: "row", alignItems: "flex-start", gap: 14, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(32,34,38,0.97)", paddingVertical: 17, paddingLeft: 19, paddingRight: 12, shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  toast: { flexDirection: "row", alignItems: "flex-start", gap: 14, borderRadius: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(32,34,38,0.97)", paddingVertical: 17, paddingLeft: 19, paddingRight: 12, shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   copy: { flex: 1, gap: 4 },
   title: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
   body: { color: "#D4D7DA", fontSize: 13, lineHeight: 20, fontWeight: "600" },

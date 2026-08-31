@@ -313,6 +313,6 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
 const styles = StyleSheet.create({
   wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB", overflow: "hidden" },
   fallback: { alignItems: "center", justifyContent: "center", padding: 16 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 6, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
 });

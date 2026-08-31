@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   headerButton: {
     paddingHorizontal: 14,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 6,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   createLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
   titleInput: {
     height: 44,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   contentInput: {
     minHeight: 90,
     maxHeight: 140,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     paddingHorizontal: 10,
     height: 30,
-    borderRadius: 10,
+    borderRadius: 5,
     backgroundColor: colors.redSoft,
     alignItems: "center",
     justifyContent: "center",

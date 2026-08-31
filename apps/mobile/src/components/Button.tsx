@@ -35,7 +35,7 @@ export function Button({ label, onPress, variant = "primary", leftLabel, disable
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 54, borderRadius: 16, paddingHorizontal: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 9 },
+  button: { minHeight: 54, borderRadius: 6, paddingHorizontal: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 9 },
   primaryButton: { backgroundColor: colors.primary },
   secondaryButton: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   softButton: { backgroundColor: colors.primarySoft },

@@ -10,7 +10,7 @@ export function Pill({ label, tone = "purple" }: { label: string; tone?: PillTon
 }
 
 const styles = StyleSheet.create({
-  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  pill: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
   text: { fontSize: 12, fontWeight: "800" },
   purplePill: { backgroundColor: colors.primarySoft },
   purpleText: { color: colors.primary },

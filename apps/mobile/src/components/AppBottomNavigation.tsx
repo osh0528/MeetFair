@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     gap: 4,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 6,
   },
   itemPressed: { opacity: 0.68 },
   icon: {
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     height: 27,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 5,
     backgroundColor: colors.background,
   },
   iconActive: { backgroundColor: colors.primary, transform: [{ scale: 1.08 }] },

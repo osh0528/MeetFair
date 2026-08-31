@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
   columnSection: { gap: 10 },
-  columnCard: { gap: 9, padding: 14, borderRadius: 18 },
+  columnCard: { gap: 9, padding: 14, borderRadius: 6 },
   meetingPressable: { position: "relative" },
   soonGlow: {
     position: "absolute",
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: -4,
     left: -4,
-    borderRadius: 26,
+    borderRadius: 10,
     backgroundColor: "#FF3B6B",
   },
   startingSoonCard: {

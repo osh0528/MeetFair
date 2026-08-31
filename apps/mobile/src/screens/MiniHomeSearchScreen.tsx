@@ -70,7 +70,7 @@ export function MiniHomeSearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 14 },
-  searchBox: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  searchBox: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   searchIcon: { color: colors.muted, fontSize: 24, lineHeight: 24 },
   input: { flex: 1, color: colors.text, fontSize: 14 },
   clear: { color: colors.muted, fontSize: 24, lineHeight: 24 },

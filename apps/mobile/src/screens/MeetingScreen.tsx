@@ -460,6 +460,8 @@ export function MeetingScreen({ navigation, route }: Props) {
           </>
         ) : null}
 
+        <View style={[styles.detailLayout, !isWideLayout && styles.detailLayoutNarrow]}>
+          <View style={styles.mainColumn}>
         {meeting.confirmedPlace ? (
           <Card style={styles.card}>
             <Text style={styles.cardTitle}>확정 장소 · {meeting.confirmedPlace.name}</Text>
@@ -571,13 +573,16 @@ export function MeetingScreen({ navigation, route }: Props) {
             {!meeting.placeCandidates.length ? <Button label="추천 후보 보기" onPress={() => navigation.navigate("Recommendations")} variant="soft" /> : null}
           </>
         )}
+          </View>
+
+          <View style={[styles.sideColumn, !isWideLayout && styles.sideColumnNarrow]}>
 
         <SectionHeading title="참여자" action={`${meeting.participants.length}명`} />
-        <View style={styles.cardGrid}>
+        <View style={styles.sideList}>
           {meeting.participants.map((participant) => {
             const late = started && !participant.arrivedAt;
             return (
-              <Card key={participant.userId} style={[styles.card, styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}>
+              <Card key={participant.userId} style={styles.card}>
               <View style={styles.row}>
                 <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
                 <View style={styles.compactActions}>
@@ -601,14 +606,13 @@ export function MeetingScreen({ navigation, route }: Props) {
               variant="soft"
             />
             {showInvitePicker ? (
-              <View style={styles.cardGrid}>
+              <View style={styles.sideList}>
                 {availableFriends.map((friend) => {
                   const selected = selectedInvitees.includes(friend.userId);
                   return (
                     <Pressable
                       key={friend.userId}
                       onPress={() => toggleInvitee(friend.userId)}
-                      style={[styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}
                     >
                   <Card style={[styles.card, selected && styles.selectedCard]}>
                     <View style={styles.row}>
@@ -647,6 +651,8 @@ export function MeetingScreen({ navigation, route }: Props) {
             <Button label="거절" onPress={() => respondJoin(request.id, "reject")} variant="secondary" />
           </Card>
         ))}
+          </View>
+        </View>
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actionGrid}>
@@ -691,12 +697,18 @@ const styles = StyleSheet.create({
   loading: { padding: 20, color: colors.muted },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
+  detailLayout: { flexDirection: "row", alignItems: "flex-start", gap: 18 },
+  detailLayoutNarrow: { flexDirection: "column" },
+  mainColumn: { flex: 1, minWidth: 0, gap: 12 },
+  sideColumn: { width: 320, flexShrink: 0, gap: 12 },
+  sideColumnNarrow: { width: "100%" },
+  sideList: { gap: 10 },
   cardGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 10 },
   cardGridItem: { width: "48%", flexGrow: 1 },
   cardGridItemNarrow: { width: "100%" },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   actionButton: { flexGrow: 1, flexBasis: 145, paddingHorizontal: 10 },
-  recommendButton: { minHeight: 104, borderRadius: 22, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  recommendButton: { minHeight: 104, borderRadius: 8, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   recommendButtonPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   recommendGlow: { position: "absolute", width: 150, height: 150, borderRadius: 75, right: -35, top: -70, backgroundColor: "rgba(96,165,250,0.32)" },
   recommendSparkle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 25, lineHeight: 46, textAlign: "center", fontWeight: "900", borderWidth: 1, borderColor: "#93C5FD" },
@@ -706,31 +718,31 @@ const styles = StyleSheet.create({
   recommendDescription: { color: "#DBEAFE", fontSize: 10, lineHeight: 15 },
   recommendArrow: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
   recommendedCard: { borderWidth: 2, borderColor: "#3B82F6", backgroundColor: "#EFF6FF", shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 7 },
-  recommendedBadge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, overflow: "hidden", backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  recommendedBadge: { alignSelf: "flex-start", borderRadius: 5, paddingHorizontal: 10, paddingVertical: 5, overflow: "hidden", backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   recommendedCardTitle: { color: "#1D4ED8", fontSize: 16 },
-  travelMetrics: { flexDirection: "row", borderRadius: 14, backgroundColor: "rgba(37,99,235,0.07)", paddingVertical: 10 },
+  travelMetrics: { flexDirection: "row", borderRadius: 6, backgroundColor: "rgba(37,99,235,0.07)", paddingVertical: 10 },
   travelMetricItem: { flex: 1, alignItems: "center", gap: 3 },
   travelMetricCaption: { color: colors.muted, fontSize: 9, fontWeight: "800" },
   travelMetricValue: { color: colors.text, fontSize: 13, fontWeight: "900" },
   participantTimes: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  participantTimeChip: { borderRadius: 999, backgroundColor: colors.background, paddingHorizontal: 9, paddingVertical: 6 },
+  participantTimeChip: { borderRadius: 5, backgroundColor: colors.background, paddingHorizontal: 9, paddingVertical: 6 },
   participantTimeText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
   travelEstimateNotice: { color: colors.subtle, fontSize: 9, textAlign: "right" },
   placePickerCard: { gap: 10 },
-  placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
+  placeMap: { height: 280, borderRadius: 6, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   placeSearchInput: { flex: 1 },
-  searchButton: { minHeight: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  searchButton: { minHeight: 50, paddingHorizontal: 16, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   searchButtonText: { color: colors.surface, fontWeight: "900" },
   placeCandidateList: { gap: 8 },
-  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidate: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
   placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
   placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
   voteCountdown: { color: colors.red, fontWeight: "900", fontSize: 13 },
   selectedCard: { borderColor: colors.primary },
   cardTitle: { color: colors.text, fontWeight: "900" },
-  input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
+  input: { minHeight: 50, borderRadius: 6, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
   compactActions: { gap: 6 },
   selection: { color: colors.primary, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
