@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://meet-fair-web.vercel.app/sitemap.xml
+Host: meet-fair-web.vercel.app

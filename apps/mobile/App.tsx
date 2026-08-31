@@ -101,7 +101,7 @@ function AppNavigator() {
 
   return (
     <NavigationContainer
-      documentTitle={{ formatter: () => "MeetFair" }}
+      documentTitle={{ formatter: () => "MeetFair | 공평한 약속 장소와 실시간 모임 관리" }}
       ref={navigationRef}
       theme={navigationTheme}
       onReady={updateCurrentRoute}

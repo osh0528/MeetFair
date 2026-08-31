@@ -1,0 +1,17 @@
+{
+  "name": "MeetFair",
+  "short_name": "MeetFair",
+  "description": "공평한 장소 추천과 실시간 소통을 결합한 소셜 모임 플랫폼",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F7F5",
+  "theme_color": "#303030",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

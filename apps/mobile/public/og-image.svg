@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">MeetFair</title>
+  <desc id="description">모임 생성부터 만남까지 한 번에</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827" />
+      <stop offset="1" stop-color="#303030" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#3B82F6" stop-opacity="0.55" />
+      <stop offset="1" stop-color="#3B82F6" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" rx="42" fill="url(#background)" />
+  <circle cx="1010" cy="110" r="300" fill="url(#glow)" />
+  <circle cx="170" cy="535" r="210" fill="url(#glow)" opacity="0.45" />
+  <rect x="88" y="86" width="94" height="94" rx="28" fill="#2563EB" />
+  <path d="M111 157V109h12l12 18 12-18h12v48h-12v-27l-12 18-12-18v27z" fill="#FFFFFF" />
+  <text x="88" y="286" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="96" font-weight="800">MeetFair</text>
+  <text x="92" y="364" fill="#BFDBFE" font-family="Arial, sans-serif" font-size="38" font-weight="700">공평한 장소 추천 · 실시간 위치 · 소통</text>
+  <text x="92" y="438" fill="#E5E7EB" font-family="Arial, sans-serif" font-size="31">모임 생성부터 만남까지 한 번에</text>
+  <g transform="translate(822 382)">
+    <circle cx="0" cy="0" r="34" fill="#FFFFFF" />
+    <circle cx="126" cy="-72" r="34" fill="#93C5FD" />
+    <circle cx="234" cy="26" r="34" fill="#FFFFFF" />
+    <path d="M28-14L96-55M154-48L207 2M32 10L204 24" stroke="#60A5FA" stroke-width="10" stroke-linecap="round" opacity="0.9" />
+    <circle cx="126" cy="20" r="25" fill="#2563EB" stroke="#FFFFFF" stroke-width="8" />
+  </g>
+</svg>

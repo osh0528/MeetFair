@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build:shared": "npm run build -w @meetfair/shared",
+    "build:web": "npm run build:web -w @meetfair/mobile",
     "build": "npm run build:shared && npm run build -w @meetfair/server",
     "dev:server": "npm run build:shared && npm run dev -w @meetfair/server",
     "dev:mobile": "npm run build:shared && npm run start -w @meetfair/mobile",
