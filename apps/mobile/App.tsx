@@ -101,7 +101,7 @@ function AppNavigator() {
 
   return (
     <NavigationContainer
-      documentTitle={{ formatter: () => "Meet World" }}
+      documentTitle={{ formatter: () => "MeetFair" }}
       ref={navigationRef}
       theme={navigationTheme}
       onReady={updateCurrentRoute}

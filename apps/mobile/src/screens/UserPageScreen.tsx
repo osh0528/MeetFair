@@ -39,6 +39,7 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
 export function UserPageScreen({ navigation, route }: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactLayout = windowWidth < 768;
+  const isNarrowLayout = windowWidth < 480;
   const { user } = useSession();
   const { mode } = useAppTheme();
   const [page, setPage] = useState<UserPageSummary | null>(null);
@@ -587,7 +588,11 @@ export function UserPageScreen({ navigation, route }: Props) {
                         if (!representative) return null;
                         const extraCount = group.length - 1;
                         return (
-                        <Pressable key={representative.id} onPress={() => setSelectedPhotoId(representative.id)} style={styles.photoTile}>
+                        <Pressable
+                          key={representative.id}
+                          onPress={() => setSelectedPhotoId(representative.id)}
+                          style={[styles.photoTile, isNarrowLayout && styles.photoTileMobile]}
+                        >
                           <View style={styles.photoImageWrap}>
                           <Image
                             resizeMode="cover"
@@ -788,10 +793,10 @@ const styles = StyleSheet.create({
   musicTime: { color: colors.muted, fontSize: 10 },
   musicError: { color: colors.red, fontSize: 10 },
   pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-  pageColumnsMobile: { flexDirection: "column", alignItems: "stretch", width: "100%" },
+  pageColumnsMobile: { flexDirection: "column", alignItems: "stretch", width: "100%", gap: 20 },
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
-  mobilePanel: { flex: 0, width: "100%", alignSelf: "stretch" },
+  mobilePanel: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", alignSelf: "stretch", overflow: "hidden" },
   introSection: { gap: 12 },
   panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
@@ -799,6 +804,7 @@ const styles = StyleSheet.create({
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  photoTileMobile: { width: "100%" },
   photoImageWrap: { position: "relative" },
   photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },

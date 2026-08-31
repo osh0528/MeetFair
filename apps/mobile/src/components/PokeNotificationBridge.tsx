@@ -93,7 +93,7 @@ export function PokeNotificationBridge() {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `${poke.senderNickname}님이 찔렀어요`,
-          body: poke.type === "MEETING" ? "모임에 늦은 친구가 도착했는지 확인해 주세요." : "친구가 Meet World에서 찌르기를 보냈습니다.",
+          body: poke.type === "MEETING" ? "모임에 늦은 친구가 도착했는지 확인해 주세요." : "친구가 MeetFair에서 찌르기를 보냈습니다.",
           ...(soundEnabled ? { sound: "default" as const } : {}),
           ...(Platform.OS === "android" ? { channelId: "pokes-v2" } : {}),
           data: { meetingId: poke.meetingId, pokeId: poke.pokeId },

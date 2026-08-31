@@ -49,5 +49,5 @@ void processQuietSummaries();
 void processRecordingAndMeetingLifecycle();
 
 httpServer.listen(env.PORT, () => {
-  console.log(`Meet World server listening on http://localhost:${env.PORT}`);
+  console.log(`MeetFair server listening on http://localhost:${env.PORT}`);
 });

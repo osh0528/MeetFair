@@ -198,7 +198,7 @@ export function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>Meet World</Text></View>
+        <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>MeetFair</Text></View>
         <Pressable accessibilityLabel="알림" onPress={() => navigation.navigate("Notifications")} style={styles.notificationButton}>
           <Text style={styles.bell}>🔔</Text>
           {unreadNotificationCount > 0 ? (

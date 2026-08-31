@@ -62,7 +62,7 @@ async function handleCasualPoke(senderId: string, targetId: string, clientReques
     userId: targetId,
     type: "CASUAL_POKE",
     title: `${sender.nickname}님이 찔렀어요`,
-    body: "친구가 Meet World에서 찌르기를 보냈습니다.",
+    body: "친구가 MeetFair에서 찌르기를 보냈습니다.",
     data: { pokeId: poke.id, senderId },
     push: !quiet,
   });
