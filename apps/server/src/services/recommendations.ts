@@ -158,7 +158,7 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
   }> = [];
 
-  for (const place of places.slice(0, 5)) {
+  for (const place of places.slice(0, 3)) {
     const originTasks = origins.map((origin) => async () => {
       if (meeting.travelMetric === "DISTANCE") {
         const dist = Math.round(
@@ -356,7 +356,7 @@ export async function generateMidpointRecommendations(
     travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
   }> = [];
 
-  for (const place of places.slice(0, 5)) {
+  for (const place of places.slice(0, 3)) {
     const originTasks = origins.map((origin) => async () => {
       if (meeting.travelMetric === "DISTANCE") {
         const dist = Math.round(
