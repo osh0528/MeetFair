@@ -22,7 +22,7 @@ import { colors } from "../theme/colors";
 registerGlobals();
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string | null }
 interface SwitchableMediaStreamTrack {
   applyConstraints(constraints: { facingMode: "user" | "environment" }): Promise<void>;
 }
@@ -181,7 +181,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       setRecordingEnabled(token.recordingEnabled);
-      setLeaveLockedUntil(new Date(token.leaveLockedUntil).getTime());
+      setLeaveLockedUntil(token.leaveLockedUntil ? new Date(token.leaveLockedUntil).getTime() : null);
       setCredentials(token);
       setMessage("");
     } catch (error) {

@@ -9,7 +9,7 @@ import { apiRequest } from "../services/api";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string | null }
 interface TrackEntry { id: string; name: string; track: LocalTrack | RemoteTrack }
 
 function formatRemainingTime(remainingMs: number) {
@@ -87,7 +87,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
         });
         if (cancelled) return;
         setRecordingEnabled(credentials.recordingEnabled);
-        setLeaveLockedUntil(new Date(credentials.leaveLockedUntil).getTime());
+        setLeaveLockedUntil(credentials.leaveLockedUntil ? new Date(credentials.leaveLockedUntil).getTime() : null);
 
         const nextRoom = new Room({ adaptiveStream: true, dynacast: true });
         activeRoom = nextRoom;

@@ -200,6 +200,7 @@ export interface MeetingCallSummary {
   roomName: string;
   status: MeetingCallStatus;
   participantStatus: MeetingCallParticipantStatus;
+  forced: boolean;
   createdAt: string;
 }
 
