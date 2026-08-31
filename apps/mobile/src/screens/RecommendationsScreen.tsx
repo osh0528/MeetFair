@@ -52,7 +52,7 @@ export function RecommendationsScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.introRow}>
           <View style={styles.introCopy}>
-            <Text style={styles.eyebrow}>Meet World 분석 완료</Text>
+            <Text style={styles.eyebrow}>MeetFair 분석 완료</Text>
             <Text style={styles.title}>모두에게 공평한{`\n`}장소를 찾았어요</Text>
           </View>
           <View style={styles.fairScore}>
@@ -145,7 +145,7 @@ export function RecommendationsScreen({ navigation }: Props) {
 
         <View style={styles.notice}>
           <Text style={styles.noticeMark}>i</Text>
-          <Text style={styles.noticeText}>추천 결과는 대중교통 예상 이동시간을 기준으로 계산한 예시입니다.</Text>
+          <Text style={styles.noticeText}>추천 결과는 모임에서 선택한 이동 기준의 예상시간으로 계산됩니다.</Text>
         </View>
       </ScrollView>
 

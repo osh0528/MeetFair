@@ -36,4 +36,15 @@ describe("rankRecommendationCandidates", () => {
     ]);
     expect(ranked[0]?.id).toBe("fast");
   });
+
+  it("uses distance fairness when the meeting metric is DISTANCE", () => {
+    const nearButUneven = candidate("near-but-uneven", [10, 10], 100);
+    nearButUneven.travelTimes[0]!.distanceMeters = 100;
+    nearButUneven.travelTimes[1]!.distanceMeters = 1000;
+    const fair = candidate("fair", [50, 60], 500);
+    fair.travelTimes[0]!.distanceMeters = 500;
+    fair.travelTimes[1]!.distanceMeters = 550;
+
+    expect(rankRecommendationCandidates([nearButUneven, fair], "DISTANCE")[0]?.id).toBe("fair");
+  });
 });

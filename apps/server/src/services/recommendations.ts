@@ -1,7 +1,8 @@
-import type { MeetingRecommendation } from "@meetfair/shared";
+import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import { AppError } from "../lib/app-error.js";
 import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js";
 import { getDrivingDirections } from "../lib/naver-maps.js";
+import { getTransitDirections } from "../lib/odsay.js";
 import { prisma } from "../lib/prisma.js";
 import { meetingIncenter } from "./meeting-center.js";
 
@@ -22,14 +23,24 @@ interface CandidateWithTravel extends KakaoPlace {
   }>;
 }
 
-interface CachedDrivingResult {
+interface CachedRouteResult {
   expiresAt: number;
   value: { durationMinutes: number; distanceMeters: number };
 }
 
-const drivingCache = new Map<string, CachedDrivingResult>();
+interface EstimatedRoute {
+  placeId: string;
+  userId: string;
+  nickname: string;
+  durationMinutes: number | null;
+  distanceMeters: number | null;
+  error: unknown;
+}
+
+const routeCache = new Map<string, CachedRouteResult>();
+const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
-const DRIVING_CACHE_TTL_MS = 2 * 60_000;
+const ROUTE_CACHE_TTL_MS = 2 * 60_000;
 const MAX_ROUTE_CANDIDATES = 3;
 
 function distanceMeters(
@@ -50,25 +61,48 @@ function distanceMeters(
   );
 }
 
-function drivingCacheKey(origin: Origin, destination: KakaoPlace): string {
-  return [origin.latitude, origin.longitude, destination.latitude, destination.longitude]
-    .map((coordinate) => coordinate.toFixed(5))
-    .join(":");
+function routeCacheKey(travelMetric: TravelMetric, origin: Origin, destination: KakaoPlace): string {
+  return [
+    travelMetric,
+    origin.latitude.toFixed(5),
+    origin.longitude.toFixed(5),
+    destination.latitude.toFixed(5),
+    destination.longitude.toFixed(5),
+  ].join(":");
 }
 
-async function cachedDrivingDirections(origin: Origin, destination: KakaoPlace) {
-  const key = drivingCacheKey(origin, destination);
-  const cached = drivingCache.get(key);
+async function cachedRouteDirections(travelMetric: TravelMetric, origin: Origin, destination: KakaoPlace) {
+  const key = routeCacheKey(travelMetric, origin, destination);
+  const cached = routeCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-  if (cached) drivingCache.delete(key);
-  const value = await getDrivingDirections(origin, destination);
-  drivingCache.set(key, { expiresAt: Date.now() + DRIVING_CACHE_TTL_MS, value });
-  if (drivingCache.size > 500) {
-    for (const [cacheKey, entry] of drivingCache) {
-      if (entry.expiresAt <= Date.now()) drivingCache.delete(cacheKey);
+  if (cached) routeCache.delete(key);
+  const running = routeJobs.get(key);
+  if (running) return running;
+  const job = (async () => {
+    if (travelMetric === "DISTANCE") {
+      const distance = distanceMeters(origin, destination);
+      return {
+        durationMinutes: Math.max(1, Math.round((distance / 1000 / 4.5) * 60)),
+        distanceMeters: distance,
+      };
     }
+    return travelMetric === "TRANSIT"
+      ? getTransitDirections(origin, destination)
+      : getDrivingDirections(origin, destination);
+  })();
+  routeJobs.set(key, job);
+  try {
+    const value = await job;
+    routeCache.set(key, { expiresAt: Date.now() + ROUTE_CACHE_TTL_MS, value });
+    if (routeCache.size > 500) {
+      for (const [cacheKey, entry] of routeCache) {
+        if (entry.expiresAt <= Date.now()) routeCache.delete(cacheKey);
+      }
+    }
+    return value;
+  } finally {
+    routeJobs.delete(key);
   }
-  return value;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -89,20 +123,20 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function metrics(candidate: CandidateWithTravel) {
-  const times = candidate.travelTimes.map((travel) => travel.durationMinutes);
-  const average = times.reduce((sum, time) => sum + time, 0) / times.length;
+function metrics(candidate: CandidateWithTravel, travelMetric: TravelMetric) {
+  const values = candidate.travelTimes.map((travel) => travelMetric === "DISTANCE" ? travel.distanceMeters : travel.durationMinutes);
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   return {
     average,
-    maximum: Math.max(...times),
-    gap: Math.max(...times) - Math.min(...times),
+    maximum: Math.max(...values),
+    gap: Math.max(...values) - Math.min(...values),
   };
 }
 
-export function rankRecommendationCandidates(candidates: CandidateWithTravel[]): CandidateWithTravel[] {
+export function rankRecommendationCandidates(candidates: CandidateWithTravel[], travelMetric: TravelMetric = "CAR"): CandidateWithTravel[] {
   return [...candidates].sort((a, b) => {
-    const metricA = metrics(a);
-    const metricB = metrics(b);
+    const metricA = metrics(a, travelMetric);
+    const metricB = metrics(b, travelMetric);
     return metricA.gap - metricB.gap
       || metricA.maximum - metricB.maximum
       || metricA.average - metricB.average
@@ -222,17 +256,28 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
-  const estimates = await mapWithConcurrency(tasks, 6, async ({ place, origin }) => {
+  const estimates: EstimatedRoute[] = await mapWithConcurrency(tasks, 6, async ({ place, origin }) => {
     try {
-      const route = await cachedDrivingDirections(origin, place);
+      const route = await cachedRouteDirections(meeting.travelMetric, origin, place);
       return {
         placeId: place.id,
         userId: origin.userId,
         nickname: origin.nickname,
         durationMinutes: route.durationMinutes,
         distanceMeters: route.distanceMeters,
+        error: null,
       };
-    } catch {
+    } catch (error) {
+      if (meeting.travelMetric === "TRANSIT") {
+        return {
+          placeId: place.id,
+          userId: origin.userId,
+          nickname: origin.nickname,
+          durationMinutes: null,
+          distanceMeters: null,
+          error,
+        };
+      }
       const distance = distanceMeters(origin, place);
       return {
         placeId: place.id,
@@ -240,17 +285,30 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         nickname: origin.nickname,
         durationMinutes: Math.max(1, Math.round((distance / 1000 / 30) * 60)),
         distanceMeters: distance,
+        error: null,
       };
     }
   });
 
-  const candidates = rankRecommendationCandidates(nearbyPlaces.map((place) => ({
-    ...place,
-    providerPlaceId: `kakao:${place.id}`,
-    travelTimes: estimates
-      .filter((estimate) => estimate.placeId === place.id)
-      .map(({ placeId: _placeId, ...estimate }) => estimate),
-  })));
+  const candidates = rankRecommendationCandidates(nearbyPlaces.flatMap((place) => {
+    const placeEstimates = estimates.filter((estimate) => estimate.placeId === place.id);
+    if (placeEstimates.some((estimate) => estimate.durationMinutes == null || estimate.distanceMeters == null)) return [];
+    return [{
+      ...place,
+      providerPlaceId: `kakao:${place.id}`,
+      travelTimes: placeEstimates.map((estimate) => ({
+        userId: estimate.userId,
+        nickname: estimate.nickname,
+        durationMinutes: estimate.durationMinutes!,
+        distanceMeters: estimate.distanceMeters!,
+      })),
+    }];
+  }), meeting.travelMetric);
+  if (!candidates.length) {
+    const routeError = estimates.find((estimate) => estimate.error)?.error;
+    if (routeError instanceof AppError) throw routeError;
+    throw new AppError(502, "TRANSIT_FAILED", "Public transit routes could not be calculated.");
+  }
 
   const persisted = await prisma.$transaction(async (transaction) => {
     await transaction.placeCandidate.deleteMany({

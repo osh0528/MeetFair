@@ -270,7 +270,13 @@ export function CreateMeetingScreen({ navigation }: Props) {
 
         <SectionHeading title="추천 이동 기준" />
         <ChoiceRow values={["DISTANCE", "CAR", "TRANSIT"]} selected={travelMetric} labels={["직선거리", "자동차", "대중교통"]} onSelect={(value) => setTravelMetric(value as TravelMetric)} />
-        {travelMetric === "TRANSIT" ? <Text style={styles.note}>대중교통 경로 API가 서버에 준비되지 않으면 추천 요청이 비활성화됩니다.</Text> : null}
+        <Text style={styles.note}>
+          {travelMetric === "TRANSIT"
+            ? "참가자별 대중교통 예상시간의 차이가 적은 장소를 우선 추천합니다."
+            : travelMetric === "CAR"
+              ? "참가자별 자동차 예상시간의 차이가 적은 장소를 우선 추천합니다."
+              : "참가자 출발지의 직선거리 차이가 적은 장소를 우선 추천합니다."}
+        </Text>
 
         <SectionHeading title="위치 공유" />
         <ChoiceRow values={["BEFORE_START", "DAY_OF", "OFF"]} selected={shareMode} labels={["시작 전", "당일 0시", "공유 안 함"]} onSelect={(value) => setShareMode(value as LocationShareMode)} />

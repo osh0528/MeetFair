@@ -1,4 +1,4 @@
-import type { FriendSummary, MeetingMemberStatusEntry } from "@meetfair/shared";
+import type { FriendSummary, MeetingCallSummary, MeetingMemberStatusEntry, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
-import { apiRequest, createClientRequestId } from "../services/api";
+import { ApiError, apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection } from "../types/location";
@@ -18,6 +18,7 @@ interface MeetingDetail {
   scheduledAt: string;
   status: string;
   hostId: string;
+  travelMetric: TravelMetric;
   locationShareMode: string;
   shareMinutesBefore: number | null;
   voteCountdownEndsAt: string | null;
@@ -40,6 +41,12 @@ interface MeetingDetail {
     providerPlaceId: string | null;
     recommendationRank: number | null;
     votes: Array<{ userId: string }>;
+    travelEstimates: Array<{
+      userId: string;
+      durationMinutes: number;
+      distanceMeters: number;
+      user: { id: string; nickname: string; accountId: string };
+    }>;
   }>;
 }
 
@@ -47,6 +54,47 @@ interface JoinRequest {
   id: string;
   status: string;
   requester: { id: string; nickname: string; accountId: string };
+}
+
+const travelMetricLabels: Record<TravelMetric, string> = {
+  TRANSIT: "대중교통",
+  CAR: "자동차",
+  DISTANCE: "직선거리",
+};
+
+function recommendationErrorMessage(error: unknown, travelMetric: TravelMetric) {
+  if (!(error instanceof ApiError) || travelMetric !== "TRANSIT") {
+    return error instanceof Error ? error.message : "추천 장소를 계산하지 못했습니다.";
+  }
+  if (error.code === "TRANSIT_NOT_CONFIGURED") return "대중교통 추천 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.";
+  if (error.code === "TRANSIT_TIMEOUT") return "대중교통 경로 계산이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
+  if (error.code === "TRANSIT_NO_ROUTE") return "참가자 모두가 이동할 수 있는 대중교통 경로를 찾지 못했습니다.";
+  if (error.code === "TRANSIT_API_ERROR" || error.code === "TRANSIT_FAILED") {
+    return "대중교통 경로 서비스에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return error.message;
+}
+
+function formatDistance(meters: number) {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${Math.round(meters)}m`;
+}
+
+function travelValue(estimate: { durationMinutes: number; distanceMeters: number }, travelMetric: TravelMetric) {
+  return travelMetric === "DISTANCE" ? formatDistance(estimate.distanceMeters) : `${estimate.durationMinutes}분`;
+}
+
+function travelStats(
+  estimates: MeetingDetail["placeCandidates"][number]["travelEstimates"],
+  travelMetric: TravelMetric,
+) {
+  const values = estimates.map((estimate) => travelMetric === "DISTANCE" ? estimate.distanceMeters : estimate.durationMinutes);
+  if (!values.length) return null;
+  const format = travelMetric === "DISTANCE" ? formatDistance : (value: number) => `${Math.round(value)}분`;
+  return {
+    average: format(values.reduce((sum, value) => sum + value, 0) / values.length),
+    maximum: format(Math.max(...values)),
+    gap: format(Math.max(...values) - Math.min(...values)),
+  };
 }
 
 export function MeetingScreen({ navigation, route }: Props) {
@@ -166,7 +214,8 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...meeting.memberStatuses.map((member) => member.userId),
   ]);
   const availableFriends = friends.filter((friend) => !unavailableUserIds.has(friend.userId));
-  const recommendedCandidate = meeting.placeCandidates.find((candidate) => candidate.recommendationRank === 1 && candidate.providerPlaceId?.startsWith("kakao:"));
+  const recommendedCandidate = meeting.placeCandidates.find((candidate) => candidate.recommendationRank === 1);
+  const travelMetricLabel = travelMetricLabels[meeting.travelMetric];
   const placeMapMarkers = recommendedCandidate ? [
     ...homeMapMarkers,
     {
@@ -241,14 +290,16 @@ export function MeetingScreen({ navigation, route }: Props) {
     }
   }
   async function receiveRecommendedPlace() {
+    const selectedTravelMetric = meeting?.travelMetric ?? "DISTANCE";
+    const selectedTravelMetricLabel = travelMetricLabels[selectedTravelMetric];
     setBusyAction("recommendation");
     setMessage("");
     try {
       await apiRequest(`/recommendations?meetingId=${meetingId}`);
       await load();
-      setMessage("이동시간 차이가 가장 적은 장소들을 추천 후보에 추가했습니다.");
+      setMessage(`${selectedTravelMetricLabel} 기준으로 이동시간 차이가 가장 적은 장소를 추가했습니다.`);
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "추천 장소를 계산하지 못했습니다.");
+      setMessage(recommendationErrorMessage(caught, selectedTravelMetric));
     } finally {
       setBusyAction("");
     }
@@ -257,6 +308,22 @@ export function MeetingScreen({ navigation, route }: Props) {
   async function arrive() {
     await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
     await load();
+  }
+  async function joinMeetingCall() {
+    if (busyAction === "call") return;
+    setBusyAction("call");
+    setMessage("");
+    try {
+      const call = await apiRequest<MeetingCallSummary>(`/meeting-calls/meetings/${meetingId}/join`, {
+        method: "POST",
+        body: "{}",
+      });
+      navigation.navigate("VideoCall", { callId: call.id, meetingId });
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "영상통화에 참여하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
   }
   async function poke(targetId: string) {
     if (pokeCooldowns[targetId]) return;
@@ -408,22 +475,42 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? "후보 이동시간 계산 중..." : "추천장소 받기"}</Text>
-                <Text style={styles.recommendDescription}>중심 근처 실제 장소를 검색하고 이동시간 차이를 비교해요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "추천장소 받기"}</Text>
+                <Text style={styles.recommendDescription}>중심 근처 장소를 검색하고 {travelMetricLabel} 기준 이동시간 차이를 비교해요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
-            {meeting.placeCandidates.map((candidate) => (
-              <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
-                <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
-                  {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ 이동시간 BEST</Text> : null}
-                  <View style={styles.row}><Text style={[styles.cardTitle, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
-                  <Text style={styles.meta}>{candidate.address}</Text>
-                </Card>
-              </Pressable>
-            ))}
+            {meeting.placeCandidates.map((candidate) => {
+              const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
+              return (
+                <Pressable key={candidate.id} onPress={() => vote(candidate.id)}>
+                  <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
+                    {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
+                    <View style={styles.row}><Text style={[styles.cardTitle, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                    <Text style={styles.meta}>{candidate.address}</Text>
+                    {stats ? (
+                      <>
+                        <View style={styles.travelMetrics}>
+                          <View style={styles.travelMetricItem}><Text style={styles.travelMetricCaption}>평균</Text><Text style={styles.travelMetricValue}>{stats.average}</Text></View>
+                          <View style={styles.travelMetricItem}><Text style={styles.travelMetricCaption}>최대</Text><Text style={styles.travelMetricValue}>{stats.maximum}</Text></View>
+                          <View style={styles.travelMetricItem}><Text style={styles.travelMetricCaption}>{meeting.travelMetric === "DISTANCE" ? "거리 차이" : "시간 차이"}</Text><Text style={styles.travelMetricValue}>{stats.gap}</Text></View>
+                        </View>
+                        <View style={styles.participantTimes}>
+                          {candidate.travelEstimates.map((estimate) => (
+                            <View key={estimate.userId} style={styles.participantTimeChip}>
+                              <Text style={styles.participantTimeText}>{estimate.user.nickname} {travelValue(estimate, meeting.travelMetric)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <Text style={styles.travelEstimateNotice}>{travelMetricLabel} 기준 예상 {meeting.travelMetric === "DISTANCE" ? "거리" : "이동시간"}</Text>
+                      </>
+                    ) : null}
+                  </Card>
+                </Pressable>
+              );
+            })}
             <Button label="지도에서 장소 직접 추천" onPress={() => setShowPlacePicker((current) => !current)} variant="soft" />
             {showPlacePicker ? (
               <Card style={styles.placePickerCard}>
@@ -545,6 +632,14 @@ export function MeetingScreen({ navigation, route }: Props) {
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button label="도착 처리" onPress={arrive} /> : null}
+        {meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
+          <Button
+            disabled={busyAction === "call"}
+            label={busyAction === "call" ? "통화 연결 중..." : started ? "영상통화 참여" : "사전 영상통화 자유 참여"}
+            onPress={() => void joinMeetingCall()}
+            variant="soft"
+          />
+        ) : null}
         {meeting.status !== "CANCELLED" ? <Button label="실시간 위치 지도" onPress={() => navigation.navigate("Tracking", { meetingId })} variant="secondary" /> : null}
         {meeting.status !== "CANCELLED" ? <Button label="채팅" onPress={() => navigation.navigate("MeetingChat", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
         {meeting.status !== "CANCELLED" ? <Button label="게시판" onPress={() => navigation.navigate("MeetingBoard", { meetingId, meetingTitle: meeting.title })} variant="secondary" /> : null}
@@ -588,6 +683,14 @@ const styles = StyleSheet.create({
   recommendedCard: { borderWidth: 2, borderColor: "#3B82F6", backgroundColor: "#EFF6FF", shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 7 },
   recommendedBadge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, overflow: "hidden", backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   recommendedCardTitle: { color: "#1D4ED8", fontSize: 16 },
+  travelMetrics: { flexDirection: "row", borderRadius: 14, backgroundColor: "rgba(37,99,235,0.07)", paddingVertical: 10 },
+  travelMetricItem: { flex: 1, alignItems: "center", gap: 3 },
+  travelMetricCaption: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  travelMetricValue: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  participantTimes: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  participantTimeChip: { borderRadius: 999, backgroundColor: colors.background, paddingHorizontal: 9, paddingVertical: 6 },
+  participantTimeText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
+  travelEstimateNotice: { color: colors.subtle, fontSize: 9, textAlign: "right" },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },

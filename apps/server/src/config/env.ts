@@ -42,6 +42,7 @@ const envSchema = z.object({
   NAVER_SEARCH_CLIENT_ID: z.string().default(""),
   NAVER_SEARCH_CLIENT_SECRET: z.string().default(""),
   KAKAO_REST_API_KEY: z.string().default(""),
+  ODSAY_API_KEY: z.string().default(""),
 });
 
 let parsed: z.infer<typeof envSchema>;
