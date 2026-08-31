@@ -596,7 +596,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                 <Button disabled={busyAction === "place" || !pickedPlace || !placeName.trim()} label={busyAction === "place" ? "추가 중..." : "이 장소를 후보로 추가"} onPress={() => void addPlaceCandidate()} />
               </Card>
             ) : null}
-            {!meeting.placeCandidates.length ? <Button compact label="추천 후보 보기" onPress={() => navigation.navigate("Recommendations")} variant="soft" /> : null}
+            <Button compact label={meeting.placeCandidates.length ? "추천 결과 다시 보기" : "추천 후보 보기"} onPress={() => navigation.navigate("Recommendations", { meetingId })} variant="soft" />
           </>
         )}
           </View>

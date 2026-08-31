@@ -9,7 +9,7 @@ import { CreateMeetingScreen } from "./src/screens/CreateMeetingScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MeetingScreen } from "./src/screens/MeetingScreen";
-import { RecommendationsScreen } from "./src/screens/RecommendationsScreen";
+import { RecommendationsLiveScreen } from "./src/screens/RecommendationsLiveScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { TrackingScreen } from "./src/screens/TrackingScreen";
 import { FriendsScreen } from "./src/screens/FriendsScreen";
@@ -42,7 +42,7 @@ export type RootStackParamList = {
   AddressSearch: { returnTo?: "Register" | "Profile" } | undefined;
   Home: undefined;
   CreateMeeting: undefined;
-  Recommendations: undefined;
+  Recommendations: { meetingId: string };
   Meeting: { meetingId: string };
   Tracking: { meetingId: string };
   Friends: undefined;
@@ -124,7 +124,7 @@ function AppNavigator() {
           <Stack.Screen name="AddressSearch" component={AddressSearchScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="CreateMeeting" component={CreateMeetingScreen} />
-          <Stack.Screen name="Recommendations" component={RecommendationsScreen} />
+          <Stack.Screen name="Recommendations" component={RecommendationsLiveScreen} />
           <Stack.Screen name="Meeting" component={MeetingScreen} />
           <Stack.Screen name="Tracking" component={TrackingScreen} />
           <Stack.Screen name="Friends" component={FriendsScreen} />
