@@ -2,7 +2,7 @@ import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import { AppError } from "../lib/app-error.js";
 import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js";
 import { getDrivingDirections } from "../lib/naver-maps.js";
-import { getTransitDirections } from "../lib/odsay.js";
+import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
 import { meetingIncenter } from "./meeting-center.js";
 

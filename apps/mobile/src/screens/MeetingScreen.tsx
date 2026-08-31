@@ -477,7 +477,7 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "추천장소 받기"}</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "공평한 장소 받기"}</Text>
                 <Text style={styles.recommendDescription}>중심 근처 장소를 검색하고 {travelMetricLabel} 기준 이동시간 차이를 비교해요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
