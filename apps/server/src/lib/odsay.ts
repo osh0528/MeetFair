@@ -1,5 +1,6 @@
 import { AppError } from "./app-error.js";
 import { env } from "../config/env.js";
+import { haversineDistance } from "./geo.js";
 
 export interface TransitResult {
   distanceMeters: number;
@@ -17,6 +18,10 @@ export async function getTransitDirections(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
 ): Promise<TransitResult> {
+  if (haversineDistance(origin, destination) < 30) {
+    const d = Math.round(haversineDistance(origin, destination));
+    return { durationMinutes: 1, distanceMeters: d };
+  }
   const key = odsayKey();
   const url =
     `https://api.odsay.com/v1/api/searchPubTransPathT?` +
@@ -29,18 +34,31 @@ export async function getTransitDirections(
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new AppError(502, "TRANSIT_API_ERROR", `ODsay failed: ${res.status} ${body.slice(0, 300)}`);
+      throw new AppError(502, "TRANSIT_API_ERROR", "Transit routing failed");
     }
     const data = (await res.json()) as {
       result?: { path?: Array<{ info?: { totalTime?: number; totalDistance?: number } }> };
-      error?: { message?: string };
+      error?: { code?: string; message?: string };
     };
     if (data.error) {
-      throw new AppError(502, "TRANSIT_API_ERROR", data.error.message ?? "ODsay error");
+      throw new AppError(502, "TRANSIT_API_ERROR", "Transit routing failed");
     }
-    const info = data.result?.path?.[0]?.info;
-    if (!info || info.totalTime == null || info.totalDistance == null) {
+    const path = data.result?.path;
+    if (!path || path.length === 0) {
+      throw new AppError(502, "TRANSIT_NO_ROUTE", "No transit route found");
+    }
+    const info = path[0]?.info;
+    if (
+      !info ||
+      info.totalTime == null ||
+      info.totalDistance == null ||
+      typeof info.totalTime !== "number" ||
+      typeof info.totalDistance !== "number" ||
+      info.totalTime <= 0 ||
+      info.totalDistance <= 0 ||
+      info.totalTime > 1440 ||
+      info.totalDistance > 2000000
+    ) {
       throw new AppError(502, "TRANSIT_NO_ROUTE", "No transit route found");
     }
     return {

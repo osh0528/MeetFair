@@ -1,10 +1,89 @@
 import { AppError } from "../lib/app-error.js";
-import { midpointOf } from "../lib/geo.js";
+import { haversineDistance, midpointOf } from "../lib/geo.js";
 import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/odsay.js";
 import { searchLocalPlaces } from "../lib/naver-search.js";
 import { prisma } from "../lib/prisma.js";
 import type { MeetingRecommendation } from "@meetfair/shared";
+
+const ROUTE_CACHE_TTL_MS = 120_000;
+const ROUTE_CONCURRENCY = 5;
+const routeCache = new Map<string, { value: { durationMinutes: number; distanceMeters: number }; expiresAt: number }>();
+const routeInflight = new Map<string, Promise<{ durationMinutes: number; distanceMeters: number }>>();
+
+function routeCacheKey(
+  origin: { latitude: number; longitude: number },
+  dest: { latitude: number; longitude: number },
+  metric: string,
+): string {
+  return `${origin.latitude.toFixed(5)},${origin.longitude.toFixed(5)}->${dest.latitude.toFixed(5)},${dest.longitude.toFixed(5)}:${metric}`;
+}
+
+export function clearRouteCacheForTest(): void {
+  routeCache.clear();
+  routeInflight.clear();
+}
+
+function getCachedRoute(key: string): { durationMinutes: number; distanceMeters: number } | undefined {
+  const entry = routeCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    routeCache.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+function setCachedRoute(key: string, value: { durationMinutes: number; distanceMeters: number }): void {
+  routeCache.set(key, { value, expiresAt: Date.now() + ROUTE_CACHE_TTL_MS });
+}
+
+async function runWithLimit<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length) as T[];
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < tasks.length) {
+      const idx = next;
+      next += 1;
+      results[idx] = await tasks[idx]!();
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+async function estimateRoute(
+  origin: { latitude: number; longitude: number },
+  dest: { latitude: number; longitude: number },
+  metric: string,
+): Promise<{ durationMinutes: number; distanceMeters: number }> {
+  if (metric === "DISTANCE") {
+    const dist = Math.round(haversineDistance(origin, dest));
+    const duration = Math.max(1, Math.round((dist / 1000 / 4.5) * 60));
+    return { durationMinutes: duration, distanceMeters: dist };
+  }
+  const key = routeCacheKey(origin, dest, metric);
+  const cached = getCachedRoute(key);
+  if (cached) return cached;
+  const inflight = routeInflight.get(key);
+  if (inflight) return inflight;
+  const promise = (async () => {
+    const result =
+      metric === "TRANSIT"
+        ? await getTransitDirections(origin, dest)
+        : await getDrivingDirections(origin, dest);
+    setCachedRoute(key, result);
+    return result;
+  })();
+  routeInflight.set(key, promise);
+  try {
+    const value = await promise;
+    return value;
+  } finally {
+    routeInflight.delete(key);
+  }
+}
 
 export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const meeting = await prisma.meeting.findUnique({
@@ -80,47 +159,47 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   }> = [];
 
   for (const place of places.slice(0, 5)) {
-    const travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }> = [];
-    for (const origin of origins) {
+    const originTasks = origins.map((origin) => async () => {
+      if (meeting.travelMetric === "DISTANCE") {
+        const dist = Math.round(
+          haversineDistance({ latitude: origin.latitude, longitude: origin.longitude }, { latitude: place.latitude, longitude: place.longitude }),
+        );
+        const duration = Math.max(1, Math.round((dist / 1000 / 4.5) * 60));
+        return { userId: origin.userId, nickname: origin.nickname, durationMinutes: duration, distanceMeters: dist, skip: false as const };
+      }
       try {
-        const result =
-          meeting.travelMetric === "TRANSIT"
-            ? await getTransitDirections(
-                { latitude: origin.latitude, longitude: origin.longitude },
-                { latitude: place.latitude, longitude: place.longitude },
-              )
-            : await getDrivingDirections(
-                { latitude: origin.latitude, longitude: origin.longitude },
-                { latitude: place.latitude, longitude: place.longitude },
-              );
-        travelTimes.push({
+        const result = await estimateRoute(
+          { latitude: origin.latitude, longitude: origin.longitude },
+          { latitude: place.latitude, longitude: place.longitude },
+          meeting.travelMetric,
+        );
+        return {
           userId: origin.userId,
           nickname: origin.nickname,
           durationMinutes: result.durationMinutes,
           distanceMeters: result.distanceMeters,
-        });
-      } catch {
+          skip: false as const,
+        };
+      } catch (caught) {
+        const code = caught instanceof AppError ? (caught as AppError).code : "";
+        if (meeting.travelMetric === "TRANSIT") {
+          if (code === "TRANSIT_NOT_CONFIGURED" || code === "TRANSIT_API_ERROR" || code === "TRANSIT_TIMEOUT" || code === "TRANSIT_FAILED") {
+            throw caught;
+          }
+          if (code === "TRANSIT_NO_ROUTE") {
+            return { skip: true as const };
+          }
+        }
         const dist = Math.round(
-          6371000 *
-            2 *
-            Math.asin(
-              Math.sqrt(
-                Math.sin(((place.latitude - origin.latitude) * Math.PI) / 360) ** 2 +
-                  Math.cos((origin.latitude * Math.PI) / 180) *
-                    Math.cos((place.latitude * Math.PI) / 180) *
-                    Math.sin(((place.longitude - origin.longitude) * Math.PI) / 360) ** 2,
-              ),
-            ),
+          haversineDistance({ latitude: origin.latitude, longitude: origin.longitude }, { latitude: place.latitude, longitude: place.longitude }),
         );
         const duration = Math.max(1, Math.round((dist / 1000 / 30) * 60));
-        travelTimes.push({
-          userId: origin.userId,
-          nickname: origin.nickname,
-          durationMinutes: duration,
-          distanceMeters: dist,
-        });
+        return { userId: origin.userId, nickname: origin.nickname, durationMinutes: duration, distanceMeters: dist, skip: false as const };
       }
-    }
+    });
+    const results = await runWithLimit(originTasks, ROUTE_CONCURRENCY);
+    if (results.some((r) => r.skip)) continue;
+    const travelTimes = results as Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
     candidates.push({
       name: place.title,
       address: place.address,
@@ -133,6 +212,12 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   }
 
   candidates.sort((a, b) => {
+    const gapA = Math.max(...a.travelTimes.map((t) => t.durationMinutes)) - Math.min(...a.travelTimes.map((t) => t.durationMinutes));
+    const gapB = Math.max(...b.travelTimes.map((t) => t.durationMinutes)) - Math.min(...b.travelTimes.map((t) => t.durationMinutes));
+    if (gapA !== gapB) return gapA - gapB;
+    const maxA = Math.max(...a.travelTimes.map((t) => t.durationMinutes));
+    const maxB = Math.max(...b.travelTimes.map((t) => t.durationMinutes));
+    if (maxA !== maxB) return maxA - maxB;
     const avgA = a.travelTimes.reduce((s, t) => s + t.durationMinutes, 0) / a.travelTimes.length;
     const avgB = b.travelTimes.reduce((s, t) => s + t.durationMinutes, 0) / b.travelTimes.length;
     return avgA - avgB;
@@ -272,47 +357,47 @@ export async function generateMidpointRecommendations(
   }> = [];
 
   for (const place of places.slice(0, 5)) {
-    const travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }> = [];
-    for (const origin of origins) {
+    const originTasks = origins.map((origin) => async () => {
+      if (meeting.travelMetric === "DISTANCE") {
+        const dist = Math.round(
+          haversineDistance({ latitude: origin.latitude, longitude: origin.longitude }, { latitude: place.latitude, longitude: place.longitude }),
+        );
+        const duration = Math.max(1, Math.round((dist / 1000 / 4.5) * 60));
+        return { userId: origin.userId, nickname: origin.nickname, durationMinutes: duration, distanceMeters: dist, skip: false as const };
+      }
       try {
-        const result =
-          meeting.travelMetric === "TRANSIT"
-            ? await getTransitDirections(
-                { latitude: origin.latitude, longitude: origin.longitude },
-                { latitude: place.latitude, longitude: place.longitude },
-              )
-            : await getDrivingDirections(
-                { latitude: origin.latitude, longitude: origin.longitude },
-                { latitude: place.latitude, longitude: place.longitude },
-              );
-        travelTimes.push({
+        const result = await estimateRoute(
+          { latitude: origin.latitude, longitude: origin.longitude },
+          { latitude: place.latitude, longitude: place.longitude },
+          meeting.travelMetric,
+        );
+        return {
           userId: origin.userId,
           nickname: origin.nickname,
           durationMinutes: result.durationMinutes,
           distanceMeters: result.distanceMeters,
-        });
-      } catch {
+          skip: false as const,
+        };
+      } catch (caught) {
+        const code = caught instanceof AppError ? (caught as AppError).code : "";
+        if (meeting.travelMetric === "TRANSIT") {
+          if (code === "TRANSIT_NOT_CONFIGURED" || code === "TRANSIT_API_ERROR" || code === "TRANSIT_TIMEOUT" || code === "TRANSIT_FAILED") {
+            throw caught;
+          }
+          if (code === "TRANSIT_NO_ROUTE") {
+            return { skip: true as const };
+          }
+        }
         const dist = Math.round(
-          6371000 *
-            2 *
-            Math.asin(
-              Math.sqrt(
-                Math.sin(((place.latitude - origin.latitude) * Math.PI) / 360) ** 2 +
-                  Math.cos((origin.latitude * Math.PI) / 180) *
-                    Math.cos((place.latitude * Math.PI) / 180) *
-                    Math.sin(((place.longitude - origin.longitude) * Math.PI) / 360) ** 2,
-              ),
-            ),
+          haversineDistance({ latitude: origin.latitude, longitude: origin.longitude }, { latitude: place.latitude, longitude: place.longitude }),
         );
         const duration = Math.max(1, Math.round((dist / 1000 / 30) * 60));
-        travelTimes.push({
-          userId: origin.userId,
-          nickname: origin.nickname,
-          durationMinutes: duration,
-          distanceMeters: dist,
-        });
+        return { userId: origin.userId, nickname: origin.nickname, durationMinutes: duration, distanceMeters: dist, skip: false as const };
       }
-    }
+    });
+    const results = await runWithLimit(originTasks, ROUTE_CONCURRENCY);
+    if (results.some((r) => r.skip)) continue;
+    const travelTimes = results as Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }>;
     candidates.push({
       name: place.title,
       address: place.address,
@@ -328,6 +413,9 @@ export async function generateMidpointRecommendations(
     const gapA = Math.max(...a.travelTimes.map((t) => t.durationMinutes)) - Math.min(...a.travelTimes.map((t) => t.durationMinutes));
     const gapB = Math.max(...b.travelTimes.map((t) => t.durationMinutes)) - Math.min(...b.travelTimes.map((t) => t.durationMinutes));
     if (gapA !== gapB) return gapA - gapB;
+    const maxA = Math.max(...a.travelTimes.map((t) => t.durationMinutes));
+    const maxB = Math.max(...b.travelTimes.map((t) => t.durationMinutes));
+    if (maxA !== maxB) return maxA - maxB;
     const avgA = a.travelTimes.reduce((s, t) => s + t.durationMinutes, 0) / a.travelTimes.length;
     const avgB = b.travelTimes.reduce((s, t) => s + t.durationMinutes, 0) / b.travelTimes.length;
     return avgA - avgB;
