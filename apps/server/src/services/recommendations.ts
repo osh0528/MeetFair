@@ -1,6 +1,7 @@
 import { AppError } from "../lib/app-error.js";
 import { midpointOf } from "../lib/geo.js";
 import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
+import { getTransitDirections } from "../lib/odsay.js";
 import { searchLocalPlaces } from "../lib/naver-search.js";
 import { prisma } from "../lib/prisma.js";
 import type { MeetingRecommendation } from "@meetfair/shared";
@@ -82,10 +83,16 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     const travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }> = [];
     for (const origin of origins) {
       try {
-        const result = await getDrivingDirections(
-          { latitude: origin.latitude, longitude: origin.longitude },
-          { latitude: place.latitude, longitude: place.longitude },
-        );
+        const result =
+          meeting.travelMetric === "TRANSIT"
+            ? await getTransitDirections(
+                { latitude: origin.latitude, longitude: origin.longitude },
+                { latitude: place.latitude, longitude: place.longitude },
+              )
+            : await getDrivingDirections(
+                { latitude: origin.latitude, longitude: origin.longitude },
+                { latitude: place.latitude, longitude: place.longitude },
+              );
         travelTimes.push({
           userId: origin.userId,
           nickname: origin.nickname,
@@ -268,10 +275,16 @@ export async function generateMidpointRecommendations(
     const travelTimes: Array<{ userId: string; nickname: string; durationMinutes: number; distanceMeters: number }> = [];
     for (const origin of origins) {
       try {
-        const result = await getDrivingDirections(
-          { latitude: origin.latitude, longitude: origin.longitude },
-          { latitude: place.latitude, longitude: place.longitude },
-        );
+        const result =
+          meeting.travelMetric === "TRANSIT"
+            ? await getTransitDirections(
+                { latitude: origin.latitude, longitude: origin.longitude },
+                { latitude: place.latitude, longitude: place.longitude },
+              )
+            : await getDrivingDirections(
+                { latitude: origin.latitude, longitude: origin.longitude },
+                { latitude: place.latitude, longitude: place.longitude },
+              );
         travelTimes.push({
           userId: origin.userId,
           nickname: origin.nickname,
