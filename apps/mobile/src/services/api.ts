@@ -12,6 +12,7 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status: number,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -20,6 +21,7 @@ export class ApiError extends Error {
 export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   let response: Response;
   const controller = new AbortController();
@@ -29,7 +31,7 @@ export async function apiRequest<T>(
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
   try {
     response = await fetch(`${appConfig.apiUrl}${path}`, {
       ...init,
@@ -58,7 +60,9 @@ export async function apiRequest<T>(
     init.signal?.removeEventListener("abort", abortFromCaller);
   }
   if (response.status === 204) return undefined as T;
-  let payload: ApiResponse<T>;
+  let payload: ApiResponse<T> & {
+    error?: { code: string; message: string; details?: Record<string, unknown> };
+  };
   try {
     payload = await response.json() as ApiResponse<T>;
   } catch {
@@ -69,7 +73,7 @@ export async function apiRequest<T>(
     );
   }
   if (!payload.success) {
-    throw new ApiError(payload.error.code, payload.error.message, response.status);
+    throw new ApiError(payload.error.code, payload.error.message, response.status, payload.error.details);
   }
   return payload.data;
 }

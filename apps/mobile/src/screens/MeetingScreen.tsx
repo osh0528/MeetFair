@@ -297,7 +297,10 @@ export function MeetingScreen({ navigation, route }: Props) {
     setBusyAction("recommendation");
     setMessage("");
     try {
-      await apiRequest(`/meetings/${meetingId}/recommendations/regenerate`, { method: "POST", body: JSON.stringify({}) });
+      await apiRequest(`/meetings/${meetingId}/recommendations/regenerate`, {
+        method: "POST",
+        body: "{}",
+      }, 60_000);
       await load();
       setMessage(`${selectedTravelMetricLabel} 기준으로 이동시간 차이가 가장 적은 장소를 추가했습니다.`);
     } catch (caught) {
