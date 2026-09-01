@@ -317,7 +317,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const persisted = await prisma.$transaction(async (transaction) => {
-  const topCandidates = candidates.slice(0, 3);
+  const topCandidates = candidates.slice(0, 2);
 
     await transaction.placeCandidate.deleteMany({
       where: {

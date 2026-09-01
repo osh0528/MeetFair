@@ -112,7 +112,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
         a.recommendationRank - b.recommendationRank
         || a.timeGapMinutes - b.timeGapMinutes
         || a.maximumDurationMinutes - b.maximumDurationMinutes,
-      );
+      ).slice(0, 2);
       setMeeting(meetingData);
       setItems(sorted);
       setSelectedId((current) => current && sorted.some((item) => item.id === current)
@@ -163,7 +163,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
         { method: "POST", body: "{}" },
         60_000,
       );
-      const sorted = [...result.recommendations].sort((a, b) => a.recommendationRank - b.recommendationRank);
+      const sorted = [...result.recommendations].sort((a, b) => a.recommendationRank - b.recommendationRank).slice(0, 2);
       setItems(sorted);
       setSelectedId(sorted[0]?.id ?? null);
       setMeeting(await apiRequest<MeetingSummary>(`/meetings/${meetingId}`));
@@ -223,16 +223,6 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                 </View>
               ) : null}
             </View>
-            {selected ? (
-              <Card style={styles.mapCard}>
-                <KakaoAddressMap
-                  query=""
-                  requestId={0}
-                  focusTarget={{ address: selected.address, latitude: selected.latitude, longitude: selected.longitude }}
-                  mapMarkers={mapMarkers}
-                />
-              </Card>
-            ) : null}
             {canRegenerate ? (
               <View style={styles.regenerateRow}>
                 <Button compact variant="soft" label={regenerating ? "계산 중..." : "추천 다시 계산"} disabled={regenerating} onPress={() => void regenerate()} />
@@ -287,6 +277,20 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
+            {selected ? (
+              <View style={styles.mapSection}>
+                <Text style={styles.mapTitle}>선택한 장소 주변 지도</Text>
+                <Text style={styles.mapSubtitle}>{selected.name} 부근과 추천 장소 2곳을 확인해 보세요.</Text>
+                <Card style={styles.mapCard}>
+                  <KakaoAddressMap
+                    query=""
+                    requestId={0}
+                    focusTarget={{ address: selected.address, latitude: selected.latitude, longitude: selected.longitude }}
+                    mapMarkers={mapMarkers}
+                  />
+                </Card>
+              </View>
+            ) : null}
           </>
         ) : null}
         {message && items.length ? <Text style={styles.message}>{message}</Text> : null}
@@ -328,6 +332,9 @@ const styles = StyleSheet.create({
   scoreLabel: { color: colors.green, fontSize: 9, fontWeight: "800" },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 12 },
   mapCard: { height: 250, padding: 0, overflow: "hidden", marginBottom: 20 },
+  mapSection: { marginTop: 24 },
+  mapTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 5 },
+  mapSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
   regenerateRow: { alignItems: "flex-end", marginBottom: 10 },
   lockNotice: { color: colors.amber, fontSize: 11, fontWeight: "800", marginBottom: 12 },
   list: { gap: 12 },
