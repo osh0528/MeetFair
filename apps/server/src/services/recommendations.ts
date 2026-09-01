@@ -364,11 +364,6 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   return persisted.map(summarizeExistingCandidate);
 }
 
-function fairnessScore(gap: number, max: number): number {
-  if (max === 0) return 100;
-  return Math.max(0, Math.round(100 * (1 - gap / max)));
-}
-
 export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const existingJob = recommendationJobs.get(meetingId);
   if (existingJob) return existingJob;
