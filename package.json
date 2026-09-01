@@ -21,9 +21,17 @@
     "prisma:migrate": "npm run prisma:migrate -w @meetfair/server",
     "prisma:deploy": "npm run prisma:prepare -w @meetfair/server && npm run prisma:deploy -w @meetfair/server"
   },
+  "overrides": {
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.2"
+  },
   "allowScripts": {
     "@prisma/engines@7.9.1": true,
     "esbuild@0.28.2": true,
     "prisma@7.9.1": true
+  },
+  "devDependencies": {
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.2"
   }
 }
