@@ -51,11 +51,8 @@ function formatValue(value: number, metric: TravelMetric) {
   return metric === "DISTANCE" ? formatDistance(value) : `${Math.round(value)}분`;
 }
 
-function fairnessScore(item: MeetingRecommendation, metric: TravelMetric) {
-  const stats = values(item, metric);
-  return stats.maximum <= 0
-    ? 100
-    : Math.max(0, Math.min(100, Math.round(100 * (1 - stats.gap / stats.maximum))));
+function fairnessScore(item: MeetingRecommendation) {
+  return item.fairnessScore;
 }
 
 function recommendationError(error: unknown) {
@@ -85,16 +82,16 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
     else setLoading(true);
     setMessage("");
     try {
-      const result = await apiRequest<{ recommendations: MeetingRecommendation[] }>(
-        `/recommendations?meetingId=${encodeURIComponent(meetingId)}`,
-      );
       const meetingData = await apiRequest<MeetingSummary>(`/meetings/${meetingId}`);
+      setMeeting(meetingData);
+      const result = await apiRequest<{ recommendations: MeetingRecommendation[] }>(
+        `/meetings/${encodeURIComponent(meetingId)}/recommendations`,
+      );
       const sorted = [...result.recommendations].sort((a, b) =>
         a.recommendationRank - b.recommendationRank
         || a.timeGapMinutes - b.timeGapMinutes
         || a.maximumDurationMinutes - b.maximumDurationMinutes,
       );
-      setMeeting(meetingData);
       setItems(sorted);
       setSelectedId((current) => current && sorted.some((item) => item.id === current)
         ? current
@@ -161,7 +158,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
               </View>
               {selected ? (
                 <View style={styles.score}>
-                  <Text style={styles.scoreValue}>{fairnessScore(selected, metric)}</Text>
+                  <Text style={styles.scoreValue}>{fairnessScore(selected)}</Text>
                   <Text style={styles.scoreLabel}>균형 점수</Text>
                 </View>
               ) : null}
