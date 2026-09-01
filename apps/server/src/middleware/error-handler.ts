@@ -22,7 +22,11 @@ export const errorHandler: ErrorRequestHandler = (
   if (error instanceof AppError) {
     response.status(error.status).json({
       success: false,
-      error: { code: error.code, message: error.message },
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      },
     });
     return;
   }

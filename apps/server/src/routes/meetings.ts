@@ -144,10 +144,11 @@ function recommendationSummary(candidate: {
   const averageDurationMinutes = times.length ? Math.round(times.reduce((sum, time) => sum + time, 0) / times.length) : 0;
   const maximumDurationMinutes = times.length ? Math.max(...times) : 0;
   const timeGapMinutes = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  const fairnessScore = maximumDurationMinutes === 0 ? 100 : Math.max(0, Math.round(100 * (1 - timeGapMinutes / maximumDurationMinutes)));
   return {
     id: candidate.id, name: candidate.name, address: candidate.address, latitude: candidate.latitude,
     longitude: candidate.longitude, category: candidate.category, averageDurationMinutes,
-    maximumDurationMinutes, timeGapMinutes,
+    maximumDurationMinutes, timeGapMinutes, fairnessScore,
     participantTravelTimes: candidate.travelEstimates.map((estimate) => ({
       userId: estimate.userId, nickname: estimate.user.nickname, durationMinutes: estimate.durationMinutes,
       distanceMeters: estimate.distanceMeters,
@@ -633,9 +634,62 @@ meetingsRouter.post("/:meetingId/recommendations", async (request: Authenticated
 meetingsRouter.get("/:meetingId/midpoint-recommendations", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
-    const { midpoint, recommendations } = await generateMidpointRecommendations(meetingId, userId(request));
-    response.json({ success: true, data: { midpoint, recommendations } });
+    const participant = await participantFor(meetingId, userId(request));
+    const meeting = participant.meeting as unknown as {
+      id: string;
+      recommendationsGeneratedAt: Date | null;
+      recommendationsInputHash: string | null;
+      recommendationsVersion: number;
+    };
+    const candidates = await prisma.placeCandidate.findMany({
+      where: { meetingId },
+      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
+      orderBy: { recommendationRank: "asc" },
+    });
+    const recommendations = candidates.map(recommendationSummary);
+    const origins = await prisma.meetingParticipant.findMany({
+      where: { meetingId },
+      include: { user: { select: { homeLatitude: true, homeLongitude: true } } },
+    });
+    const points = origins
+      .map((p) => {
+        if (p.originLatitude != null && p.originLongitude != null) return { latitude: p.originLatitude, longitude: p.originLongitude };
+        if (p.user.homeLatitude != null && p.user.homeLongitude != null) return { latitude: p.user.homeLatitude, longitude: p.user.homeLongitude };
+        return null;
+      })
+      .filter((v): v is { latitude: number; longitude: number } => v !== null);
+    let midpoint: { latitude: number; longitude: number } | null = null;
+    if (points.length === 2) {
+      const { midpointOf } = await import("../lib/geo.js");
+      midpoint = midpointOf(points[0]!, points[1]!);
+    }
+    response.json({
+      success: true,
+      data: {
+        midpoint,
+        recommendations,
+        generatedAt: meeting.recommendationsGeneratedAt?.toISOString() ?? null,
+        inputHash: meeting.recommendationsInputHash ?? null,
+        version: meeting.recommendationsVersion ?? 0,
+      },
+    });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/midpoint-recommendations/regenerate", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await hostFor(meetingId, userId(request));
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { placeCandidates: { include: { votes: true } } },
+    });
+    if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+    if (meeting.placeCandidates.some((c) => c.votes.length > 0)) {
+      throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
+    }
+    const result = await generateMidpointRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: result });
   } catch (error) { next(error); }
 });
 
