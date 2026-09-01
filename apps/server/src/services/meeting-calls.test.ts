@@ -98,6 +98,10 @@ describe("meeting call modes", () => {
 
     await processDueMeetingCalls();
 
+    expect(prisma.meeting.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ participants: { some: { arrivedAt: null } } }),
+      orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+    }));
     expect(prisma.meetingCallParticipant.createMany).toHaveBeenCalledWith(expect.objectContaining({
       data: [expect.objectContaining({ userId: "late-1", forcedAt: expect.any(Date) })],
     }));

@@ -145,6 +145,12 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [message, setMessage] = useState("");
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const sharingRef = useRef(false);
+
+  const updateSharingState = useCallback((value: boolean) => {
+    sharingRef.current = value;
+    setSharing(value);
+  }, []);
 
   const load = useCallback(async () => {
     const [meetingData, locationData] = await Promise.all([
@@ -153,7 +159,8 @@ export function TrackingScreen({ navigation, route }: Props) {
     ]);
     setMeeting(meetingData);
     setLocations(locationData.locations);
-  }, [meetingId]);
+    updateSharingState(locationData.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING"));
+  }, [meetingId, updateSharingState, user?.id]);
 
   const updateMyLocation = useCallback((position: GeolocationPosition) => {
     setLocations((current) => current.map((item) => item.userId === user?.id ? {
@@ -215,8 +222,17 @@ export function TrackingScreen({ navigation, route }: Props) {
     return () => {
       clearInterval(timer);
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-      socket?.disconnect();
+      watchIdRef.current = null;
       socketRef.current = null;
+      if (sharingRef.current) {
+        socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
+        void apiRequest(`/meetings/${meetingId}/location-consent`, {
+          method: "PATCH",
+          body: JSON.stringify({ consent: false }),
+        }).catch(() => undefined).finally(() => socket?.disconnect());
+      } else {
+        socket?.disconnect();
+      }
     };
   }, [accessToken, load, meetingId]);
 
@@ -252,7 +268,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         socket.emit("location:update", { meetingId, latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, sentAt: new Date(position.timestamp).toISOString() });
         updateMyLocation(position);
       }, (error) => setMessage(`위치 갱신에 실패했습니다: ${error.message}`), { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
-      setSharing(true);
+      updateSharingState(true);
       setMessage("실시간 위치 공유를 시작했습니다.");
     } catch (error) {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
@@ -262,7 +278,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         method: "PATCH",
         body: JSON.stringify({ consent: false }),
       }).catch(() => undefined);
-      setSharing(false);
+      updateSharingState(false);
       setMessage(error instanceof Error ? `위치 권한이 필요합니다: ${error.message}` : "위치 권한이 필요합니다.");
     }
   }
@@ -272,7 +288,7 @@ export function TrackingScreen({ navigation, route }: Props) {
     watchIdRef.current = null;
     socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
     await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: false }) });
-    setSharing(false);
+    updateSharingState(false);
     setMessage("실시간 위치 공유를 중지했습니다.");
   }
 

@@ -93,6 +93,12 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [message, setMessage] = useState("");
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
+  const sharingRef = useRef(false);
+
+  function updateSharingState(value: boolean) {
+    sharingRef.current = value;
+    setSharing(value);
+  }
 
   async function load() {
     const [meetingData, locationData] = await Promise.all([
@@ -101,6 +107,7 @@ export function TrackingScreen({ navigation, route }: Props) {
     ]);
     setMeeting(meetingData);
     setLocations(locationData.locations);
+    updateSharingState(locationData.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING"));
   }
 
   function updateMyLocation(position: Location.LocationObject) {
@@ -174,10 +181,23 @@ export function TrackingScreen({ navigation, route }: Props) {
     return () => {
       clearInterval(timer);
       watcher.current?.remove();
-      socketRef.current?.disconnect();
+      watcher.current = null;
+      const socket = socketRef.current;
       socketRef.current = null;
+      void Location.hasStartedLocationUpdatesAsync(TASK_NAME)
+        .catch(() => false)
+        .then(async (backgroundActive) => {
+          if (sharingRef.current && !backgroundActive) {
+            socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
+            await apiRequest(`/meetings/${meetingId}/location-consent`, {
+              method: "PATCH",
+              body: JSON.stringify({ consent: false }),
+            }).catch(() => undefined);
+          }
+          socket?.disconnect();
+        });
     };
-  }, [accessToken, meetingId]);
+  }, [accessToken, meetingId, user?.id]);
 
   useEffect(() => {
     if (!mapExpanded) return;
@@ -239,7 +259,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         updateMyLocation(position);
       });
       await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
-      setSharing(true);
+      updateSharingState(true);
       setMessage("실시간 위치 공유를 시작했습니다.");
 
       try {
@@ -267,7 +287,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         method: "PATCH",
         body: JSON.stringify({ consent: false }),
       }).catch(() => undefined);
-      setSharing(false);
+      updateSharingState(false);
       setMessage(error instanceof Error ? error.message : "위치 공유를 시작하지 못했습니다.");
     }
   }
@@ -282,7 +302,7 @@ export function TrackingScreen({ navigation, route }: Props) {
       method: "PATCH",
       body: JSON.stringify({ consent: false }),
     });
-    setSharing(false);
+    updateSharingState(false);
   }
 
   async function arrive() {

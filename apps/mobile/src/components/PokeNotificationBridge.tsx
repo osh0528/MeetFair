@@ -7,6 +7,7 @@ import { isPokeSoundEnabled } from "../services/poke-sound";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
 import type { RootStackParamList } from "../../App";
+import { navigateForNotificationData, stringValue } from "../services/notification-navigation";
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
@@ -56,22 +57,34 @@ function playWebPokeAlert() {
 }
 
 export function PokeNotificationBridge() {
-  const { accessToken } = useSession();
+  const { accessToken, user } = useSession();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const seenPokeIds = useRef<Set<string>>(new Set());
+  const seenResponseIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { meetingId?: string | null };
-      if (data?.meetingId) {
-        navigation.navigate("Tracking", { meetingId: data.meetingId });
-      } else {
-        navigation.navigate("Notifications");
+    const handleResponse = (response: Notifications.NotificationResponse) => {
+      const identifier = response.notification.request.identifier;
+      if (seenResponseIds.current.has(identifier)) return;
+      seenResponseIds.current.add(identifier);
+      void Notifications.clearLastNotificationResponseAsync();
+      const data = response.notification.request.content.data as Record<string, unknown>;
+      const notificationType = stringValue(data.notificationType);
+      if (notificationType) {
+        navigateForNotificationData(notificationType, data, navigation, user?.id);
+        return;
       }
+      const meetingId = stringValue(data.meetingId);
+      if (meetingId) navigation.navigate("Tracking", { meetingId });
+      else navigation.navigate("Notifications");
+    };
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) handleResponse(response);
     });
+    const sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => sub.remove();
-  }, [navigation]);
+  }, [navigation, user?.id]);
 
   useEffect(() => {
     if (!accessToken) return;

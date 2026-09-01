@@ -37,12 +37,40 @@ export function LoginScreen({ navigation }: Props) {
     }
   }
 
+  async function reconnectStoredSession() {
+    setSubmitting(true);
+    setError("");
+    try {
+      await session.refreshUser();
+      navigation.replace("Home");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "서버에 다시 연결하지 못했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (session.loading) {
     return <SafeAreaView style={styles.center}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
   }
   if (session.user) {
     navigation.replace("Home");
     return null;
+  }
+  if (session.accessToken) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <LogoMark />
+          <Text style={styles.brand}>MeetFair</Text>
+          <Text style={styles.title}>서버 연결이 지연되고 있어요</Text>
+          <Text style={styles.recoveryText}>로그인 정보는 안전하게 유지했습니다. 네트워크를 확인한 뒤 다시 연결해 주세요.</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button disabled={submitting} label={submitting ? "연결 중..." : "다시 연결"} onPress={reconnectStoredSession} />
+          <Button label="다른 계정으로 로그인" onPress={() => void session.logout()} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -114,5 +142,6 @@ const styles = StyleSheet.create({
   rememberCopy: { flex: 1, gap: 2 },
   rememberLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
   rememberHelp: { color: colors.muted, fontSize: 10, lineHeight: 14 },
+  recoveryText: { color: colors.muted, fontSize: 14, lineHeight: 22, marginBottom: 8 },
   error: { color: colors.red, fontSize: 12 },
 });

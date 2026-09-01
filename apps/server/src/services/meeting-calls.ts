@@ -58,6 +58,7 @@ export async function processDueMeetingCalls() {
     where: {
       scheduledAt: { lte: now },
       status: { notIn: ["COMPLETED", "CANCELLED"] },
+      participants: { some: { arrivedAt: null } },
       OR: [
         { calls: { none: {} } },
         { calls: { some: { forcedAt: null } } },
@@ -66,6 +67,7 @@ export async function processDueMeetingCalls() {
     include: {
       participants: true,
     },
+    orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
     take: 20,
   });
   for (const meeting of meetings) {

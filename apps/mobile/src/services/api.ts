@@ -2,6 +2,7 @@ import type { ApiResponse } from "@meetfair/shared";
 import { appConfig } from "../config/env";
 
 let accessToken: string | null = null;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function setApiAccessToken(token: string | null) {
   accessToken = token;
@@ -21,9 +22,18 @@ export async function apiRequest<T>(
   init: RequestInit = {},
 ): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${appConfig.apiUrl}${path}`, {
       ...init,
+      signal: controller.signal,
       headers: {
         "content-type": "application/json",
         ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
@@ -31,11 +41,21 @@ export async function apiRequest<T>(
       },
     });
   } catch {
+    if (timedOut) {
+      throw new ApiError(
+        "SERVER_TIMEOUT",
+        "서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
+        0,
+      );
+    }
     throw new ApiError(
       "SERVER_UNREACHABLE",
       "서버에 연결할 수 없습니다. 서버 주소와 실행 상태를 확인해 주세요.",
       0,
     );
+  } finally {
+    clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", abortFromCaller);
   }
   if (response.status === 204) return undefined as T;
   let payload: ApiResponse<T>;

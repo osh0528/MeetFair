@@ -117,18 +117,27 @@ export function HomeScreen({ navigation }: Props) {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const [meetingData, invitationData, activityData, callData, notificationData] = await Promise.all([
+      const [meetingResult, invitationResult, activityResult, callResult, notificationResult] = await Promise.allSettled([
         apiRequest<MeetingSummary[]>("/meetings"),
         apiRequest<{ invitations: MeetingInvitationSummary[] }>("/meeting-invitations"),
         apiRequest<{ activities: FriendActivitySummary[] }>("/meetings/activity/friends"),
         apiRequest<{ calls: MeetingCallSummary[] }>("/meeting-calls/pending"),
         apiRequest<{ notifications: NotificationSummary[] }>("/notifications"),
-      ]);
-      setMeetings(meetingData);
-      setInvitations(invitationData.invitations.filter((item) => item.status === "PENDING"));
-      setActivities(activityData.activities);
-      setCalls(callData.calls);
-      setUnreadNotificationCount(notificationData.notifications.filter((item) => !item.readAt).length);
+      ] as const);
+      if (meetingResult.status === "fulfilled") setMeetings(meetingResult.value);
+      if (invitationResult.status === "fulfilled") {
+        setInvitations(invitationResult.value.invitations.filter((item) => item.status === "PENDING"));
+      }
+      if (activityResult.status === "fulfilled") setActivities(activityResult.value.activities);
+      if (callResult.status === "fulfilled") setCalls(callResult.value.calls);
+      if (notificationResult.status === "fulfilled") {
+        setUnreadNotificationCount(notificationResult.value.notifications.filter((item) => !item.readAt).length);
+      }
+      const failed = [meetingResult, invitationResult, activityResult, callResult, notificationResult]
+        .find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") {
+        setError(failed.reason instanceof Error ? failed.reason.message : "일부 홈 정보를 불러오지 못했습니다.");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "홈 정보를 불러오지 못했습니다.");
     } finally {
