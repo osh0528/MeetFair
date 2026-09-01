@@ -41,7 +41,7 @@ const routeCache = new Map<string, CachedRouteResult>();
 const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
-const MAX_ROUTE_CANDIDATES = 12;
+const MAX_ROUTE_CANDIDATES = 24;
 
 function distanceMeters(
   origin: { latitude: number; longitude: number },
@@ -236,29 +236,46 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
       : [];
   });
   if (origins.length < 2) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "추천을 받으려면 위치를 설정한 참가자가 2명 이상 필요합니다.");
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "異붿쿇??諛쏆쑝?ㅻ㈃ ?꾩튂瑜??ㅼ젙??李멸??먭? 2紐??댁긽 ?꾩슂?⑸땲??");
   }
   if (origins.length !== meeting.participants.length) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "모든 참가자가 출발 위치를 설정한 뒤 추천을 받아주세요.");
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆븘二쇱꽭??");
   }
 
   const center = meetingIncenter(origins);
+  // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
+  const searchCenters = origins.length > 2
+    ? [
+        center,
+        {
+          latitude: origins.reduce((sum, origin) => sum + origin.latitude, 0) / origins.length,
+          longitude: origins.reduce((sum, origin) => sum + origin.longitude, 0) / origins.length,
+        },
+        ...origins.map(({ latitude, longitude }) => ({ latitude, longitude })),
+      ]
+    : [center];
   const queries = meeting.categories.length ? meeting.categories : ["카페", "음식점"];
-  const searchResults = await Promise.all(queries.map((query) => searchNearbyKakaoPlaces({
-    query,
-    latitude: center.latitude,
-    longitude: center.longitude,
-    radiusMeters: 3000,
-  })));
+  const searchResults = await Promise.all(
+    searchCenters.flatMap((searchCenter) => queries.map((query) => searchNearbyKakaoPlaces({
+      query,
+      latitude: searchCenter.latitude,
+      longitude: searchCenter.longitude,
+      radiusMeters: origins.length > 2 ? 5000 : 3000,
+    }))),
+  );
   const uniquePlaces = new Map<string, KakaoPlace>();
   for (const place of searchResults.flat()) {
     if (!uniquePlaces.has(place.id)) uniquePlaces.set(place.id, place);
   }
   const nearbyPlaces = [...uniquePlaces.values()]
-    .sort((a, b) => a.distanceMeters - b.distanceMeters)
+    .sort((a, b) => {
+      const nearestA = Math.min(...searchCenters.map((point) => distanceMeters(point, a)));
+      const nearestB = Math.min(...searchCenters.map((point) => distanceMeters(point, b)));
+      return nearestA - nearestB;
+    })
     .slice(0, MAX_ROUTE_CANDIDATES);
   if (!nearbyPlaces.length) {
-    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "중심 위치 주변에서 추천할 장소를 찾지 못했습니다.");
+    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "以묒떖 ?꾩튂 二쇰??먯꽌 異붿쿇???μ냼瑜?李얠? 紐삵뻽?듬땲??");
   }
 
   const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
