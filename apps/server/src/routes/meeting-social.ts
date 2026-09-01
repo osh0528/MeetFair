@@ -174,12 +174,18 @@ meetingSocialRouter.patch("/:meetingId/permissions", async (request: Authenticat
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
     const input = z.object({
-      cameraPermissionGranted: z.boolean(),
+      cameraPermissionGranted: z.boolean().optional(),
+      microphonePermissionGranted: z.boolean().optional(),
+    }).refine((data) => data.cameraPermissionGranted !== undefined || data.microphonePermissionGranted !== undefined, {
+      message: "At least one permission field is required.",
     }).parse(request.body);
     const participant = await requireParticipant(meetingId, userId(request));
+    const data: { cameraPermissionGranted?: boolean; microphonePermissionGranted?: boolean } = {};
+    if (input.cameraPermissionGranted !== undefined) data.cameraPermissionGranted = input.cameraPermissionGranted;
+    if (input.microphonePermissionGranted !== undefined) data.microphonePermissionGranted = input.microphonePermissionGranted;
     const updated = await prisma.meetingParticipant.update({
       where: { id: participant.id },
-      data: { cameraPermissionGranted: input.cameraPermissionGranted, microphonePermissionGranted: false },
+      data,
     });
     response.json({ success: true, data: { participant: updated } });
   } catch (error) { next(error); }
