@@ -115,6 +115,7 @@ function recommendationSummary(candidate: {
   const averageDurationMinutes = times.length ? Math.round(times.reduce((sum, time) => sum + time, 0) / times.length) : 0;
   const maximumDurationMinutes = times.length ? Math.max(...times) : 0;
   const timeGapMinutes = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  const fairnessScore = maximumDurationMinutes === 0 ? 100 : Math.max(0, Math.round(100 * (1 - timeGapMinutes / maximumDurationMinutes)));
   return {
     id: candidate.id, providerPlaceId: candidate.providerPlaceId ?? null,
     name: candidate.name, address: candidate.address, latitude: candidate.latitude,
