@@ -1,4 +1,4 @@
-import type { FriendSummary, MeetingMemberStatusEntry } from "@meetfair/shared";
+import type { FriendSummary, MeetingMemberStatusEntry, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -18,6 +18,7 @@ interface MeetingDetail {
   scheduledAt: string;
   status: string;
   hostId: string;
+  travelMetric: TravelMetric;
   locationShareMode: string;
   shareMinutesBefore: number | null;
   voteCountdownEndsAt: string | null;
@@ -37,6 +38,22 @@ interface MeetingDetail {
     category: string;
     votes: Array<{ userId: string }>;
   }>;
+}
+
+const travelMetricLabels: Record<TravelMetric, string> = {
+  TRANSIT: "대중교통",
+  CAR: "자동차",
+  DISTANCE: "직선거리",
+};
+
+function recommendationErrorMessage(error: unknown, travelMetric: TravelMetric) {
+  if (!(error instanceof Error) || travelMetric !== "TRANSIT") {
+    return error instanceof Error ? error.message : "추천 장소를 계산하지 못했습니다.";
+  }
+  if ((error as { code?: string }).code === "TRANSIT_NOT_CONFIGURED") return "대중교통 추천 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.";
+  if ((error as { code?: string }).code === "TRANSIT_TIMEOUT") return "대중교통 경로 계산이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
+  if ((error as { code?: string }).code === "TRANSIT_NO_ROUTE") return "참가자 모두가 이동할 수 있는 대중교통 경로를 찾지 못했습니다.";
+  return error.message;
 }
 
 interface JoinRequest {
@@ -219,6 +236,22 @@ export function MeetingScreen({ navigation, route }: Props) {
       await load();
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "장소 후보를 추가하지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function receiveRecommendedPlace() {
+    const selectedTravelMetric = meeting?.travelMetric ?? "DISTANCE";
+    const selectedTravelMetricLabel = travelMetricLabels[selectedTravelMetric] ?? selectedTravelMetric;
+    setBusyAction("recommendation");
+    setMessage("");
+    try {
+      await apiRequest(`/meetings/${meetingId}/recommendations/regenerate`, { method: "POST", body: JSON.stringify({}) });
+      await load();
+      setMessage(`${selectedTravelMetricLabel} 기준으로 이동시간 차이가 가장 작은 장소를 추천했습니다.`);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "추천 장소를 계산하지 못했습니다.");
     } finally {
       setBusyAction("");
     }
