@@ -147,7 +147,7 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
       room: participant.call.roomName,
       roomJoin: true,
       canPublish: true,
-      canPublishSources: [TrackSource.CAMERA],
+      canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
       canSubscribe: true,
     });
     response.json({
