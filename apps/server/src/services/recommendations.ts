@@ -41,7 +41,7 @@ const routeCache = new Map<string, CachedRouteResult>();
 const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
-const MAX_ROUTE_CANDIDATES = 3;
+const MAX_ROUTE_CANDIDATES = 12;
 
 function distanceMeters(
   origin: { latitude: number; longitude: number },
@@ -317,6 +317,8 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const persisted = await prisma.$transaction(async (transaction) => {
+  const topCandidates = candidates.slice(0, 3);
+
     await transaction.placeCandidate.deleteMany({
       where: {
         meetingId,
@@ -329,8 +331,8 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     });
 
     const created = [];
-    for (let index = 0; index < candidates.length; index += 1) {
-      const candidate = candidates[index]!;
+    for (let index = 0; index < topCandidates.length; index += 1) {
+      const candidate = topCandidates[index]!;
       created.push(await transaction.placeCandidate.create({
         data: {
           meetingId,

@@ -108,6 +108,7 @@ function createInviteCode() {
 
 function recommendationSummary(candidate: {
   id: string; name: string; address: string; latitude: number; longitude: number; category: string;
+  providerPlaceId?: string | null; recommendationRank?: number | null;
   travelEstimates: { userId: string; durationMinutes: number; distanceMeters: number; user: { id: string; accountId: string; nickname: string } }[];
 }) {
   const times = candidate.travelEstimates.map((estimate) => estimate.durationMinutes);
@@ -115,15 +116,43 @@ function recommendationSummary(candidate: {
   const maximumDurationMinutes = times.length ? Math.max(...times) : 0;
   const timeGapMinutes = times.length ? Math.max(...times) - Math.min(...times) : 0;
   return {
-    id: candidate.id, name: candidate.name, address: candidate.address, latitude: candidate.latitude,
-    longitude: candidate.longitude, category: candidate.category, averageDurationMinutes,
+    id: candidate.id, providerPlaceId: candidate.providerPlaceId ?? null,
+    name: candidate.name, address: candidate.address, latitude: candidate.latitude,
+    longitude: candidate.longitude, category: candidate.category,
+    recommendationRank: candidate.recommendationRank ?? 99, averageDurationMinutes,
     maximumDurationMinutes, timeGapMinutes,
+    fairnessScore: maximumDurationMinutes === 0 ? 100 : Math.max(0, Math.round(100 * (1 - timeGapMinutes / maximumDurationMinutes))),
     participantTravelTimes: candidate.travelEstimates.map((estimate) => ({
       userId: estimate.userId, nickname: estimate.user.nickname, durationMinutes: estimate.durationMinutes,
       distanceMeters: estimate.distanceMeters,
     })),
   };
 }
+
+meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await participantFor(meetingId, userId(request));
+    const candidates = await prisma.placeCandidate.findMany({
+      where: { meetingId },
+      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
+      orderBy: { recommendationRank: "asc" },
+    });
+    response.json({ success: true, data: { recommendations: candidates.map(recommendationSummary) } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/recommendations/regenerate", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const host = await hostFor(meetingId, userId(request));
+    if (host.meeting.status !== "PLANNING") throw new AppError(409, "MEETING_NOT_PLANNING", "Recommendations can only be changed while planning.");
+    const voteCount = await prisma.vote.count({ where: { meetingId } });
+    if (voteCount > 0) throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
+    const recommendations = await generateRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
 
 async function resolveInvitees(input: {
   inviteeUserIds?: string[];
