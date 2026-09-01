@@ -13,8 +13,8 @@
     "plugins": [
       ["expo-camera", {
         "cameraPermission": "모임 영상 통화와 지각 확인을 위해 카메라 접근을 허용해 주세요.",
-        "microphonePermission": false,
-        "recordAudioAndroid": false
+        "microphonePermission": "모임 영상 통화의 음성 통화를 위해 마이크 접근을 허용해 주세요.",
+        "recordAudioAndroid": true
       }],
       "expo-location",
       ["expo-image-picker", {
@@ -32,8 +32,8 @@
     },
     "android": {
       "package": "com.meetfair.app",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"],
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      "blockedPermissions": []
     }
   }
 }
