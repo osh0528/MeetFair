@@ -117,6 +117,8 @@ export async function ensureCallRecording(callId: string, roomName: string) {
     });
     const egress = await egressClient.startRoomCompositeEgress(roomName, output, {
       layout: "grid",
+      audioOnly: false,
+      videoOnly: false,
       encodingOptions: EncodingOptionsPreset.H264_720P_30,
     });
     await prisma.meetingCall.update({

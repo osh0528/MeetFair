@@ -10,13 +10,14 @@ import {
 } from "@livekit/react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
+import { requestRecordingPermissionsAsync } from "expo-audio";
 import { ConnectionState, Track } from "livekit-client";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
-import { apiRequest } from "../services/api";
+import { apiRequest, ApiError } from "../services/api";
 import { colors } from "../theme/colors";
 
 registerGlobals();
@@ -68,6 +69,7 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   const {
     cameraTrack,
     isCameraEnabled,
+    isMicrophoneEnabled,
     localParticipant,
   } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
@@ -91,6 +93,12 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
     });
   }
 
+  function toggleMicrophone() {
+    void run(async () => {
+      await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+    });
+  }
+
   function switchCamera() {
     void run(async () => {
       const mediaTrack = cameraTrack?.track?.mediaStreamTrack as unknown as SwitchableMediaStreamTrack | undefined;
@@ -104,6 +112,7 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   return (
     <View style={styles.controls}>
       <ControlButton disabled={busy} label={isCameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={toggleCamera} />
+      <ControlButton disabled={busy} label={isMicrophoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={toggleMicrophone} />
       <ControlButton disabled={busy || !isCameraEnabled} label="카메라 전환" onPress={switchCamera} />
       <ControlButton
         danger
@@ -169,21 +178,39 @@ export function VideoCallScreen({ navigation, route }: Props) {
   async function connect() {
     setConnecting(true);
     setMessage("통화 연결 준비 중...");
+    let microphonePermissionGranted = false;
+    let micDeniedNotice: string | null = null;
     try {
       const camera = await Camera.requestCameraPermissionsAsync();
       if (!camera.granted) throw new Error("카메라 권한이 필요합니다.");
-      await apiRequest(`/meetings/${meetingId}/permissions`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          cameraPermissionGranted: true,
-        }),
-      });
+      try {
+        const mic = await requestRecordingPermissionsAsync();
+        microphonePermissionGranted = mic.granted;
+        if (!mic.granted) {
+          micDeniedNotice = "마이크 권한이 거부되어 음성 없이 연결됩니다. 설정에서 허용하면 음성 통화를 사용할 수 있습니다.";
+        }
+      } catch {
+        microphonePermissionGranted = false;
+        micDeniedNotice = "마이크 권한을 확인하지 못했습니다. 음성 없이 연결됩니다.";
+      }
+      try {
+        await apiRequest(`/meetings/${meetingId}/permissions`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            cameraPermissionGranted: true,
+            microphonePermissionGranted,
+          }),
+        });
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw new Error(error instanceof Error ? error.message : "권한 정보를 저장하지 못했습니다.");
+      }
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       setRecordingEnabled(token.recordingEnabled);
       setLeaveLockedUntil(token.leaveLockedUntil ? new Date(token.leaveLockedUntil).getTime() : null);
       setCredentials(token);
-      setMessage("");
+      setMessage(micDeniedNotice ?? "");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "통화에 연결하지 못했습니다.");
     } finally {

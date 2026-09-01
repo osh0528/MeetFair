@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
-import { apiRequest } from "../services/api";
+import { apiRequest, ApiError } from "../services/api";
 import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
@@ -53,6 +53,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
   const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
@@ -64,6 +65,8 @@ export function VideoCallScreen({ navigation, route }: Props) {
     async function connect() {
       setConnecting(true);
       setMessage("카메라 권한 확인 중...");
+      let microphonePermissionGranted = false;
+      let micDeniedNotice: string | null = null;
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error("이 브라우저는 카메라 영상통화를 지원하지 않습니다.");
@@ -71,12 +74,37 @@ export function VideoCallScreen({ navigation, route }: Props) {
         const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         permissionStream.getTracks().forEach((track) => track.stop());
 
-        await apiRequest(`/meetings/${meetingId}/permissions`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            cameraPermissionGranted: true,
-          }),
-        });
+        setMessage("마이크 권한 확인 중...");
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStream.getTracks().forEach((track) => track.stop());
+          microphonePermissionGranted = true;
+        } catch (micError) {
+          const isNotAllowed =
+            micError instanceof DOMException &&
+            (micError.name === "NotAllowedError" || micError.name === "PermissionDeniedError");
+          if (isNotAllowed) {
+            micDeniedNotice = "마이크 권한이 거부되었습니다. 음성 없이 연결됩니다. 브라우저 설정에서 허용해 주세요.";
+          } else if (micError instanceof DOMException && micError.name === "NotFoundError") {
+            micDeniedNotice = "마이크 장치를 찾을 수 없어 음성 없이 연결됩니다.";
+          } else {
+            micDeniedNotice = "마이크 권한을 확인하지 못했습니다. 음성 없이 연결됩니다.";
+          }
+          microphonePermissionGranted = false;
+        }
+
+        try {
+          await apiRequest(`/meetings/${meetingId}/permissions`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              cameraPermissionGranted: true,
+              microphonePermissionGranted,
+            }),
+          });
+        } catch (error) {
+          if (error instanceof ApiError) throw error;
+          throw new Error(error instanceof Error ? error.message : "권한 정보를 저장하지 못했습니다.");
+        }
         await apiRequest(`/meeting-calls/${callId}`, {
           method: "PATCH",
           body: JSON.stringify({ action: "accept" }),
@@ -128,9 +156,17 @@ export function VideoCallScreen({ navigation, route }: Props) {
         setMessage("통화 연결 중...");
         await nextRoom.connect(credentials.url, credentials.token);
         await nextRoom.localParticipant.setCameraEnabled(true);
+        if (microphonePermissionGranted) {
+          try {
+            await nextRoom.localParticipant.setMicrophoneEnabled(true);
+            setMicrophoneEnabled(true);
+          } catch {
+            micDeniedNotice = "마이크를 켜지 못했습니다. 브라우저 설정을 확인해 주세요.";
+          }
+        }
         refreshTracks();
         setRoom(nextRoom);
-        setMessage("");
+        setMessage(micDeniedNotice ?? "");
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "통화에 연결하지 못했습니다.");
@@ -173,6 +209,17 @@ export function VideoCallScreen({ navigation, route }: Props) {
       setCameraEnabled(next);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "카메라 설정을 변경하지 못했습니다.");
+    }
+  }
+
+  async function toggleMicrophone() {
+    if (!room) return;
+    const next = !microphoneEnabled;
+    try {
+      await room.localParticipant.setMicrophoneEnabled(next);
+      setMicrophoneEnabled(next);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "마이크 설정을 변경하지 못했습니다.");
     }
   }
 
@@ -231,6 +278,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <View style={styles.controls}>
             <ControlButton label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={() => void toggleCamera()} />
+            <ControlButton label={microphoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={() => void toggleMicrophone()} />
             <ControlButton
               danger
               disabled={leaveLockRemainingMs > 0}
