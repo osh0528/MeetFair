@@ -222,6 +222,9 @@ model Meeting {
   locationPurgeAt  DateTime?
   retentionWarningSentAt DateTime?
   confirmedPlaceId String?              @unique
+  recommendationsGeneratedAt DateTime?
+  recommendationsInputHash String?
+  recommendationsVersion Int @default(0)
   createdAt        DateTime             @default(now())
   host             User                 @relation("MeetingHost", fields: [hostId], references: [id])
   confirmedPlace   PlaceCandidate?      @relation("ConfirmedPlace", fields: [confirmedPlaceId], references: [id], onDelete: SetNull)

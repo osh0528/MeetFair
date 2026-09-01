@@ -144,6 +144,11 @@ export function rankRecommendationCandidates(candidates: CandidateWithTravel[], 
   });
 }
 
+function fairnessScore(gap: number, max: number): number {
+  if (max === 0) return 100;
+  return Math.max(0, Math.round(100 * (1 - gap / max)));
+}
+
 function summarizeExistingCandidate(candidate: {
   id: string;
   providerPlaceId: string | null;
@@ -178,6 +183,7 @@ function summarizeExistingCandidate(candidate: {
     averageDurationMinutes,
     maximumDurationMinutes,
     timeGapMinutes,
+    fairnessScore: fairnessScore(timeGapMinutes, maximumDurationMinutes),
     participantTravelTimes: candidate.travelEstimates.map((estimate) => ({
       userId: estimate.userId,
       nickname: estimate.user.nickname,
