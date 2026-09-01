@@ -31,7 +31,37 @@ recommendationsRouter.get("/", async (request: AuthenticatedRequest, response, n
   try {
     const { meetingId } = z.object({ meetingId: idSchema }).parse(request.query);
     await participantFor(meetingId, userId(request));
-    const recommendations = await generateRecommendations(meetingId, userId(request));
+    const candidates = await prisma.placeCandidate.findMany({
+      where: { meetingId },
+      include: { travelEstimates: { include: { user: { select: { id: true, nickname: true } } } } },
+      orderBy: { recommendationRank: "asc" },
+    });
+    const recommendations = candidates.map((candidate) => {
+      const times = candidate.travelEstimates.map((e) => e.durationMinutes);
+      const gap = times.length ? Math.max(...times) - Math.min(...times) : 0;
+      const max = times.length ? Math.max(...times) : 0;
+      const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+      return {
+        id: candidate.id,
+        providerPlaceId: candidate.providerPlaceId,
+        name: candidate.name,
+        address: candidate.address,
+        latitude: candidate.latitude,
+        longitude: candidate.longitude,
+        category: candidate.category,
+        recommendationRank: candidate.recommendationRank ?? 99,
+        averageDurationMinutes: avg,
+        maximumDurationMinutes: max,
+        timeGapMinutes: gap,
+        fairnessScore: max === 0 ? 100 : Math.max(0, Math.round(100 * (1 - gap / max))),
+        participantTravelTimes: candidate.travelEstimates.map((e) => ({
+          userId: e.userId,
+          nickname: e.user.nickname,
+          durationMinutes: e.durationMinutes,
+          distanceMeters: e.distanceMeters,
+        })),
+      };
+    });
     response.json({ success: true, data: { recommendations } });
   } catch (error) { next(error); }
 });
@@ -606,6 +636,37 @@ meetingsRouter.get("/:meetingId/midpoint-recommendations", async (request: Authe
     await participantFor(meetingId, userId(request));
     const { midpoint, recommendations } = await generateMidpointRecommendations(meetingId, userId(request));
     response.json({ success: true, data: { midpoint, recommendations } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/recommendations/regenerate", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await hostFor(meetingId, userId(request));
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { placeCandidates: { include: { votes: true } } },
+    });
+    if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
+    if (meeting.placeCandidates.some((c) => c.votes.length > 0)) {
+      throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
+    }
+    const recommendations = await generateRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await participantFor(meetingId, userId(request));
+    const candidates = await prisma.placeCandidate.findMany({
+      where: { meetingId },
+      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
+      orderBy: { recommendationRank: "asc" },
+    });
+    const recommendations = candidates.map(recommendationSummary);
+    response.json({ success: true, data: { recommendations } });
   } catch (error) { next(error); }
 });
 

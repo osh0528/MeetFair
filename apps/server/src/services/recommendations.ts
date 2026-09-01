@@ -90,6 +90,22 @@ function fairnessScore(gap: number, max: number): number {
   return Math.max(0, Math.round(100 * (1 - gap / max)));
 }
 
+function computeInputHash(
+  meeting: { travelMetric: string; categories?: string[] | null },
+  origins: Array<{ userId: string; latitude: number; longitude: number }>,
+): string {
+  const cats = meeting.categories ?? [];
+  const sorted = [...origins].sort((a, b) => a.userId.localeCompare(b.userId));
+  const payload = JSON.stringify({
+    travelMetric: meeting.travelMetric,
+    categories: [...cats].sort(),
+    origins: sorted.map((o) => ({ userId: o.userId, lat: o.latitude.toFixed(5), lng: o.longitude.toFixed(5) })),
+  });
+  let hash = 0;
+  for (let i = 0; i < payload.length; i += 1) hash = (hash * 31 + payload.charCodeAt(i)) >>> 0;
+  return hash.toString(16);
+}
+
 export async function generateRecommendations(meetingId: string, requesterId: string): Promise<MeetingRecommendation[]> {
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
@@ -148,7 +164,16 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     }
   }
   if (origins.length < 2) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "At least two participants need origins for recommendations.");
+    const missing = meeting.participants
+      .filter((p) => {
+        const hasOrigin = p.originLatitude != null && p.originLongitude != null;
+        const hasHome = p.user.homeLatitude != null && p.user.homeLongitude != null;
+        return !hasOrigin && !hasHome;
+      })
+      .map((p) => p.userId);
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "At least two participants need origins for recommendations.", {
+      missingParticipantIds: missing,
+    } as unknown as Record<string, unknown>);
   }
 
   const query = meeting.title || "맛집";
@@ -286,6 +311,16 @@ export async function generateRecommendations(meetingId: string, requesterId: st
     return created;
   });
 
+  const inputHash = computeInputHash(meeting, origins);
+  await prisma.meeting.update({
+    where: { id: meetingId },
+    data: {
+      recommendationsGeneratedAt: new Date(),
+      recommendationsInputHash: inputHash,
+      recommendationsVersion: { increment: 1 },
+    },
+  });
+
   return persisted.map((c) => {
     const times = c.travelTimes.map((t) => t.durationMinutes);
     const gap = Math.max(...times) - Math.min(...times);
@@ -339,7 +374,16 @@ export async function generateMidpointRecommendations(
     }
   }
   if (origins.length !== 2) {
-    throw new AppError(409, "MIDPOINT_REQUIRES_TWO_ORIGINS", "Midpoint recommendations require exactly two participants with origins.");
+    const missing = meeting.participants
+      .filter((p) => {
+        const hasOrigin = p.originLatitude != null && p.originLongitude != null;
+        const hasHome = p.user.homeLatitude != null && p.user.homeLongitude != null;
+        return !hasOrigin && !hasHome;
+      })
+      .map((p) => p.userId);
+    throw new AppError(409, "MIDPOINT_REQUIRES_TWO_ORIGINS", "Midpoint recommendations require exactly two participants with origins.", {
+      missingParticipantIds: missing,
+    } as unknown as Record<string, unknown>);
   }
 
   const midpoint = midpointOf(origins[0]!, origins[1]!);
@@ -487,6 +531,16 @@ export async function generateMidpointRecommendations(
       });
     }
     return created;
+  });
+
+  const inputHash = computeInputHash(meeting, origins);
+  await prisma.meeting.update({
+    where: { id: meetingId },
+    data: {
+      recommendationsGeneratedAt: new Date(),
+      recommendationsInputHash: inputHash,
+      recommendationsVersion: { increment: 1 },
+    },
   });
 
   const recommendations: MeetingRecommendation[] = persisted.map((c) => {

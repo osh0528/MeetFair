@@ -16,7 +16,7 @@ vi.mock("../lib/kakao-transit.js", () => odsayMocks);
 vi.mock("../lib/naver-search.js", () => searchMocks);
 vi.mock("../lib/prisma.js", () => ({
   prisma: {
-    meeting: { findUnique: vi.fn() },
+    meeting: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue({}) },
     placeCandidate: { deleteMany: vi.fn() },
     $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       const tx = {
