@@ -254,7 +254,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         ...origins.map(({ latitude, longitude }) => ({ latitude, longitude })),
       ]
     : [center];
-  const queries = meeting.categories.length ? meeting.categories : ["카페", "음식점"];
+  const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])];
   const searchResults = await Promise.all(
     searchCenters.flatMap((searchCenter) => queries.map((query) => searchNearbyKakaoPlaces({
       query,
