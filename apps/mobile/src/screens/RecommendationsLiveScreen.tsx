@@ -279,8 +279,8 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
             </View>
             {selected ? (
               <View style={styles.mapSection}>
-                <Text style={styles.mapTitle}>선택한 장소 주변 지도</Text>
-                <Text style={styles.mapSubtitle}>{selected.name} 부근과 추천 장소 2곳을 확인해 보세요.</Text>
+                <Text style={styles.mapTitle}>추천 장소 위치</Text>
+                <Text style={styles.mapSubtitle}>추천 장소 2곳을 지도에서 간략하게 확인해 보세요.</Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
                     query=""
