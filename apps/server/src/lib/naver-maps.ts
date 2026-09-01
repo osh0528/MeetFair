@@ -26,25 +26,13 @@ function naverHeaders(): Record<string, string> {
   };
 }
 
-async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = 5_000): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new AppError(502, "MAP_API_ERROR", `Naver Maps API failed: ${response.status} ${body.slice(0, 500)}`);
-    }
-    return (await response.json()) as T;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new AppError(504, "MAP_API_TIMEOUT", "Naver Maps API 응답 시간이 초과됐습니다.");
-    }
-    throw new AppError(502, "MAP_API_ERROR", "Naver Maps API 요청에 실패했습니다.");
-  } finally {
-    clearTimeout(timeout);
+async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new AppError(502, "MAP_API_ERROR", `Naver Maps API failed: ${response.status} ${body.slice(0, 500)}`);
   }
+  return (await response.json()) as T;
 }
 
 // ── Geocoding ──
@@ -104,19 +92,12 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   if (data.status.code !== 0 || data.results.length === 0) {
     throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", `Reverse geocode failed for ${latitude},${longitude}`);
   }
-  const road = data.results.find((result) => result.name === "roadaddr");
-  const addr = data.results.find((result) => result.name === "addr") ?? road;
-  if (!road && !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
-
-  const formatAddress = (result: NaverReverseResponse["results"][number] | undefined) => {
-    if (!result) return "";
-    const region = [result.region.area1.name, result.region.area2.name, result.region.area3.name].filter(Boolean);
-    const landNumber = [result.land.number1, result.land.number2].filter(Boolean).join("-");
-    return [...region, result.land.name, landNumber].filter(Boolean).join(" ");
-  };
+  const road = data.results[0];
+  const addr = data.results[1] ?? road;
+  if (!road || !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
   return {
-    roadAddress: formatAddress(road),
-    address: formatAddress(addr),
+    roadAddress: road.name ?? "",
+    address: addr.name ?? road.name ?? "",
   };
 }
 
@@ -139,30 +120,65 @@ export interface DrivingResult {
 
 export type DirectionOption = "trafast" | "tracomfort" | "traoptimal";
 
+function kakaoDrivingKey(): string {
+  if (!env.KAKAO_REST_API_KEY) {
+    throw new AppError(503, "DIRECTION_NOT_CONFIGURED", "Kakao driving API key is not configured.");
+  }
+  return env.KAKAO_REST_API_KEY;
+}
+
 export async function getDrivingDirections(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
-  option: DirectionOption = "trafast",
+  _option: DirectionOption = "trafast",
 ): Promise<DrivingResult> {
-  // Directions 5: /driving?start=lng,lat&goal=lng,lat&option=trafast
-  const base = BASE.direction5;
+  const key = kakaoDrivingKey();
   const url =
-    `${base}/driving?` +
-    `start=${origin.longitude},${origin.latitude}` +
-    `&goal=${destination.longitude},${destination.latitude}` +
-    `&option=${option}`;
-  const data = await fetchJson<NaverDirectionResponse>(url, { headers: naverHeaders() }, 3_500);
-  if (data.code !== 0 || !data.route) {
-    throw new AppError(502, "DIRECTION_FAILED", data.message || "Directions API failed");
+    `https://apis-navi.kakaomobility.com/v1/directions?` +
+    `origin=${origin.longitude},${origin.latitude}` +
+    `&destination=${destination.longitude},${destination.latitude}` +
+    `&priority=RECOMMEND&car_fuel=GASOLINE&car_hipass=false`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${key}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      if (body.includes("NO_ROUTE") || body.includes("NO_RESULT")) {
+        throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
+      }
+      throw new AppError(502, "DIRECTION_FAILED", "Directions API failed");
+    }
+    const data = (await res.json()) as {
+      routes?: Array<{ summary?: { distance?: number; duration?: number }; result_code?: number; result_msg?: string }>;
+      code?: number;
+      msg?: string;
+    };
+    const route = data.routes?.[0];
+    const summary = route?.summary;
+    if (!summary || typeof summary.distance !== "number" || typeof summary.duration !== "number") {
+      if (route?.result_msg?.includes("NO_ROUTE") || route?.result_msg?.includes("NO_RESULT")) {
+        throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
+      }
+      throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
+    }
+    if (summary.distance <= 0 || summary.duration <= 0 || summary.duration > 86400 || summary.distance > 2000000) {
+      throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
+    }
+    return {
+      distanceMeters: Math.round(summary.distance),
+      durationMinutes: Math.max(1, Math.round(summary.duration / 60)),
+    };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    if ((error as Error).name === "AbortError") throw new AppError(504, "DIRECTION_TIMEOUT", "Directions request timed out");
+    throw new AppError(502, "DIRECTION_FAILED", "Directions request failed");
+  } finally {
+    clearTimeout(timeout);
   }
-  const summary = data.route[option]?.[0]?.summary;
-  if (!summary) {
-    throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
-  }
-  return {
-    distanceMeters: summary.distance,
-    durationMinutes: Math.max(1, Math.round(summary.duration / 1000 / 60)),
-  };
 }
 
 export async function getDrivingDirections15(
@@ -171,28 +187,35 @@ export async function getDrivingDirections15(
   waypoints?: { latitude: number; longitude: number }[],
   option: DirectionOption = "trafast",
 ): Promise<DrivingResult> {
-  // Directions 15 supports waypoints; fallback to direction5 if no waypoints
-  if (!waypoints || waypoints.length === 0) {
-    return getDrivingDirections(origin, destination, option);
+  if (waypoints && waypoints.length > 0) {
+    const key = kakaoDrivingKey();
+    const via = waypoints.map((w) => `${w.longitude},${w.latitude}`).join("|");
+    const url =
+      `https://apis-navi.kakaomobility.com/v1/directions?` +
+      `origin=${origin.longitude},${origin.latitude}` +
+      `&destination=${destination.longitude},${destination.latitude}` +
+      `&waypoints=${encodeURIComponent(via)}` +
+      `&priority=RECOMMEND`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` }, signal: controller.signal });
+      if (!res.ok) throw new AppError(502, "DIRECTION_FAILED", "Directions API failed");
+      const data = (await res.json()) as { routes?: Array<{ summary?: { distance?: number; duration?: number } }> };
+      const summary = data.routes?.[0]?.summary;
+      if (!summary || typeof summary.distance !== "number" || typeof summary.duration !== "number" || summary.distance <= 0 || summary.duration <= 0) {
+        throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found");
+      }
+      return { distanceMeters: Math.round(summary.distance), durationMinutes: Math.max(1, Math.round(summary.duration / 60)) };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      if ((error as Error).name === "AbortError") throw new AppError(504, "DIRECTION_TIMEOUT", "Directions request timed out");
+      throw new AppError(502, "DIRECTION_FAILED", "Directions request failed");
+    } finally {
+      clearTimeout(timeout);
+    }
   }
-  const base = BASE.direction15;
-  const waypointParam = waypoints.map((w) => `${w.longitude},${w.latitude}`).join("|");
-  const url =
-    `${base}/driving?` +
-    `start=${origin.longitude},${origin.latitude}` +
-    `&goal=${destination.longitude},${destination.latitude}` +
-    `&waypoints=${encodeURIComponent(waypointParam)}` +
-    `&option=${option}`;
-  const data = await fetchJson<NaverDirectionResponse>(url, { headers: naverHeaders() });
-  if (data.code !== 0 || !data.route) {
-    throw new AppError(502, "DIRECTION_FAILED", data.message || "Directions 15 API failed");
-  }
-  const summary = data.route[option]?.[0]?.summary;
-  if (!summary) throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found");
-  return {
-    distanceMeters: summary.distance,
-    durationMinutes: Math.max(1, Math.round(summary.duration / 1000 / 60)),
-  };
+  return getDrivingDirections(origin, destination, option);
 }
 
 // ── Static Map ──
