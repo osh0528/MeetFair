@@ -1,0 +1,6 @@
+# EAS Build ignore — keep minimal; EAS respects .gitignore by default
+# No extra ignores needed. This file exists to prevent accidental inclusion of local-only dirs if .gitignore is bypassed.
+# Uncomment if you add local-only folders that are gitignored but not easignored:
+# .omo/
+# .opencode/
+# .tmp/
