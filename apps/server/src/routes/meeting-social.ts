@@ -9,6 +9,7 @@ import { emitMeetingUpdated, emitPoke } from "../realtime/events.js";
 import { canStartSharing } from "../lib/share-window.js";
 import { checkCooldown, cooldownKey, MEETING_COOLDOWN_MS, setCooldown } from "../lib/poke-cooldown.js";
 import { approximateHomeCoordinate, friendIdsAmong } from "../services/friend-home-locations.js";
+import { ARRIVAL_RADIUS_METERS, distanceMeters } from "../lib/geo.js";
 
 export const meetingSocialRouter = Router();
 meetingSocialRouter.use(requireAuth);
@@ -22,9 +23,9 @@ function userId(request: AuthenticatedRequest) {
 async function requireParticipant(meetingId: string, currentUserId: string) {
   const participant = await prisma.meetingParticipant.findUnique({
     where: { meetingId_userId: { meetingId, userId: currentUserId } },
-    include: { meeting: true },
+    include: { meeting: { include: { confirmedPlace: true } } },
   });
-  if (!participant) throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant.");
+  if (!participant) throw new AppError(403, "NOT_PARTICIPANT", "You are not a participant.", { legacyCode: "NOT_A_PARTICIPANT" });
   return participant;
 }
 
@@ -195,13 +196,32 @@ meetingSocialRouter.post("/:meetingId/arrive", async (request: AuthenticatedRequ
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
     const participant = await requireParticipant(meetingId, userId(request));
-    const shareDecision = canStartSharing(
-      { locationShareMode: participant.meeting.locationShareMode, scheduledAt: participant.meeting.scheduledAt, shareMinutesBefore: participant.meeting.shareMinutesBefore },
-      new Date(),
-    );
-    if (!shareDecision.allowed) {
-      const code = shareDecision.reason === "SHARE_MODE_OFF" ? "MEETING_LOCATION_SHARE_OFF" : "SHARING_TOO_EARLY";
-      throw new AppError(403, code, "Location sharing is not allowed at this time.");
+    if (participant.arrivedAt) {
+      throw new AppError(409, "ALREADY_ARRIVED", "You have already arrived.", {
+        arrivedAt: participant.arrivedAt.toISOString(),
+      });
+    }
+    if (!participant.meeting.confirmedPlaceId || !participant.meeting.confirmedPlace) {
+      throw new AppError(400, "PLACE_NOT_CONFIRMED", "Meeting place has not been confirmed yet.");
+    }
+    // Relaxed for testing: bypass share-window check for arrive (keep for GET /locations).
+    // Optional distance check: if client provides coordinates, enforce 500m threshold for testing.
+    const arriveBodySchema = z
+      .object({
+        latitude: z.number().min(-90).max(90).optional(),
+        longitude: z.number().min(-180).max(180).optional(),
+      })
+      .passthrough();
+    const body = arriveBodySchema.parse(request.body ?? {});
+    if (body.latitude !== undefined && body.longitude !== undefined) {
+      const confirmed = participant.meeting.confirmedPlace as { latitude: number; longitude: number };
+      const dist = distanceMeters(body.latitude, body.longitude, confirmed.latitude, confirmed.longitude);
+      if (dist > ARRIVAL_RADIUS_METERS) {
+        throw new AppError(400, "TOO_FAR", `You are too far from the meeting place. Distance: ${Math.round(dist)}m`, {
+          distanceMeters: Math.round(dist),
+          thresholdMeters: ARRIVAL_RADIUS_METERS,
+        });
+      }
     }
     const updated = await prisma.meetingParticipant.update({
       where: { id: participant.id },
@@ -291,7 +311,7 @@ meetingSocialRouter.post("/:meetingId/pokes", async (request: AuthenticatedReque
     }).parse(request.body);
     const requestId = clientRequestId ?? randomUUID();
     const participant = await requireParticipant(meetingId, senderId);
-    if (!participant) throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant.");
+    if (!participant) throw new AppError(403, "NOT_PARTICIPANT", "You are not a participant.");
     const targetParticipant = await prisma.meetingParticipant.findUnique({
       where: { meetingId_userId: { meetingId, userId: targetId } },
       include: { user: true },

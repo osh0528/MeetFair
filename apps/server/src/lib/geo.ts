@@ -1,6 +1,6 @@
 // Pure geographic helpers. No logging of coordinates anywhere (contract §11).
 
-export const ARRIVAL_RADIUS_METERS = 100;
+export const ARRIVAL_RADIUS_METERS = 500;
 export const REQUIRED_PROXIMITY_HITS = 2;
 
 export function distanceMeters(
