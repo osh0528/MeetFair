@@ -548,7 +548,7 @@ export function MeetingScreen({ navigation, route }: Props) {
             </Pressable>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
-            <View style={styles.cardGrid}>
+            <View style={[styles.cardGrid, !isWideLayout && styles.cardGridNarrow]}>
               {meeting.placeCandidates.map((candidate) => {
                 const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
                 return (
@@ -763,9 +763,10 @@ const styles = StyleSheet.create({
   sideColumn: { width: 320, flexShrink: 0, gap: 12 },
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },
-  cardGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 10 },
-  cardGridItem: { width: "48%", flexGrow: 1 },
-  cardGridItemNarrow: { width: "100%" },
+  cardGrid: { flexDirection: "row", alignItems: "stretch", gap: 10 },
+  cardGridNarrow: { flexDirection: "column" },
+  cardGridItem: { flexBasis: 0, flexGrow: 1, minWidth: 0 },
+  cardGridItemNarrow: { flexBasis: "auto", width: "100%" },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   actionButton: { paddingHorizontal: 12 },
   recommendButton: { minHeight: 104, borderRadius: 8, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
