@@ -244,7 +244,7 @@ if (shouldAlignExistingSchema) {
   console.log("Safely preparing recording-related columns, indexes, and constraints.");
   await alignRecordingSchema();
   console.log("Aligning the existing MeetFair database with the current schema.");
-  runPrisma(["db", "push"]);
+  runPrisma(["db", "push", "--accept-data-loss"]);
   if (shouldResolvePhotoMigration) {
     runPrisma(["migrate", "resolve", "--applied", photoMigrationName]);
   }
