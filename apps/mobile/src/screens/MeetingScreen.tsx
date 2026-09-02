@@ -7,6 +7,8 @@ import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
 import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
 import { ApiError, apiRequest, createClientRequestId } from "../services/api";
+import { arrivalErrorMessage } from "../services/arrival-errors";
+import { getCurrentCoordinates } from "../services/current-location";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection } from "../types/location";
@@ -311,8 +313,22 @@ export function MeetingScreen({ navigation, route }: Props) {
   }
 
   async function arrive() {
-    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
-    await load();
+    if (busyAction === "arrive") return;
+    setBusyAction("arrive");
+    setMessage("");
+    try {
+      const coordinates = await getCurrentCoordinates();
+      await apiRequest(`/meetings/${meetingId}/arrive`, {
+        method: "POST",
+        body: JSON.stringify(coordinates),
+      });
+      await load();
+      setMessage("도착 처리됐습니다.");
+    } catch (caught) {
+      setMessage(arrivalErrorMessage(caught));
+    } finally {
+      setBusyAction("");
+    }
   }
   async function joinMeetingCall() {
     if (busyAction === "call") return;
@@ -457,7 +473,7 @@ export function MeetingScreen({ navigation, route }: Props) {
         <Text style={styles.title}>{meeting.title}</Text>
         <Text style={styles.meta}>위치 공유: {meeting.locationShareMode}{meeting.shareMinutesBefore ? ` · ${meeting.shareMinutesBefore}분 전` : ""}</Text>
         <View style={styles.actionGrid}>
-          {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button compact label="도착 처리" onPress={arrive} style={styles.actionButton} /> : null}
+          {!me?.arrivedAt && meeting.status !== "CANCELLED" ? <Button compact disabled={busyAction === "arrive"} label={busyAction === "arrive" ? "위치 확인 중..." : "도착 처리"} onPress={arrive} style={styles.actionButton} /> : null}
           {meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
             <Button
               compact

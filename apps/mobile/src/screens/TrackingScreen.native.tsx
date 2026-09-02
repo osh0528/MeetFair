@@ -9,6 +9,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
+import { arrivalErrorMessage } from "../services/arrival-errors";
+import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
@@ -91,6 +93,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [sharing, setSharing] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [message, setMessage] = useState("");
+  const [arriving, setArriving] = useState(false);
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const sharingRef = useRef(false);
@@ -306,9 +309,20 @@ export function TrackingScreen({ navigation, route }: Props) {
   }
 
   async function arrive() {
-    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
-    await stopSharing();
-    await load();
+    if (arriving) return;
+    setArriving(true);
+    setMessage("");
+    try {
+      const coordinates = await getCurrentCoordinates();
+      await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
+      await stopSharing();
+      await load();
+      setMessage("도착 처리됐습니다.");
+    } catch (error) {
+      setMessage(arrivalErrorMessage(error));
+    } finally {
+      setArriving(false);
+    }
   }
 
   return (
@@ -366,7 +380,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
           <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
-          <Button compact label="도착 처리" onPress={arrive} variant="soft" />
+          <Button compact disabled={arriving} label={arriving ? "위치 확인 중..." : "도착 처리"} onPress={arrive} variant="soft" />
         </View>
       </View> : null}
     </SafeAreaView>

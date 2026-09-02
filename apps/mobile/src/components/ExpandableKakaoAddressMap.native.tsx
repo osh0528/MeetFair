@@ -10,7 +10,7 @@ export function ExpandableKakaoAddressMap(props: KakaoAddressMapProps) {
   return (
     <>
       <View style={styles.preview}>
-        <KakaoAddressMap {...props} interactive={false} />
+        <KakaoAddressMap {...props} interactive={props.interactive ?? true} />
         <Pressable
           accessibilityHint="전체 화면에서 지도를 조작합니다."
           accessibilityLabel="지도 크게 보기"
@@ -48,10 +48,8 @@ const styles = StyleSheet.create({
   preview: { flex: 1, position: "relative" },
   expandOverlay: {
     position: "absolute",
-    top: 0,
     right: 0,
     bottom: 0,
-    left: 0,
     alignItems: "flex-end",
     justifyContent: "flex-end",
     padding: 12,

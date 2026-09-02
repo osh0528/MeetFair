@@ -4,7 +4,10 @@ import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
+import { OpenStreetMapFallback } from "../components/OpenStreetMapFallback";
 import { apiRequest } from "../services/api";
+import { arrivalErrorMessage } from "../services/arrival-errors";
+import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
@@ -127,6 +130,24 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
     return () => { cancelled = true; };
   }, [locations, meeting]);
 
+  if (!appConfig.kakaoMapJsKey) {
+    return (
+      <View style={styles.locationMap}>
+        <OpenStreetMapFallback
+          focusTarget={meeting?.confirmedPlace ? { ...meeting.confirmedPlace, address: meeting.confirmedPlace.name } : null}
+          mapMarkers={mappedLocations.map((item) => ({
+            id: `live:${item.userId}`,
+            label: item.nickname,
+            kind: "HOME" as const,
+            address: item.nickname,
+            latitude: item.latitude!,
+            longitude: item.longitude!,
+          }))}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.locationMap}>
       <View ref={containerRef} style={styles.map} />
@@ -143,6 +164,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState("");
+  const [arriving, setArriving] = useState(false);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const sharingRef = useRef(false);
@@ -293,9 +315,20 @@ export function TrackingScreen({ navigation, route }: Props) {
   }
 
   async function arrive() {
-    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
-    await stopSharing();
-    await load();
+    if (arriving) return;
+    setArriving(true);
+    setMessage("");
+    try {
+      const coordinates = await getCurrentCoordinates();
+      await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
+      await stopSharing();
+      await load();
+      setMessage("도착 처리됐습니다.");
+    } catch (error) {
+      setMessage(arrivalErrorMessage(error));
+    } finally {
+      setArriving(false);
+    }
   }
 
   return (
@@ -322,7 +355,7 @@ export function TrackingScreen({ navigation, route }: Props) {
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
           <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={() => void (sharing ? stopSharing() : startSharing())} variant={sharing ? "secondary" : "primary"} />
-          <Button compact label="도착 처리" onPress={() => void arrive()} variant="soft" />
+          <Button compact disabled={arriving} label={arriving ? "위치 확인 중..." : "도착 처리"} onPress={() => void arrive()} variant="soft" />
         </View>
       </View>
     </SafeAreaView>
