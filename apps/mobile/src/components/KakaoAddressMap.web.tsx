@@ -13,6 +13,7 @@ export interface KakaoAddressMapProps {
   onResolved?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  fitMarkers?: boolean;
 }
 
 declare global {
@@ -73,7 +74,7 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -224,14 +225,18 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       const content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       const icon = document.createElement("div");
-      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : "🏠";
+      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : item.kind === "LIVE" ? "●" : "🏠";
       icon.style.cssText = item.kind === "RECOMMENDED"
         ? "width:44px;height:44px;border-radius:22px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:0 0 0 8px rgba(59,130,246,.2),0 8px 20px rgba(37,99,235,.45);"
+        : item.kind === "LIVE"
+        ? "color:#1677FF;font-size:28px;line-height:28px;text-shadow:0 2px 5px rgba(0,0,0,.35);"
         : "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
       const label = document.createElement("div");
       label.textContent = item.label;
       label.style.cssText = item.kind === "RECOMMENDED"
         ? "padding:5px 10px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#172554);color:white;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(37,99,235,.35);"
+        : item.kind === "LIVE"
+        ? "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;"
         : "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
       content.append(icon, label);
       return new window.kakao.maps.CustomOverlay({
@@ -241,16 +246,16 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         yAnchor: 1,
       });
     });
-    if (mapMarkers.length > 1) {
+    if (fitMarkers && mapMarkers.length > 1) {
       const bounds = new window.kakao.maps.LatLngBounds();
       for (const item of mapMarkers) {
         bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
       }
       mapRef.current.setBounds(bounds, 48, 48, 48, 48);
-    } else if (mapMarkers.length === 1) {
+    } else if (fitMarkers && mapMarkers.length === 1) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(mapMarkers[0]!.latitude, mapMarkers[0]!.longitude));
     }
-  }, [mapMarkers, ready]);
+  }, [fitMarkers, mapMarkers, ready]);
 
   if (!appConfig.kakaoMapJsKey) {
     return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;

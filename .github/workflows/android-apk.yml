@@ -18,7 +18,6 @@ jobs:
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
       EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
       EXPO_PUBLIC_KAKAO_MAP_JS_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_MAP_JS_KEY }}
-      NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
 
     steps:
       - name: Checkout
@@ -44,7 +43,7 @@ jobs:
         run: |
           test -n "$EXPO_PUBLIC_API_URL" || { echo "EXPO_PUBLIC_API_URL secret is required"; exit 1; }
           test -n "$EXPO_PUBLIC_SOCKET_URL" || { echo "EXPO_PUBLIC_SOCKET_URL secret is required"; exit 1; }
-          test -n "$NAVER_MAP_CLIENT_ID" || { echo "NAVER_MAP_CLIENT_ID secret is required for the native map"; exit 1; }
+          test -n "$EXPO_PUBLIC_KAKAO_MAP_JS_KEY" || { echo "EXPO_PUBLIC_KAKAO_MAP_JS_KEY secret is required for maps"; exit 1; }
 
       - name: Generate Android project
         working-directory: apps/mobile

@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NaverMapMarkerOverlay, NaverMapView } from "@mj-studio/react-native-naver-map";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
@@ -7,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { arrivalErrorMessage } from "../services/arrival-errors";
@@ -14,6 +14,7 @@ import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
+import type { AddressSelection, MapDisplayMarker } from "../types/location";
 
 const TASK_NAME = "meetfair-meeting-location";
 const TASK_STATE_KEY = "meetfair.location-task";
@@ -62,28 +63,6 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
 });
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
-
-function LiveLocationMarker({ item, mine }: { item: LocationItem; mine: boolean }) {
-  return (
-    <NaverMapMarkerOverlay width={110} height={52} anchor={{ x: 0.5, y: 0.35 }} latitude={item.latitude!} longitude={item.longitude!}>
-      <View collapsable={false} style={styles.liveMarker}>
-        <View style={styles.liveDot} />
-        <Text numberOfLines={1} style={styles.liveLabel}>{mine ? `${item.nickname} (나)` : item.nickname}</Text>
-      </View>
-    </NaverMapMarkerOverlay>
-  );
-}
-
-function HomeLocationMarker({ item }: { item: LocationItem }) {
-  return (
-    <NaverMapMarkerOverlay width={110} height={58} anchor={{ x: 0.5, y: 0.4 }} latitude={item.homeLatitude!} longitude={item.homeLongitude!}>
-      <View collapsable={false} style={styles.homeMarker}>
-        <Text style={styles.homeIcon}>🏠</Text>
-        <Text numberOfLines={1} style={styles.homeLabel}>{item.nickname}</Text>
-      </View>
-    </NaverMapMarkerOverlay>
-  );
-}
 
 export function TrackingScreen({ navigation, route }: Props) {
   const meetingId = route.params.meetingId;
@@ -211,10 +190,53 @@ export function TrackingScreen({ navigation, route }: Props) {
     return () => subscription.remove();
   }, [mapExpanded]);
 
-  const mapCenter = useMemo(() => {
+  const mapFocusTarget = useMemo<AddressSelection>(() => {
     const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
-    return meeting?.confirmedPlace ?? (mine ? { latitude: mine.latitude!, longitude: mine.longitude! } : { latitude: 37.5665, longitude: 126.978 });
+    if (meeting?.confirmedPlace) {
+      return { ...meeting.confirmedPlace, address: meeting.confirmedPlace.name };
+    }
+    if (mine) {
+      return { address: mine.nickname, latitude: mine.latitude!, longitude: mine.longitude! };
+    }
+    return { address: "서울", latitude: 37.5665, longitude: 126.978 };
   }, [locations, meeting, user?.id]);
+
+  const mapMarkers = useMemo<MapDisplayMarker[]>(() => {
+    const markers: MapDisplayMarker[] = [];
+    if (meeting?.confirmedPlace) {
+      markers.push({
+        id: "confirmed-place",
+        label: `약속 장소 · ${meeting.confirmedPlace.name}`,
+        kind: "RECOMMENDED",
+        address: meeting.confirmedPlace.name,
+        latitude: meeting.confirmedPlace.latitude,
+        longitude: meeting.confirmedPlace.longitude,
+      });
+    }
+    for (const item of locations) {
+      if (item.homeLatitude != null && item.homeLongitude != null) {
+        markers.push({
+          id: `home:${item.userId}`,
+          label: `${item.nickname} 출발 위치`,
+          kind: "HOME",
+          address: item.nickname,
+          latitude: item.homeLatitude,
+          longitude: item.homeLongitude,
+        });
+      }
+      if (item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null) {
+        markers.push({
+          id: `live:${item.userId}`,
+          label: item.userId === user?.id ? `${item.nickname} (나)` : item.nickname,
+          kind: "LIVE",
+          address: item.nickname,
+          latitude: item.latitude,
+          longitude: item.longitude,
+        });
+      }
+    }
+    return markers;
+  }, [locations, meeting?.confirmedPlace, user?.id]);
 
   async function startSharing() {
     if (!accessToken) return;
@@ -331,26 +353,16 @@ export function TrackingScreen({ navigation, route }: Props) {
         <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
       </View>
       {meeting ? (
-        <NaverMapView
-          style={[styles.map, mapExpanded && styles.mapExpanded]}
-          initialRegion={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
-          isShowLocationButton
-          onTapMap={() => setMapExpanded(true)}
-        >
-          {meeting.confirmedPlace ? (
-            <NaverMapMarkerOverlay
-              latitude={meeting.confirmedPlace.latitude}
-              longitude={meeting.confirmedPlace.longitude}
-              caption={{ text: `약속 장소 · ${meeting.confirmedPlace.name}` }}
-            />
-          ) : null}
-          {locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null).map((item) => (
-            <HomeLocationMarker item={item} key={`home:${item.userId}`} />
-          ))}
-          {locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).map((item) => (
-            <LiveLocationMarker item={item} key={`live:${item.userId}`} mine={item.userId === user?.id} />
-          ))}
-        </NaverMapView>
+        <View style={[styles.map, mapExpanded && styles.mapExpanded]}>
+          <KakaoAddressMap
+            fitMarkers={false}
+            focusTarget={mapFocusTarget}
+            interactive
+            mapMarkers={mapMarkers}
+            query=""
+            requestId={0}
+          />
+        </View>
       ) : (
         <View style={[styles.map, styles.mapLoading]}>
           <Text style={styles.meta}>지도를 준비하고 있습니다.</Text>
@@ -364,6 +376,15 @@ export function TrackingScreen({ navigation, route }: Props) {
           style={styles.collapseMapButton}
         >
           <Text style={styles.collapseMapButtonText}>지도 닫기</Text>
+        </Pressable>
+      ) : meeting ? (
+        <Pressable
+          accessibilityLabel="지도 확대"
+          accessibilityRole="button"
+          onPress={() => setMapExpanded(true)}
+          style={styles.expandMapButton}
+        >
+          <Text style={styles.collapseMapButtonText}>지도 크게 보기</Text>
         </Pressable>
       ) : null}
       {!mapExpanded ? <View style={styles.panel}>
@@ -394,6 +415,7 @@ const styles = StyleSheet.create({
   mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   hidden: { display: "none" },
   collapseMapButton: { position: "absolute", top: 14, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
+  expandMapButton: { position: "absolute", top: 82, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
   collapseMapButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -403,10 +425,4 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
   actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
-  liveMarker: { width: 110, alignItems: "center", gap: 3 },
-  liveDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#1677FF", borderWidth: 4, borderColor: "#FFFFFF", shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 5 },
-  liveLabel: { maxWidth: 105, borderRadius: 4, overflow: "hidden", backgroundColor: "#1677FF", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
-  homeMarker: { width: 110, alignItems: "center", gap: 1 },
-  homeIcon: { fontSize: 25 },
-  homeLabel: { maxWidth: 105, borderRadius: 4, overflow: "hidden", backgroundColor: "#303030", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
 });

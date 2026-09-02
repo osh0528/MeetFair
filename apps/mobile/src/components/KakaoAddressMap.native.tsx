@@ -31,6 +31,7 @@ export interface KakaoAddressMapProps {
   onResolved?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  fitMarkers?: boolean;
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
@@ -160,32 +161,36 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   };
 
   var displayOverlays = [];
-  window.meetfairSetMarkers = function (items) {
+  window.meetfairSetMarkers = function (items, fitMarkers) {
     displayOverlays.forEach(function (overlay) { overlay.setMap(null); });
     displayOverlays = (items || []).map(function (item) {
       var content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       var icon = document.createElement("div");
-      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : "🏠";
+      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : item.kind === "LIVE" ? "●" : "🏠";
       icon.style.cssText = item.kind === "RECOMMENDED"
         ? "width:44px;height:44px;border-radius:22px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:0 0 0 8px rgba(59,130,246,.2),0 8px 20px rgba(37,99,235,.45);"
+        : item.kind === "LIVE"
+        ? "color:#1677FF;font-size:28px;line-height:28px;text-shadow:0 2px 5px rgba(0,0,0,.35);"
         : "font-size:25px;";
       var label = document.createElement("div");
       label.textContent = item.label;
       label.style.cssText = item.kind === "RECOMMENDED"
         ? "padding:5px 10px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#172554);color:white;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(37,99,235,.35);"
+        : item.kind === "LIVE"
+        ? "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;"
         : "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
       content.appendChild(icon);
       content.appendChild(label);
       return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
     });
-    if (map && items && items.length > 1) {
+    if (fitMarkers && map && items && items.length > 1) {
       var bounds = new kakao.maps.LatLngBounds();
       items.forEach(function (item) {
         bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
       });
       map.setBounds(bounds, 48, 48, 48, 48);
-    } else if (map && items && items.length === 1) {
+    } else if (fitMarkers && map && items && items.length === 1) {
       map.setCenter(new kakao.maps.LatLng(items[0].latitude, items[0].longitude));
     }
   };
@@ -204,7 +209,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -234,8 +239,8 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
 
   useEffect(() => {
     if (!readyRef.current) return;
-    webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}); true;`);
-  }, [mapMarkers, ready]);
+    webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}, ${fitMarkers}); true;`);
+  }, [fitMarkers, mapMarkers, ready]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

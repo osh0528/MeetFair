@@ -1,7 +1,5 @@
 import type { ExpoConfig } from "expo/config";
 
-const naverMapClientId = process.env.NAVER_MAP_CLIENT_ID ?? "";
-
 export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ...config,
   name: "MeetFair",
@@ -17,10 +15,6 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ios: {
     ...config.ios,
     bundleIdentifier: "com.meetfair.app",
-    infoPlist: {
-      ...config.ios?.infoPlist,
-      NMFClientId: naverMapClientId,
-    },
   },
   plugins: [
     [
@@ -62,31 +56,6 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     ],
     "expo-web-browser",
     "expo-secure-store",
-    [
-      "expo-build-properties",
-      {
-        android: {
-          extraMavenRepos: ["https://repository.map.naver.com/archive/maven"],
-        },
-      },
-    ],
-    [
-      "@mj-studio/react-native-naver-map",
-      {
-        client_id: naverMapClientId,
-        android: {
-          ACCESS_FINE_LOCATION: true,
-          ACCESS_COARSE_LOCATION: true,
-          ACCESS_BACKGROUND_LOCATION: true,
-        },
-        ios: {
-          NSLocationAlwaysUsageDescription:
-            "Location access is required to show the meeting point and your movement status.",
-          NSLocationWhenInUseUsageDescription:
-            "Location access is required to show the meeting point and your movement status.",
-        },
-      },
-    ],
     "@livekit/react-native-expo-plugin",
     "./plugins/with-video-only-webrtc",
   ],
