@@ -179,6 +179,15 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
       content.appendChild(label);
       return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
     });
+    if (map && items && items.length > 1) {
+      var bounds = new kakao.maps.LatLngBounds();
+      items.forEach(function (item) {
+        bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
+      });
+      map.setBounds(bounds, 48, 48, 48, 48);
+    } else if (map && items && items.length === 1) {
+      map.setCenter(new kakao.maps.LatLng(items[0].latitude, items[0].longitude));
+    }
   };
 
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {

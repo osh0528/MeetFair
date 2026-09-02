@@ -241,6 +241,15 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         yAnchor: 1,
       });
     });
+    if (mapMarkers.length > 1) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      for (const item of mapMarkers) {
+        bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
+      }
+      mapRef.current.setBounds(bounds, 48, 48, 48, 48);
+    } else if (mapMarkers.length === 1) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(mapMarkers[0]!.latitude, mapMarkers[0]!.longitude));
+    }
   }, [mapMarkers, ready]);
 
   if (!appConfig.kakaoMapJsKey) {
