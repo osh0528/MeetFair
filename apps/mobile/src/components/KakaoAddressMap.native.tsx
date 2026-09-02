@@ -4,6 +4,7 @@ import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-n
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
 // props 타입이 never로 붕괴되는 업스트림 타입 버그가 있다.
@@ -280,13 +281,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 
   if (!appConfig.kakaoMapJsKey) {
-    return (
-      <View style={[styles.wrapper, styles.fallback]}>
-        <Text style={styles.message}>
-          카카오 지도 키가 없어요. EAS/Vercel 환경변수에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정하고 다시 빌드/배포하세요.
-        </Text>
-      </View>
-    );
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
   }
 
   return (

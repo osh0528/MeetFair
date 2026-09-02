@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 export interface KakaoAddressMapProps {
   query: string;
@@ -241,6 +242,10 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       });
     });
   }, [mapMarkers, ready]);
+
+  if (!appConfig.kakaoMapJsKey) {
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
+  }
 
   return (
     <View style={styles.wrapper}>
