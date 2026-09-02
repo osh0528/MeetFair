@@ -37,21 +37,21 @@ jobs:
       - name: Expo prebuild (android)
         working-directory: apps/mobile
         env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
-          EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL || 'https://meetfair-l5ak.onrender.com/api' }}
+          EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL || 'https://meetfair-l5ak.onrender.com' }}
           EXPO_PUBLIC_NAVER_MAP_NCP_KEY_ID: ${{ secrets.EXPO_PUBLIC_NAVER_MAP_NCP_KEY_ID }}
-          EXPO_PUBLIC_KAKAO_MAP_JS_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_MAP_JS_KEY }}
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
-          EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
-          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_MAP_JS_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_MAP_JS_KEY || '6ebc0ef90c92aca9af991a2be136c658' }}
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '354665026515-b11kur83lbhpai739kl0gs9fhljkvcle.apps.googleusercontent.com' }}
+          EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '354665026515-b11kur83lbhpai739kl0gs9fhljkvcle.apps.googleusercontent.com' }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '354665026515-b11kur83lbhpai739kl0gs9fhljkvcle.apps.googleusercontent.com' }}
           NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
         run: npx expo prebuild --platform android --clean --non-interactive
 
       - name: Assemble Release APK
         working-directory: apps/mobile/android
         env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
-          EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL || 'https://meetfair-l5ak.onrender.com/api' }}
+          EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL || 'https://meetfair-l5ak.onrender.com' }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK artifact

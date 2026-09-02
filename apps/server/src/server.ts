@@ -48,6 +48,6 @@ void processDueMeetingCalls();
 void processQuietSummaries();
 void processRecordingAndMeetingLifecycle();
 
-httpServer.listen(env.PORT, () => {
-  console.log(`MeetFair server listening on http://localhost:${env.PORT}`);
+httpServer.listen(env.PORT, "0.0.0.0", () => {
+  console.log(`MeetFair server listening on http://0.0.0.0:${env.PORT} (LAN: http://172.30.1.173:${env.PORT})`);
 });
