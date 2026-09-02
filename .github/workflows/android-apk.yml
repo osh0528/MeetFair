@@ -1,0 +1,74 @@
+name: Android APK Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
+      EXPO_PUBLIC_KAKAO_MAP_JS_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_MAP_JS_KEY }}
+      NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required environment
+        shell: bash
+        run: |
+          test -n "$EXPO_PUBLIC_API_URL" || { echo "EXPO_PUBLIC_API_URL secret is required"; exit 1; }
+          test -n "$EXPO_PUBLIC_SOCKET_URL" || { echo "EXPO_PUBLIC_SOCKET_URL secret is required"; exit 1; }
+          test -n "$NAVER_MAP_CLIENT_ID" || { echo "NAVER_MAP_CLIENT_ID secret is required for the native map"; exit 1; }
+
+      - name: Generate Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Build installable APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          APK_PATH="$(find apps/mobile/android/app/build/outputs/apk/release -name '*.apk' -print -quit)"
+          test -n "$APK_PATH" || { echo "Release APK was not generated"; exit 1; }
+          cp "$APK_PATH" app-release.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetfair-${{ github.ref_name }}-apk
+          path: app-release.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" app-release.apk --generate-notes --title "MeetFair ${{ github.ref_name }}"
