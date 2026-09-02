@@ -33,8 +33,8 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       "expo-camera",
       {
         cameraPermission: "Camera access is required to take and share photos.",
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        microphonePermission: "영상 통화의 음성 연결을 위해 마이크 접근을 허용해 주세요.",
+        recordAudioAndroid: true,
       },
     ],
     [
@@ -54,8 +54,8 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     [
       "expo-audio",
       {
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        microphonePermission: "영상 통화의 음성 연결을 위해 마이크 접근을 허용해 주세요.",
+        recordAudioAndroid: true,
         enableBackgroundRecording: false,
         enableBackgroundPlayback: true,
       },

@@ -171,26 +171,28 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [credentials, setCredentials] = useState<CallToken | null>(null);
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
+  const [microphonePermissionGranted, setMicrophonePermissionGranted] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
   const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
 
   async function connect() {
     setConnecting(true);
+    setMicrophonePermissionGranted(false);
     setMessage("통화 연결 준비 중...");
-    let microphonePermissionGranted = false;
+    let microphoneGranted = false;
     let micDeniedNotice: string | null = null;
     try {
       const camera = await Camera.requestCameraPermissionsAsync();
       if (!camera.granted) throw new Error("카메라 권한이 필요합니다.");
       try {
         const mic = await requestRecordingPermissionsAsync();
-        microphonePermissionGranted = mic.granted;
+        microphoneGranted = mic.granted;
         if (!mic.granted) {
           micDeniedNotice = "마이크 권한이 거부되어 음성 없이 연결됩니다. 설정에서 허용하면 음성 통화를 사용할 수 있습니다.";
         }
       } catch {
-        microphonePermissionGranted = false;
+        microphoneGranted = false;
         micDeniedNotice = "마이크 권한을 확인하지 못했습니다. 음성 없이 연결됩니다.";
       }
       try {
@@ -198,7 +200,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
           method: "PATCH",
           body: JSON.stringify({
             cameraPermissionGranted: true,
-            microphonePermissionGranted,
+            microphonePermissionGranted: microphoneGranted,
           }),
         });
       } catch (error) {
@@ -209,6 +211,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       setRecordingEnabled(token.recordingEnabled);
       setLeaveLockedUntil(token.leaveLockedUntil ? new Date(token.leaveLockedUntil).getTime() : null);
+      setMicrophonePermissionGranted(microphoneGranted);
       setCredentials(token);
       setMessage(micDeniedNotice ?? "");
     } catch (error) {
@@ -278,7 +281,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       {leaveLockRemainingMs > 0 ? (
         <Text style={styles.leaveLockNotice}>최소 통화 시간 · 종료까지 {formatRemainingTime(leaveLockRemainingMs)}</Text>
       ) : null}
-      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio={false} video onError={(error) => setMessage(error.message)}>
+      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio={microphonePermissionGranted} video onError={(error) => setMessage(error.message)}>
         <CallContent leaveLockRemainingMs={leaveLockRemainingMs} onError={setMessage} onLeave={() => void leave()} />
         {message ? <Text style={styles.error}>{message}</Text> : null}
       </LiveKitRoom>

@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, LogoMark } from "../components/ui";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
+import { authErrorMessage } from "../services/auth-errors";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 
@@ -31,7 +32,7 @@ export function LoginScreen({ navigation }: Props) {
       await session.login(email.trim(), password, rememberLogin);
       navigation.replace("Home");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "로그인하지 못했습니다.");
+      setError(authErrorMessage(caught, "로그인하지 못했습니다."));
     } finally {
       setSubmitting(false);
     }
@@ -44,7 +45,7 @@ export function LoginScreen({ navigation }: Props) {
       await session.refreshUser();
       navigation.replace("Home");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "서버에 다시 연결하지 못했습니다.");
+      setError(authErrorMessage(caught, "서버에 다시 연결하지 못했습니다."));
     } finally {
       setSubmitting(false);
     }
@@ -115,7 +116,7 @@ export function LoginScreen({ navigation }: Props) {
         <Button disabled={submitting || !email || password.length < 8} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
         <GoogleAuthButton
           label="Google로 로그인"
-          onError={(caught) => setError(caught.message)}
+          onError={(caught) => setError(authErrorMessage(caught, "Google 로그인에 실패했습니다."))}
           onIdToken={async (idToken) => {
             setError("");
             await session.googleLogin(idToken);
