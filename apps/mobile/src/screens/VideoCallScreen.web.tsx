@@ -52,7 +52,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [tracks, setTracks] = useState<TrackEntry[]>([]);
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
@@ -201,17 +200,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
     setMessage(`통화 연결 후 5분 동안 종료할 수 없습니다. ${formatRemainingTime(leaveLockRemainingMs)} 남았습니다.`);
   }), [leaveLockRemainingMs, navigation]);
 
-  async function toggleCamera() {
-    if (!room) return;
-    const next = !cameraEnabled;
-    try {
-      await room.localParticipant.setCameraEnabled(next);
-      setCameraEnabled(next);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "카메라 설정을 변경하지 못했습니다.");
-    }
-  }
-
   async function toggleMicrophone() {
     if (!room) return;
     const next = !microphoneEnabled;
@@ -277,7 +265,6 @@ export function VideoCallScreen({ navigation, route }: Props) {
           </View>
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <View style={styles.controls}>
-            <ControlButton label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={() => void toggleCamera()} />
             <ControlButton label={microphoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={() => void toggleMicrophone()} />
             <ControlButton
               danger

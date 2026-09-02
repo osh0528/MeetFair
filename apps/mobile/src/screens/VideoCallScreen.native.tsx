@@ -87,12 +87,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
     }
   }
 
-  function toggleCamera() {
-    void run(async () => {
-      await localParticipant.setCameraEnabled(!isCameraEnabled);
-    });
-  }
-
   function toggleMicrophone() {
     void run(async () => {
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
@@ -111,7 +105,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
 
   return (
     <View style={styles.controls}>
-      <ControlButton disabled={busy} label={isCameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={toggleCamera} />
       <ControlButton disabled={busy} label={isMicrophoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={toggleMicrophone} />
       <ControlButton disabled={busy || !isCameraEnabled} label="카메라 전환" onPress={switchCamera} />
       <ControlButton
