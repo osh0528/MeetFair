@@ -42,6 +42,9 @@ const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
 const MAX_ROUTE_CANDIDATES = 24;
+const MAX_ROUTE_ESTIMATES = 120;
+const MAX_SEARCH_CENTERS = 6;
+const MAX_SEARCH_QUERIES = 3;
 
 function distanceMeters(
   origin: { latitude: number; longitude: number },
@@ -244,7 +247,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
 
   const center = meetingIncenter(origins);
   // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
-  const searchCenters = origins.length > 2
+  const rawSearchCenters = origins.length > 2
     ? [
         center,
         {
@@ -254,7 +257,14 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         ...origins.map(({ latitude, longitude }) => ({ latitude, longitude })),
       ]
     : [center];
-  const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])];
+  const searchCenters = rawSearchCenters
+    .filter((point, index, points) => points.findIndex((candidate) =>
+      candidate.latitude.toFixed(5) === point.latitude.toFixed(5)
+      && candidate.longitude.toFixed(5) === point.longitude.toFixed(5)) === index)
+    .filter((_, index, points) => index < 2 || index % Math.max(1, Math.ceil((points.length - 2) / (MAX_SEARCH_CENTERS - 2))) === 0)
+    .slice(0, MAX_SEARCH_CENTERS);
+  const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])]
+    .slice(0, MAX_SEARCH_QUERIES);
   const searchResults = await Promise.all(
     searchCenters.flatMap((searchCenter) => queries.map((query) => searchNearbyKakaoPlaces({
       query,
@@ -267,13 +277,14 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   for (const place of searchResults.flat()) {
     if (!uniquePlaces.has(place.id)) uniquePlaces.set(place.id, place);
   }
+  const routeCandidateLimit = Math.max(2, Math.min(MAX_ROUTE_CANDIDATES, Math.floor(MAX_ROUTE_ESTIMATES / origins.length)));
   const nearbyPlaces = [...uniquePlaces.values()]
     .sort((a, b) => {
       const nearestA = Math.min(...searchCenters.map((point) => distanceMeters(point, a)));
       const nearestB = Math.min(...searchCenters.map((point) => distanceMeters(point, b)));
       return nearestA - nearestB;
     })
-    .slice(0, MAX_ROUTE_CANDIDATES);
+    .slice(0, routeCandidateLimit);
   if (!nearbyPlaces.length) {
     throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "以묒떖 ?꾩튂 二쇰??먯꽌 異붿쿇???μ냼瑜?李얠? 紐삵뻽?듬땲??");
   }
