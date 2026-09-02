@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
 import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { ApiError, apiRequest, createClientRequestId } from "../services/api";
 import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
@@ -231,6 +232,22 @@ export function MeetingScreen({ navigation, route }: Props) {
       longitude: recommendedCandidate.longitude,
     },
   ] : homeMapMarkers;
+  const candidateOverviewMarkers = meeting.placeCandidates.slice(0, 3).map((candidate, index) => ({
+    id: `candidate-overview:${candidate.id}`,
+    label: `${index + 1}. ${candidate.name}`,
+    kind: "RECOMMENDED" as const,
+    address: candidate.address,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
+  }));
+  const firstCandidate = meeting.placeCandidates[0];
+  const candidateOverviewFocus: AddressSelection | null = firstCandidate
+    ? {
+        address: firstCandidate.address,
+        latitude: firstCandidate.latitude,
+        longitude: firstCandidate.longitude,
+      }
+    : null;
 
   async function vote(placeCandidateId: string) {
     try {
@@ -566,6 +583,21 @@ export function MeetingScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
+            {candidateOverviewMarkers.length ? (
+              <View style={styles.candidateOverviewSection}>
+                <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
+                <Text style={styles.candidateOverviewCaption}>추천 후보 {candidateOverviewMarkers.length}곳을 지도에서 확인해 보세요.</Text>
+                <View style={styles.candidateOverviewMap}>
+                  <KakaoAddressMap
+                    focusTarget={candidateOverviewFocus}
+                    interactive
+                    mapMarkers={candidateOverviewMarkers}
+                    query=""
+                    requestId={0}
+                  />
+                </View>
+              </View>
+            ) : null}
             <Button compact label="지도에서 장소 직접 추천" onPress={() => setShowPlacePicker((current) => !current)} variant="soft" />
             {showPlacePicker ? (
               <Card style={styles.placePickerCard}>
@@ -756,6 +788,10 @@ const styles = StyleSheet.create({
   participantTimeChip: { borderRadius: 5, backgroundColor: colors.background, paddingHorizontal: 9, paddingVertical: 6 },
   participantTimeText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
   travelEstimateNotice: { color: colors.subtle, fontSize: 9, textAlign: "right" },
+  candidateOverviewSection: { gap: 6, marginTop: 2 },
+  candidateOverviewTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  candidateOverviewCaption: { color: colors.muted, fontSize: 10 },
+  candidateOverviewMap: { height: 230, borderRadius: 6, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 6, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
