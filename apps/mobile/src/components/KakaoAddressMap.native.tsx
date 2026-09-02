@@ -169,7 +169,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
       var icon = document.createElement("div");
       icon.textContent = item.kind === "RECOMMENDED" ? "✨" : item.kind === "LIVE" ? "●" : "🏠";
       icon.style.cssText = item.kind === "RECOMMENDED"
-        ? "width:44px;height:44px;border-radius:22px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:0 0 0 8px rgba(59,130,246,.2),0 8px 20px rgba(37,99,235,.45);"
+        ? "width:32px;height:32px;border-radius:16px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 0 0 4px rgba(59,130,246,.18),0 5px 12px rgba(37,99,235,.4);"
         : item.kind === "LIVE"
         ? "color:#1677FF;font-size:28px;line-height:28px;text-shadow:0 2px 5px rgba(0,0,0,.35);"
         : "font-size:25px;";
