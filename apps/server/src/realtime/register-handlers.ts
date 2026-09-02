@@ -6,7 +6,7 @@ import type { Server } from "socket.io";
 import { prisma } from "../lib/prisma.js";
 import { verifyAccessToken } from "../lib/auth.js";
 import { canStartSharing } from "../lib/share-window.js";
-import { distanceMeters, nextProximityCount, hasConsecutivelyArrived } from "../lib/geo.js";
+import { ARRIVAL_RADIUS_METERS, distanceMeters, nextProximityCount, hasConsecutivelyArrived } from "../lib/geo.js";
 import { connectUser, disconnectUser } from "./presence.js";
 
 const meetingRoom = (meetingId: string) => `meeting:${meetingId}`;
@@ -109,7 +109,7 @@ export function registerRealtimeHandlers(
       }
       const place = participant.meeting.confirmedPlace;
       const withinRadius = place
-        ? distanceMeters(payload.latitude, payload.longitude, place.latitude, place.longitude) <= 100
+        ? distanceMeters(payload.latitude, payload.longitude, place.latitude, place.longitude) <= ARRIVAL_RADIUS_METERS
         : false;
       const proximityCount = nextProximityCount(participant.arrivalProximityCount, withinRadius);
       const arrived = hasConsecutivelyArrived(proximityCount);
