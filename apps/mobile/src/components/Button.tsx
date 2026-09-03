@@ -43,12 +43,12 @@ export function Button({ label, onPress, variant = "primary", leftLabel, disable
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 46, borderRadius: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, borderWidth: 1, borderColor: "transparent", shadowColor: colors.charcoal, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  button: { minHeight: 46, borderRadius: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, borderWidth: 1, borderColor: "transparent", shadowColor: colors.charcoal, shadowOpacity: 0.045, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
   compactButton: { minHeight: 38, alignSelf: "flex-start", paddingHorizontal: 12 },
   primaryButton: { backgroundColor: colors.primary },
   secondaryButton: { backgroundColor: colors.surface, borderColor: colors.border },
   softButton: { backgroundColor: colors.primarySoft },
-  hovered: { shadowOpacity: 0.16, transform: [{ translateY: -1 }] },
+  hovered: { shadowOpacity: 0.1, transform: [{ translateY: -1 }] },
   focused: { borderColor: colors.borderStrong, shadowColor: colors.primary, shadowOpacity: 0.28, shadowRadius: 5 },
   pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.58 },

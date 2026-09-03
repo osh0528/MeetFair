@@ -2,7 +2,7 @@ import type { FriendRecommendation, FriendSummary, PublicProfileSearchResult } f
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -16,6 +16,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "Friends">;
 
 export function FriendsScreen({ navigation }: Props) {
   const { accessToken } = useSession();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [accountId, setAccountId] = useState("");
   const [accountSuggestions, setAccountSuggestions] = useState<PublicProfileSearchResult[]>([]);
   const [friends, setFriends] = useState<FriendSummary[]>([]);
@@ -193,7 +195,7 @@ export function FriendsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="친구" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.addRow}>
+        <View style={[styles.addRow, isMobile && styles.addRowMobile]}>
           <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 또는 닉네임 검색" placeholderTextColor={colors.subtle} style={styles.input} value={accountId} />
           <Pressable disabled={submitting || !accountId.trim()} onPress={sendRequest} style={[styles.addButton, (submitting || !accountId.trim()) && styles.disabled]}>
             <Text style={styles.addText}>{submitting ? "전송 중" : "요청"}</Text>
@@ -213,7 +215,7 @@ export function FriendsScreen({ navigation }: Props) {
             ))}
           </View>
         ) : null}
-        <View style={styles.quickActions}>
+        <View style={[styles.quickActions, isMobile && styles.quickActionsMobile]}>
           <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
           <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
           <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
@@ -286,10 +288,12 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12, paddingBottom: 40 },
   addRow: { flexDirection: "row", gap: 8 },
+  addRowMobile: { flexDirection: "column", alignItems: "stretch" },
   input: { flex: 1, height: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
-  addButton: { paddingHorizontal: 18, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  addButton: { minHeight: 48, paddingHorizontal: 18, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   quickActions: { flexDirection: "row", gap: 8 },
-  quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6 },
+  quickActionsMobile: { flexDirection: "column", gap: 8 },
+  quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6, minWidth: 0 },
   addText: { color: colors.surface, fontWeight: "900" },
   suggestionList: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
   suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },

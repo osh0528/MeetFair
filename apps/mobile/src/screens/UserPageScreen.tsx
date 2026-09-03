@@ -581,6 +581,9 @@ export function UserPageScreen({ navigation, route }: Props) {
   const wallpaper = wallpapers[activeWallpaper];
   const wallpaperTextColor = activeWallpaper === "NIGHT" ? "#FFF8E7" : "#2D2A26";
   const wallpaperMutedColor = activeWallpaper === "NIGHT" ? "#E8DDBF" : "#665F56";
+  const wallpaperPanelColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.28)" : "rgba(255,255,255,0.42)";
+  const wallpaperInputColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.38)" : "rgba(255,255,255,0.58)";
+  const wallpaperInputBorder = activeWallpaper === "NIGHT" ? "rgba(255,255,255,0.18)" : "rgba(90,70,50,0.16)";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
   async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[], nextLayout: RoomDecorationPlacement[] = roomLayout) {
@@ -857,13 +860,13 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <View style={styles.photoSection}>
                   <SectionHeading color={wallpaperTextColor} title="사진첩" action={page.photos.length + " / 30"} />
                   {page.isOwner ? (
-                    <View style={styles.photoComposer}>
+                    <View style={[styles.photoComposer, { backgroundColor: wallpaperPanelColor, borderColor: wallpaperInputBorder }]}>
                       <TextInput
                         maxLength={150}
                         onChangeText={setPhotoCaption}
                         placeholder="사진 설명을 입력해 주세요. (선택)"
-                        placeholderTextColor={colors.subtle}
-                        style={styles.input}
+                        placeholderTextColor={wallpaperMutedColor}
+                        style={[styles.input, styles.photoComposerInput, { backgroundColor: wallpaperInputColor, borderColor: wallpaperInputBorder, color: wallpaperTextColor }]}
                         value={photoCaption}
                       />
                       <Button
@@ -885,7 +888,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         <Pressable
                           key={representative.id}
                           onPress={() => setSelectedPhotoId(representative.id)}
-                          style={[styles.photoTile, { borderColor: palette.accent }]}
+                          style={[styles.photoTile, { borderColor: wallpaperInputBorder }]}
                         >
                           <View style={styles.photoImageWrap}>
                           <Image
@@ -1067,7 +1070,7 @@ const styles = StyleSheet.create({
   layoutEditText: { fontSize: 12, fontWeight: "900" },
   heroCard: { gap: 12, overflow: "hidden", position: "relative", zIndex: 1 },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
-  heroRowMobile: { gap: 10 },
+  heroRowMobile: { flexDirection: "column", alignItems: "stretch", gap: 10 },
   profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 0.9, minWidth: 0 },
   profileIdentityMobile: { flex: 1 },
   profileText: { flex: 1, minWidth: 0 },
@@ -1107,7 +1110,7 @@ const styles = StyleSheet.create({
   decorLabel: { color: colors.text, fontSize: 10, fontWeight: "900" },
   decorState: { color: colors.muted, fontSize: 9, fontWeight: "700" },
   heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
-  heroMusicMobile: { flex: 1, paddingLeft: 12 },
+  heroMusicMobile: { flex: 1, paddingLeft: 0, borderLeftWidth: 0 },
   heroMusicCard: { padding: 0, borderWidth: 0, borderRadius: 0, backgroundColor: "transparent" },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   musicControl: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
@@ -1128,7 +1131,8 @@ const styles = StyleSheet.create({
   photoSection: { gap: 14 },
   panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
-  photoComposer: { gap: 10, padding: 12, borderRadius: 6, backgroundColor: colors.background },
+  photoComposer: { gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
+  photoComposerInput: { minHeight: 52, borderRadius: 12 },
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   photoTile: { width: "31%", maxWidth: 180, borderRadius: 6, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

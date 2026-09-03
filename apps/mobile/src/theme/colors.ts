@@ -14,7 +14,7 @@ export const colors = {
   muted: themed("muted", "#697080"),
   subtle: themed("subtle", "#A0A5B1"),
   icon: themed("icon", "#626978"),
-  border: themed("border", "#E4E7EF"),
+  border: themed("border", "#EAECF2"),
   borderStrong: themed("border-strong", "#C7D2FE"),
   input: themed("input", "#FFFFFF"),
   primary: themed("primary", "#5B5FEA"),

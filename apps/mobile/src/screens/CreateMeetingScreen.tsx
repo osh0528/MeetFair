@@ -1,7 +1,7 @@
 import type { FriendSummary, LocationShareMode, MeetingSummary, MeetingVisibility, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -83,6 +83,8 @@ function parseSchedule(dateValue: string, timeValue: string): Date | null {
 }
 
 export function CreateMeetingScreen({ navigation }: Props) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const defaultDate = useMemo(() => dateFromOffset(1), []);
   const [title, setTitle] = useState("");
   const [scheduledDate, setScheduledDate] = useState(defaultDate);
@@ -253,7 +255,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         {!scheduledAt ? <Text style={styles.error}>날짜 또는 시간 형식을 확인해 주세요.</Text> : scheduledAt.getTime() <= Date.now() ? <Text style={styles.error}>현재보다 이후 시간을 선택해 주세요.</Text> : null}
 
         <SectionHeading title="모임 공개 범위" />
-        <View style={styles.visibilityRow}>
+        <View style={[styles.visibilityRow, isMobile && styles.visibilityRowMobile]}>
           <VisibilityCard
             description="친구 피드에 공개하고 참여 요청을 받아요."
             onPress={() => setVisibility("PUBLIC_FRIENDS")}
@@ -286,7 +288,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         <View style={styles.wrap}>{categoryOptions.map((category) => <Chip key={category} label={category} selected={categories.includes(category)} onPress={() => setCategories(toggle(categories, category))} />)}</View>
 
         <SectionHeading title="모임 장소 추천" action={selectedPlace ? "선택됨" : "선택 사항"} />
-        <View style={styles.placeSearchRow}>
+        <View style={[styles.placeSearchRow, isMobile && styles.placeSearchRowMobile]}>
           <TextInput
             onChangeText={setPlaceInput}
             onSubmitEditing={searchPlace}
@@ -408,8 +410,9 @@ const styles = StyleSheet.create({
   timeInputGroup: { gap: 6 },
   fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginLeft: 3 },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  placeSearchRowMobile: { flexDirection: "column", alignItems: "stretch" },
   placeSearchInput: { flex: 1 },
-  searchButton: { height: 50, borderRadius: 6, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
+  searchButton: { minHeight: 50, borderRadius: 6, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
   searchButtonText: { color: colors.surface, fontWeight: "900" },
   placeMap: { height: 280, borderRadius: 6, overflow: "hidden" },
   placeCandidateList: { gap: 8 },
@@ -419,6 +422,7 @@ const styles = StyleSheet.create({
   placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
   selectedPlace: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   visibilityRow: { flexDirection: "row", gap: 10 },
+  visibilityRowMobile: { flexDirection: "column", gap: 10 },
   visibilityOption: { flex: 1 },
   visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
   visibilityCardSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },

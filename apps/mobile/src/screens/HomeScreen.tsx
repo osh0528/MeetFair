@@ -244,7 +244,7 @@ export function HomeScreen({ navigation }: Props) {
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
         <View style={[styles.meetingDashboard, (isMobile || isCompactTablet) && styles.meetingDashboardStacked]}>
-          <View style={[styles.meetingColumn, isDesktop && styles.invitationColumn]}>
+          <View style={[styles.meetingColumn, (isMobile || isCompactTablet) && styles.meetingColumnStacked, isDesktop && styles.invitationColumn]}>
             <View style={styles.columnSection}>
               <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
               {invitations.map((item) => (
@@ -258,7 +258,7 @@ export function HomeScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <View style={[styles.meetingColumn, isDesktop && styles.invitationColumn]}>
+          <View style={[styles.meetingColumn, (isMobile || isCompactTablet) && styles.meetingColumnStacked, isDesktop && styles.upcomingColumn]}>
             <View style={styles.columnSection}>
               <SectionHeading title="예정된 모임" action={`${meetings.length}개`} />
               <View style={styles.meetingGrid}>
@@ -334,11 +334,12 @@ const styles = StyleSheet.create({
   hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
   accountId: { color: colors.muted, fontWeight: "700", marginTop: -8 },
   card: { gap: 9 },
-  cardHover: { backgroundColor: colors.surfaceHover, borderColor: colors.borderStrong, shadowOpacity: 0.12, transform: [{ translateY: -1 }] },
+  cardHover: { backgroundColor: colors.surfaceHover, borderColor: colors.borderStrong, shadowOpacity: 0.08, transform: [{ translateY: -1 }] },
   cardFocus: { borderColor: colors.primary, shadowColor: colors.primary, shadowOpacity: 0.2, shadowRadius: 6 },
   meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 32 },
   meetingDashboardStacked: { flexDirection: "column", gap: 28 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
+  meetingColumnStacked: { flex: 0, width: "100%" },
   invitationColumn: { flex: 0.8 },
   upcomingColumn: { flex: 2 },
   columnSection: { gap: 10 },

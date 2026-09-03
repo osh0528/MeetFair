@@ -10,7 +10,7 @@ const palettes = {
   LIGHT: {
     background: "#F7F8FC", surface: "#FFFFFF", "surface-subtle": "#F1F3F9", "surface-hover": "#FAFAFF",
     text: "#171923", "text-secondary": "#3F4350", muted: "#697080", subtle: "#A0A5B1", icon: "#626978",
-    border: "#E4E7EF", "border-strong": "#C7D2FE", input: "#FFFFFF",
+    border: "#EAECF2", "border-strong": "#C7D2FE", input: "#FFFFFF",
     primary: "#5B5FEA", "primary-hover": "#4F46E5", "primary-pressed": "#4338CA", "primary-soft": "#EEF2FF", "primary-contrast": "#FFFFFF",
     mint: "#ECFDF3", green: "#16794A", online: "#22C55E", success: "#16794A", "success-soft": "#ECFDF3", "success-border": "#BBF7D0",
     amber: "#A15C07", "amber-soft": "#FFF7E8", warning: "#A15C07", "warning-soft": "#FFF7E8", "warning-border": "#FDE3AE",

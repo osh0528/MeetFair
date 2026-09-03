@@ -29,6 +29,7 @@ export interface KakaoAddressMapProps {
   focusTarget?: AddressSelection | null;
   onResults?: (candidates: AddressCandidate[]) => void;
   onResolved?: (selection: AddressSelection) => void;
+  onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
   fitMarkers?: boolean;
