@@ -420,12 +420,34 @@ export function UserPageScreen({ navigation, route }: Props) {
   const palette = (mode === "DARK" ? darkThemes : themes)[activeTheme];
   const activeWallpaper = page?.isOwner ? roomWallpaper : page?.roomWallpaper ?? roomWallpaper;
   const wallpaper = wallpapers[activeWallpaper];
+  const wallpaperTextColor = activeWallpaper === "NIGHT" ? "#FFF8E7" : "#2D2A26";
+  const wallpaperMutedColor = activeWallpaper === "NIGHT" ? "#E8DDBF" : "#665F56";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
+  async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[]) {
+    setRoomWallpaper(nextWallpaper);
+    setRoomDecorations(nextDecorations);
+    setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations } : current);
+    try {
+      const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
+        method: "PATCH",
+        body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations }),
+      });
+      applyPage({
+        ...data.page,
+        roomWallpaper: data.page.roomWallpaper ?? nextWallpaper,
+        roomDecorations: Array.isArray(data.page.roomDecorations) ? data.page.roomDecorations : nextDecorations,
+      });
+      setMessage("방 꾸미기가 자동 저장되었습니다.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "방 꾸미기를 저장하지 못했습니다.");
+    }
+  }
   const toggleRoomDecoration = (decoration: RoomDecoration) => {
-    setRoomDecorations((current) => current.includes(decoration)
-      ? current.filter((item) => item !== decoration)
-      : [...current, decoration]);
+    const nextDecorations = roomDecorations.includes(decoration)
+      ? roomDecorations.filter((item) => item !== decoration)
+      : [...roomDecorations, decoration];
+    void saveRoom(roomWallpaper, nextDecorations);
   };
   const wallpaperEditor = page?.isOwner ? (
     <View style={styles.wallpaperEditor}>
@@ -436,7 +458,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           const selected = roomWallpaper === item.id;
           const preview = wallpapers[item.id];
           return (
-            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => setRoomWallpaper(item.id)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
+            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => void saveRoom(item.id, roomDecorations)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
               <View style={[styles.wallpaperPreview, { backgroundColor: preview.background }]}>
                 <WallpaperPattern color={preview.patternColor} compact pattern={preview.pattern} />
                 {selected ? <Text style={styles.wallpaperCheck}>✓</Text> : null}
@@ -549,56 +571,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
                   <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={80} />
                   <View style={styles.profileText}>
-                    <Text style={styles.nickname}>{page.user.nickname}</Text>
+                    <Text style={[styles.nickname, { color: wallpaperTextColor }]}> {page.user.nickname}</Text>
                     <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
                   </View>
                 </View>
                 <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
               </View>
-              <View style={[styles.myRoom, { backgroundColor: palette.soft }]}>
-                <View style={styles.roomTopRow}>
-                  <View>
-                    <Text style={[styles.roomEyebrow, { color: palette.accent }]}>MY LITTLE ROOM</Text>
-                    <Text style={styles.roomTitle}>{page.user.nickname}의 공간</Text>
-                  </View>
-                  {page.isOwner ? (
-                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { backgroundColor: palette.background }]}>
-                      <Text style={[styles.roomEditText, { color: palette.accent }]}>꾸미기</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View style={[styles.roomWall, { backgroundColor: wallpaper.background }]}>
-                  <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
-                  {roomDecorations.includes("WINDOW") ? <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
-                    <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
-                    <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
-                    <Text style={styles.windowView}>☁️</Text>
-                  </View> : null}
-                  <Text style={styles.roomCharacter}>{page.emoji}</Text>
-                  {roomDecorations.includes("PLANT") ? <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View> : null}
-                  {roomDecorations.includes("SOFA") ? <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
-                    <View style={[styles.sofaBack, { backgroundColor: palette.accent }]} />
-                    <View style={styles.sofaCushion} />
-                    <View style={styles.sofaCushion} />
-                  </View> : null}
-                  {roomDecorations.includes("LAMP") ? <Text style={styles.roomLamp}>💡</Text> : null}
-                  {roomDecorations.includes("RUG") ? <View style={[styles.roomRug, { backgroundColor: palette.accent }]} /> : null}
-                  {roomDecorations.includes("BED") ? <Text style={[styles.roomEmojiItem, styles.roomBed]}>🛏️</Text> : null}
-                  {roomDecorations.includes("DESK") ? <Text style={[styles.roomEmojiItem, styles.roomDesk]}>🖥️</Text> : null}
-                  {roomDecorations.includes("BOOKSHELF") ? <Text style={[styles.roomEmojiItem, styles.roomBookshelf]}>📚</Text> : null}
-                  {roomDecorations.includes("TV") ? <Text style={[styles.roomEmojiItem, styles.roomTv]}>📺</Text> : null}
-                  {roomDecorations.includes("TABLE") ? <Text style={[styles.roomEmojiItem, styles.roomTable]}>☕</Text> : null}
-                  {roomDecorations.includes("CLOCK") ? <Text style={[styles.roomEmojiItem, styles.roomClock]}>🕰️</Text> : null}
-                  {roomDecorations.includes("POSTER") ? <Text style={[styles.roomEmojiItem, styles.roomPoster]}>🖼️</Text> : null}
-                  {roomDecorations.includes("CAT") ? <Text style={[styles.roomEmojiItem, styles.roomCat]}>🐈</Text> : null}
-                  {roomDecorations.includes("CACTUS") ? <Text style={[styles.roomEmojiItem, styles.roomCactus]}>🌵</Text> : null}
-                  {roomDecorations.includes("TEDDY") ? <Text style={[styles.roomEmojiItem, styles.roomTeddy]}>🧸</Text> : null}
-                  <View style={styles.roomFloor} />
-                  {!roomDecorations.length ? <Text style={styles.emptyRoomText}>원하는 가구를 골라 나만의 집을 꾸며보세요</Text> : null}
-                </View>
-              </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
-                <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
+                <Text style={[styles.statusText, { color: wallpaperTextColor }]}> {page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
               </View>
             </Card>
             {!page.isOwner ? (
@@ -699,7 +679,7 @@ export function UserPageScreen({ navigation, route }: Props) {
             <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
               <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel, housePanel]}>
                 <View style={styles.photoSection}>
-                  <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
+                  <SectionHeading color={wallpaperTextColor} title="사진첩" action={page.photos.length + " / 30"} />
                   {page.isOwner ? (
                     <View style={styles.photoComposer}>
                       <TextInput
@@ -743,7 +723,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                             </View>
                           ) : null}
                           </View>
-                          {representative.caption ? <Text numberOfLines={isNarrowLayout ? 1 : 2} style={styles.photoCaption}>{representative.caption}</Text> : null}
+                          {representative.caption ? <Text numberOfLines={isNarrowLayout ? 1 : 2} style={[styles.photoCaption, { color: wallpaperTextColor }]}> {representative.caption}</Text> : null}
                           <Pressable
                             accessibilityLabel={representative.likedByMe ? "사진 좋아요 취소" : "사진 좋아요"}
                             disabled={likingPhotoId === representative.id}
@@ -764,14 +744,56 @@ export function UserPageScreen({ navigation, route }: Props) {
                   ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
                 </View>
 
-                <View style={styles.panelSection}>
-                  <SectionHeading title="About me" />
-                  <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
+                <View style={[styles.myRoom, { backgroundColor: palette.soft }]}>
+                <View style={styles.roomTopRow}>
+                  <View>
+                    <Text style={[styles.roomEyebrow, { color: palette.accent }]}>MY LITTLE ROOM</Text>
+                    <Text style={[styles.roomTitle, { color: wallpaperTextColor }]}> {page.user.nickname}의 공간</Text>
+                  </View>
+                  {page.isOwner ? (
+                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { backgroundColor: palette.background }]}>
+                      <Text style={[styles.roomEditText, { color: palette.accent }]}>꾸미기</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={[styles.roomWall, { backgroundColor: wallpaper.background }]}>
+                  <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
+                  {roomDecorations.includes("WINDOW") ? <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
+                    <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
+                    <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
+                    <Text style={styles.windowView}>☁️</Text>
+                  </View> : null}
+                  <Text style={styles.roomCharacter}>{page.emoji}</Text>
+                  {roomDecorations.includes("PLANT") ? <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View> : null}
+                  {roomDecorations.includes("SOFA") ? <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
+                    <View style={[styles.sofaBack, { backgroundColor: palette.accent }]} />
+                    <View style={styles.sofaCushion} />
+                    <View style={styles.sofaCushion} />
+                  </View> : null}
+                  {roomDecorations.includes("LAMP") ? <Text style={styles.roomLamp}>💡</Text> : null}
+                  {roomDecorations.includes("RUG") ? <View style={[styles.roomRug, { backgroundColor: palette.accent }]} /> : null}
+                  {roomDecorations.includes("BED") ? <Text style={[styles.roomEmojiItem, styles.roomBed]}>🛏️</Text> : null}
+                  {roomDecorations.includes("DESK") ? <Text style={[styles.roomEmojiItem, styles.roomDesk]}>🖥️</Text> : null}
+                  {roomDecorations.includes("BOOKSHELF") ? <Text style={[styles.roomEmojiItem, styles.roomBookshelf]}>📚</Text> : null}
+                  {roomDecorations.includes("TV") ? <Text style={[styles.roomEmojiItem, styles.roomTv]}>📺</Text> : null}
+                  {roomDecorations.includes("TABLE") ? <Text style={[styles.roomEmojiItem, styles.roomTable]}>☕</Text> : null}
+                  {roomDecorations.includes("CLOCK") ? <Text style={[styles.roomEmojiItem, styles.roomClock]}>🕰️</Text> : null}
+                  {roomDecorations.includes("POSTER") ? <Text style={[styles.roomEmojiItem, styles.roomPoster]}>🖼️</Text> : null}
+                  {roomDecorations.includes("CAT") ? <Text style={[styles.roomEmojiItem, styles.roomCat]}>🐈</Text> : null}
+                  {roomDecorations.includes("CACTUS") ? <Text style={[styles.roomEmojiItem, styles.roomCactus]}>🌵</Text> : null}
+                  {roomDecorations.includes("TEDDY") ? <Text style={[styles.roomEmojiItem, styles.roomTeddy]}>🧸</Text> : null}
+                  <View style={styles.roomFloor} />
+                  {!roomDecorations.length ? <Text style={[styles.emptyRoomText, { color: wallpaperMutedColor }]}> 원하는 가구를 골라 나만의 집을 꾸며보세요</Text> : null}
+                </View>
+              </View>
+              <View style={styles.panelSection}>
+                  <SectionHeading color={wallpaperTextColor} title="About me" />
+                  <Text style={[styles.bio, { color: wallpaperTextColor }]}> {page.bio || "아직 소개글이 없습니다."}</Text>
                 </View>
               </Card>
 
               <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel, housePanel]}>
-                <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
+                <SectionHeading color={wallpaperTextColor} title="방명록" action={page.guestbook.length + "개"} />
                 <View style={styles.guestbookComposer}>
                   <TextInput
                     maxLength={200}
@@ -790,8 +812,8 @@ export function UserPageScreen({ navigation, route }: Props) {
                     <View style={styles.guestbookHeader}>
                       <Avatar imageUrl={avatarUrl(entry.author.id, entry.author.avatarUpdatedAt)} name={entry.author.nickname} size={38} />
                       <View style={styles.guestbookAuthor}>
-                        <Text style={styles.authorName}>{entry.author.nickname}</Text>
-                        <Text style={styles.date}>{new Date(entry.createdAt).toLocaleString("ko-KR")}</Text>
+                        <Text style={[styles.authorName, { color: wallpaperTextColor }]}> {entry.author.nickname}</Text>
+                        <Text style={[styles.date, { color: wallpaperMutedColor }]}> {new Date(entry.createdAt).toLocaleString("ko-KR")}</Text>
                       </View>
                       {page.isOwner || entry.author.id === user?.id ? (
                         <Pressable disabled={busy} onPress={() => void deleteGuestbook(entry.id)}>
@@ -799,7 +821,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         </Pressable>
                       ) : null}
                     </View>
-                    <Text style={styles.guestbookText}>{entry.content}</Text>
+                    <Text style={[styles.guestbookText, { color: wallpaperTextColor }]}> {entry.content}</Text>
                   </View>
                 ))}
                 {!page.guestbook.length ? <Text style={styles.empty}>첫 번째 방명록을 남겨 보세요.</Text> : null}

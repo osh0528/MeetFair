@@ -57,14 +57,16 @@ export function ScreenHeader({
 export function SectionHeading({
   title,
   action,
+  color,
 }: {
   title: string;
   action?: string;
+  color?: string;
 }) {
   return (
     <View style={styles.sectionHeading}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {action ? <Text style={styles.sectionAction}>{action}</Text> : null}
+      <Text style={[styles.sectionTitle, color ? { color } : null]}>{title}</Text>
+      {action ? <Text style={[styles.sectionAction, color ? { color } : null]}>{action}</Text> : null}
     </View>
   );
 }
