@@ -545,8 +545,6 @@ export function MeetingScreen({ navigation, route }: Props) {
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
-            <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
-            {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
             <View style={[styles.recommendationResultLayout, !isWideLayout && styles.recommendationResultLayoutNarrow]}>
               <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn]}>
                 <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
@@ -566,6 +564,8 @@ export function MeetingScreen({ navigation, route }: Props) {
                 </View>
               </View>
               <View style={styles.candidateStack}>
+                <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
+                {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
               {meeting.placeCandidates.map((candidate) => {
                 const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
                 return (
