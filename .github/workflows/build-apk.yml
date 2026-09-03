@@ -52,7 +52,9 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL || 'https://meetfair-l5ak.onrender.com/api' }}
           EXPO_PUBLIC_SOCKET_URL: ${{ secrets.EXPO_PUBLIC_SOCKET_URL || 'https://meetfair-l5ak.onrender.com' }}
-        run: ./gradlew assembleRelease --stacktrace
+          GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError" -Dorg.gradle.daemon=false
+          _JAVA_OPTIONS: -XX:MaxMetaspaceSize=512m
+        run: ./gradlew assembleRelease --stacktrace --no-daemon -Dorg.gradle.workers.max=2
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
