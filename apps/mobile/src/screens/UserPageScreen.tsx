@@ -1,4 +1,4 @@
-import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfileTheme, type RoomDecoration, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
+import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfileTheme, type RoomDecoration, type RoomDecorationPlacement, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -6,8 +6,8 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
@@ -69,27 +69,26 @@ function WallpaperPattern({ pattern, color, compact = false }: { pattern: string
   );
 }
 
-const homeDecorItems: ReadonlyArray<{ id: RoomDecoration; icon: string; style: { top: number; left?: number; right?: number } }> = [
-  { id: "WINDOW", icon: "🪟", style: { top: 115, left: 18 } },
-  { id: "PLANT", icon: "🌿", style: { top: 245, right: 20 } },
-  { id: "SOFA", icon: "🛋️", style: { top: 365, left: 16 } },
-  { id: "LAMP", icon: "💡", style: { top: 475, right: 24 } },
-  { id: "RUG", icon: "🧶", style: { top: 585, left: 24 } },
-  { id: "BED", icon: "🛏️", style: { top: 695, right: 15 } },
-  { id: "DESK", icon: "🖥️", style: { top: 805, left: 18 } },
-  { id: "BOOKSHELF", icon: "📚", style: { top: 915, right: 22 } },
-  { id: "TV", icon: "📺", style: { top: 1025, left: 20 } },
-  { id: "TABLE", icon: "☕", style: { top: 1135, right: 24 } },
-  { id: "CLOCK", icon: "🕰️", style: { top: 1245, left: 22 } },
-  { id: "POSTER", icon: "🖼️", style: { top: 1355, right: 18 } },
-  { id: "CAT", icon: "🐈", style: { top: 1465, left: 20 } },
-  { id: "CACTUS", icon: "🌵", style: { top: 1575, right: 22 } },
-  { id: "TEDDY", icon: "🧸", style: { top: 1685, left: 18 } },
-];
+const homeDecorIcons: Record<RoomDecoration, string> = {
+  WINDOW: "🪟", PLANT: "🌿", SOFA: "🛋️", LAMP: "💡", RUG: "🧶",
+  BED: "🛏️", DESK: "🖥️", BOOKSHELF: "📚", TV: "📺", TABLE: "☕",
+  CLOCK: "🕰️", POSTER: "🖼️", CAT: "🐈", CACTUS: "🌵", TEDDY: "🧸",
+};
+
+function defaultRoomLayout(decorations: RoomDecoration[]): RoomDecorationPlacement[] {
+  return decorations.map((id, index) => ({
+    id,
+    x: index % 2 ? 0.82 : 0.08,
+    y: Math.min(0.92, 0.08 + index * 0.06),
+    scale: 1,
+    rotation: 0,
+  }));
+}
 
 type SavedRoomCustomization = {
   wallpaper: RoomWallpaper;
   decorations: RoomDecoration[];
+  layout: RoomDecorationPlacement[];
 };
 
 const roomWallpaperIds = new Set(ROOM_WALLPAPERS.map((item) => item.id));
@@ -103,25 +102,114 @@ async function readSavedRoomCustomization(userId: string): Promise<SavedRoomCust
   try {
     const raw = await AsyncStorage.getItem(roomCustomizationKey(userId));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { wallpaper?: unknown; decorations?: unknown };
+    const parsed = JSON.parse(raw) as { wallpaper?: unknown; decorations?: unknown; layout?: unknown };
     if (!roomWallpaperIds.has(parsed.wallpaper as RoomWallpaper) || !Array.isArray(parsed.decorations)) return null;
+    const decorations = parsed.decorations.filter((item): item is RoomDecoration => roomDecorationIds.has(item as RoomDecoration));
     return {
       wallpaper: parsed.wallpaper as RoomWallpaper,
-      decorations: parsed.decorations.filter((item): item is RoomDecoration => roomDecorationIds.has(item as RoomDecoration)),
+      decorations,
+      layout: Array.isArray(parsed.layout) ? parsed.layout as RoomDecorationPlacement[] : defaultRoomLayout(decorations),
     };
   } catch {
     return null;
   }
 }
 
-async function writeSavedRoomCustomization(userId: string, wallpaper: RoomWallpaper, decorations: RoomDecoration[]) {
-  await AsyncStorage.setItem(roomCustomizationKey(userId), JSON.stringify({ wallpaper, decorations }));
+async function writeSavedRoomCustomization(userId: string, wallpaper: RoomWallpaper, decorations: RoomDecoration[], layout: RoomDecorationPlacement[]) {
+  await AsyncStorage.setItem(roomCustomizationKey(userId), JSON.stringify({ wallpaper, decorations, layout }));
 }
-function HomeDecorations({ decorations }: { decorations: RoomDecoration[] }) {
+
+function EditableDecoration({
+  placement,
+  width,
+  height,
+  editable,
+  onChange,
+}: {
+  placement: RoomDecorationPlacement;
+  width: number;
+  height: number;
+  editable: boolean;
+  onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
+}) {
+  const gestureStart = useRef({ x: placement.x, y: placement.y, scale: placement.scale, rotation: placement.rotation, distance: 0, angle: 0 });
+  const latest = useRef(placement);
+  latest.current = placement;
+  const responder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => editable,
+    onMoveShouldSetPanResponder: () => editable,
+    onPanResponderGrant: (event) => {
+      const touches = event.nativeEvent.touches;
+      const first = touches[0];
+      const second = touches[1];
+      const dx = second && first ? second.pageX - first.pageX : 0;
+      const dy = second && first ? second.pageY - first.pageY : 0;
+      gestureStart.current = {
+        x: latest.current.x,
+        y: latest.current.y,
+        scale: latest.current.scale,
+        rotation: latest.current.rotation,
+        distance: Math.hypot(dx, dy),
+        angle: Math.atan2(dy, dx) * 180 / Math.PI,
+      };
+    },
+    onPanResponderMove: (event, gesture) => {
+      const touches = event.nativeEvent.touches;
+      const first = touches[0];
+      const second = touches[1];
+      if (first && second) {
+        const dx = second.pageX - first.pageX;
+        const dy = second.pageY - first.pageY;
+        const distance = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        const start = gestureStart.current;
+        onChange({
+          ...latest.current,
+          scale: Math.max(0.5, Math.min(2.5, start.scale * (start.distance ? distance / start.distance : 1))),
+          rotation: Math.max(-180, Math.min(180, start.rotation + angle - start.angle)),
+        }, false);
+        return;
+      }
+      const start = gestureStart.current;
+      onChange({
+        ...latest.current,
+        x: Math.max(0, Math.min(1, start.x + gesture.dx / Math.max(1, width - 48))),
+        y: Math.max(0, Math.min(1, start.y + gesture.dy / Math.max(1, height - 48))),
+      }, false);
+    },
+    onPanResponderRelease: () => onChange(latest.current, true),
+    onPanResponderTerminate: () => onChange(latest.current, true),
+  }), [editable, height, onChange, width]);
   return (
-    <View pointerEvents="none" style={styles.homeDecorLayer}>
-      {homeDecorItems.filter((item) => decorations.includes(item.id)).map((item) => (
-        <Text key={item.id} style={[styles.homeDecorItem, item.style]}>{item.icon}</Text>
+    <View
+      {...responder.panHandlers}
+      style={[
+        styles.homeDecorItem,
+        {
+          left: placement.x * Math.max(1, width - 48),
+          top: placement.y * Math.max(1, height - 48),
+          opacity: editable ? 0.9 : 0.38,
+          transform: [{ scale: placement.scale }, { rotate: placement.rotation + "deg" }],
+        },
+        editable && styles.homeDecorItemEditing,
+      ]}
+    >
+      <Text style={styles.homeDecorEmoji}>{homeDecorIcons[placement.id]}</Text>
+    </View>
+  );
+}
+
+function HomeDecorations({ layout, width, height, editable, onChange }: {
+  layout: RoomDecorationPlacement[];
+  width: number;
+  height: number;
+  editable: boolean;
+  onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
+}) {
+  return (
+    <View pointerEvents={editable ? "box-none" : "none"} style={styles.homeDecorLayer}>
+      {layout.map((placement) => (
+        <EditableDecoration editable={editable} height={height} key={placement.id} onChange={onChange} placement={placement} width={width} />
       ))}
     </View>
   );
@@ -143,6 +231,9 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [theme, setTheme] = useState<ProfileTheme>("PURPLE");
   const [roomWallpaper, setRoomWallpaper] = useState<RoomWallpaper>("CREAM");
   const [roomDecorations, setRoomDecorations] = useState<RoomDecoration[]>([]);
+  const [roomLayout, setRoomLayout] = useState<RoomDecorationPlacement[]>([]);
+  const [decorating, setDecorating] = useState(false);
+  const [houseSize, setHouseSize] = useState({ width: 1, height: 1 });
   const [musicTitle, setMusicTitle] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -169,7 +260,9 @@ export function UserPageScreen({ navigation, route }: Props) {
     setEmoji(next.emoji);
     setTheme(next.theme);
     setRoomWallpaper(next.roomWallpaper ?? "CREAM");
-    setRoomDecorations(Array.isArray(next.roomDecorations) ? next.roomDecorations : []);
+    const nextDecorations = Array.isArray(next.roomDecorations) ? next.roomDecorations : [];
+    setRoomDecorations(nextDecorations);
+    setRoomLayout(Array.isArray(next.roomLayout) && next.roomLayout.length ? next.roomLayout : defaultRoomLayout(nextDecorations));
     setMusicTitle(next.musicTitle ?? "");
   }, []);
 
@@ -183,6 +276,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         ...data.page,
         roomWallpaper: savedRoom.wallpaper,
         roomDecorations: savedRoom.decorations,
+        roomLayout: savedRoom.layout,
       } : data.page);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "개인 페이지를 불러오지 못했습니다.");
@@ -235,7 +329,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBusy(true);
     setMessage("");
     try {
-      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, roomWallpaper, roomDecorations);
+      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, roomWallpaper, roomDecorations, roomLayout);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
         body: JSON.stringify({
@@ -245,10 +339,11 @@ export function UserPageScreen({ navigation, route }: Props) {
           theme,
           roomWallpaper,
           roomDecorations,
+          roomLayout,
           musicTitle,
         }),
       });
-      applyPage({ ...data.page, roomWallpaper, roomDecorations });
+      applyPage({ ...data.page, roomWallpaper, roomDecorations, roomLayout });
       if (isCompactLayout) setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
@@ -488,20 +583,22 @@ export function UserPageScreen({ navigation, route }: Props) {
   const wallpaperMutedColor = activeWallpaper === "NIGHT" ? "#E8DDBF" : "#665F56";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
-  async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[]) {
+  async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[], nextLayout: RoomDecorationPlacement[] = roomLayout) {
     setRoomWallpaper(nextWallpaper);
     setRoomDecorations(nextDecorations);
-    setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations } : current);
+    setRoomLayout(nextLayout);
+    setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout } : current);
     try {
-      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, nextWallpaper, nextDecorations);
+      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, nextWallpaper, nextDecorations, nextLayout);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
-        body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations }),
+        body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout }),
       });
       applyPage({
         ...data.page,
         roomWallpaper: nextWallpaper,
         roomDecorations: nextDecorations,
+        roomLayout: nextLayout,
       });
       setMessage("방 꾸미기가 자동 저장되었습니다.");
     } catch (caught) {
@@ -509,10 +606,18 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
   const toggleRoomDecoration = (decoration: RoomDecoration) => {
-    const nextDecorations = roomDecorations.includes(decoration)
-      ? roomDecorations.filter((item) => item !== decoration)
-      : [...roomDecorations, decoration];
-    void saveRoom(roomWallpaper, nextDecorations);
+    const selected = roomDecorations.includes(decoration);
+    const nextDecorations = selected ? roomDecorations.filter((item) => item !== decoration) : [...roomDecorations, decoration];
+    const nextLayout = selected
+      ? roomLayout.filter((item) => item.id !== decoration)
+      : [...roomLayout, { ...defaultRoomLayout([decoration])[0]!, y: Math.min(0.9, 0.12 + roomLayout.length * 0.06) }];
+    void saveRoom(roomWallpaper, nextDecorations, nextLayout);
+  };
+  const updateDecorationPlacement = (next: RoomDecorationPlacement, finished: boolean) => {
+    const nextLayout = roomLayout.map((item) => item.id === next.id ? next : item);
+    setRoomLayout(nextLayout);
+    setPage((current) => current ? { ...current, roomLayout: nextLayout } : current);
+    if (finished) void saveRoom(roomWallpaper, roomDecorations, nextLayout);
   };
   const wallpaperEditor = page?.isOwner ? (
     <View style={styles.wallpaperEditor}>
@@ -523,7 +628,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           const selected = roomWallpaper === item.id;
           const preview = wallpapers[item.id];
           return (
-            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => void saveRoom(item.id, roomDecorations)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
+            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => void saveRoom(item.id, roomDecorations, roomLayout)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
               <View style={[styles.wallpaperPreview, { backgroundColor: preview.background }]}>
                 <WallpaperPattern color={preview.patternColor} compact pattern={preview.pattern} />
                 {selected ? <Text style={styles.wallpaperCheck}>✓</Text> : null}
@@ -625,12 +730,17 @@ export function UserPageScreen({ navigation, route }: Props) {
         ) : undefined}
       />
       {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!decorating}>
         {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
         {page ? (
-          <View style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
+          <View onLayout={(event) => setHouseSize(event.nativeEvent.layout)} style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
             <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
-            <HomeDecorations decorations={roomDecorations} />
+            <HomeDecorations editable={decorating} height={houseSize.height} layout={roomLayout} onChange={updateDecorationPlacement} width={houseSize.width} />
+            {page.isOwner && roomDecorations.length ? (
+              <Pressable onPress={() => setDecorating((current) => !current)} style={[styles.layoutEditButton, { backgroundColor: palette.soft }]}>
+                <Text style={[styles.layoutEditText, { color: wallpaperTextColor }]}>{decorating ? "배치 완료" : "가구 위치 편집"}</Text>
+              </Pressable>
+            ) : null}
             <Card style={[styles.heroCard, housePanel]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
@@ -950,7 +1060,11 @@ const styles = StyleSheet.create({
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   houseShell: { borderRadius: 24, padding: 14, gap: 12, overflow: "hidden", position: "relative" },
   homeDecorLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
-  homeDecorItem: { position: "absolute", fontSize: 38, opacity: 0.38 },
+  homeDecorItem: { position: "absolute", width: 52, height: 52, alignItems: "center", justifyContent: "center", zIndex: 3 },
+  homeDecorItemEditing: { backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 26 },
+  homeDecorEmoji: { fontSize: 38 },
+  layoutEditButton: { alignSelf: "flex-end", minHeight: 38, borderRadius: 19, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", position: "relative", zIndex: 5 },
+  layoutEditText: { fontSize: 12, fontWeight: "900" },
   heroCard: { gap: 12, overflow: "hidden", position: "relative", zIndex: 1 },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
   heroRowMobile: { gap: 10 },

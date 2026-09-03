@@ -90,6 +90,14 @@ export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
 export type RoomWallpaper = "CREAM" | "STRIPES" | "CHECK" | "FLORAL" | "SKY" | "FOREST" | "NIGHT" | "BRICK";
 export type RoomDecoration = "RUG" | "PLANT" | "LAMP" | "SOFA" | "WINDOW" | "BED" | "DESK" | "BOOKSHELF" | "TV" | "TABLE" | "CLOCK" | "POSTER" | "CAT" | "CACTUS" | "TEDDY";
 
+export interface RoomDecorationPlacement {
+  id: RoomDecoration;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
 export const ROOM_WALLPAPERS: ReadonlyArray<{
   id: RoomWallpaper;
   label: string;
@@ -154,6 +162,7 @@ export interface UserPageSummary {
   theme: ProfileTheme;
   roomWallpaper: RoomWallpaper;
   roomDecorations: RoomDecoration[];
+  roomLayout: RoomDecorationPlacement[];
   musicTitle: string | null;
   hasMusic: boolean;
   musicUpdatedAt: string | null;

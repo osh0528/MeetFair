@@ -98,6 +98,7 @@ model User {
   profileTheme    String               @default("PURPLE")
   profileRoomWallpaper String          @default("CREAM")
   profileRoomDecor String[]            @default([])
+  profileRoomLayout Json               @default("[]")
   profileMusicTitle String?
   profileMusicData Bytes?
   profileMusicMimeType String?

@@ -7,7 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { toProfileGuestbookEntry, toPublicUser, toUserSummary } from "../lib/serializers.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createNotification } from "../lib/notifications.js";
-import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfilePhotoSummary, type ProfileTheme, type RoomDecoration, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
+import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfilePhotoSummary, type ProfileTheme, type RoomDecoration, type RoomDecorationPlacement, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
 import { isUserOnline } from "../realtime/presence.js";
 
 export const usersRouter = Router();
@@ -20,6 +20,13 @@ const roomWallpaperIds = ROOM_WALLPAPERS.map((item) => item.id) as [RoomWallpape
 const musicMimeTypes = ["audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"] as const;
 const maxMusicBytes = 6 * 1024 * 1024;
 const profileThemes = ["PURPLE", "PINK", "BLUE", "MINT", "SUNSET"] as const;
+const roomLayoutSchema = z.array(z.object({
+  id: z.enum(roomDecorationIds),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  scale: z.number().min(0.5).max(2.5),
+  rotation: z.number().min(-180).max(180),
+})).max(roomDecorationIds.length);
 
 function matchesAvatarMimeType(data: Buffer, mimeType: typeof avatarMimeTypes[number]) {
   if (mimeType === "image/jpeg") {
@@ -233,6 +240,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
       profileTheme: true,
       profileRoomWallpaper: true,
       profileRoomDecor: true,
+      profileRoomLayout: true,
       profileMusicTitle: true,
       profileMusicUpdatedAt: true,
       profileUpdatedAt: true,
@@ -279,6 +287,8 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
   const roomDecorations = owner.profileRoomDecor.filter(
     (item): item is RoomDecoration => roomDecorationIds.includes(item as RoomDecoration),
   );
+  const parsedRoomLayout = roomLayoutSchema.safeParse(owner.profileRoomLayout);
+  const roomLayout: RoomDecorationPlacement[] = parsedRoomLayout.success ? parsedRoomLayout.data : [];
   return {
     user: toUserSummary(owner),
     statusMessage: owner.profileStatus,
@@ -287,6 +297,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
     theme,
     roomWallpaper,
     roomDecorations,
+    roomLayout,
     musicTitle: owner.profileMusicTitle,
     hasMusic: Boolean(owner.profileMusicUpdatedAt),
     musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
@@ -317,6 +328,7 @@ usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, ne
       theme: z.enum(profileThemes).optional(),
       roomWallpaper: z.enum(roomWallpaperIds).optional(),
       roomDecorations: z.array(z.enum(roomDecorationIds)).max(roomDecorationIds.length).optional(),
+      roomLayout: roomLayoutSchema.optional(),
       musicTitle: z.string().trim().max(100).nullable().optional(),
     }).refine(
       (value) => Object.values(value).some((item) => item !== undefined),
@@ -332,6 +344,7 @@ usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, ne
         profileTheme: input.theme,
         profileRoomWallpaper: input.roomWallpaper,
         profileRoomDecor: input.roomDecorations,
+        profileRoomLayout: input.roomLayout,
         profileMusicTitle: input.musicTitle === "" ? null : input.musicTitle,
         profileUpdatedAt: new Date(),
       },

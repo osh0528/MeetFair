@@ -1,0 +1,2 @@
+ALTER TABLE "User"
+ADD COLUMN "profileRoomLayout" JSONB NOT NULL DEFAULT '[]';
