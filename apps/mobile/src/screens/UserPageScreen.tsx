@@ -378,7 +378,9 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
-  const palette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
+  const activeTheme = page?.isOwner ? theme : page?.theme ?? theme;
+  const palette = (mode === "DARK" ? darkThemes : themes)[activeTheme];
+  const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const photoGroups = page ? Object.values(page.photos.reduce<Record<string, UserPageSummary["photos"]>>((groups, photo) => {
     const key = photo.groupId ?? photo.id;
     groups[key] ??= [];
@@ -444,7 +446,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
         {page ? (
           <>
-            <Card style={[styles.heroCard, { borderColor: palette.soft }]}>
+            <Card style={[styles.heroCard, themedPanel]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
                 <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
@@ -508,7 +510,7 @@ export function UserPageScreen({ navigation, route }: Props) {
             ) : null}
 
             {page.isOwner && !isCompactLayout ? (
-              <Card style={styles.editorCard}>
+              <Card style={[styles.editorCard, themedPanel]}>
                 <SectionHeading title="간편 설정" action="나만 수정 가능" />
                 <Text style={styles.label}>대표 이모지</Text>
                 <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
@@ -583,7 +585,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card> : null}
             <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
-              <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel]}>
+              <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel, themedPanel]}>
                 <View style={styles.photoSection}>
                   <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
                   {page.isOwner ? (
@@ -615,7 +617,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         <Pressable
                           key={representative.id}
                           onPress={() => setSelectedPhotoId(representative.id)}
-                          style={[styles.photoTile, isNarrowLayout && styles.photoTileMobile]}
+                          style={[styles.photoTile, { borderColor: palette.accent }]}
                         >
                           <View style={styles.photoImageWrap}>
                           <Image
@@ -656,7 +658,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 </View>
               </Card>
 
-              <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel]}>
+              <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel, themedPanel]}>
                 <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
                 <View style={styles.guestbookComposer}>
                   <TextInput
@@ -700,7 +702,7 @@ export function UserPageScreen({ navigation, route }: Props) {
             <ScreenHeader title="홈피 편집" onBack={() => setEditing(false)} />
           </View>
           <ScrollView contentContainerStyle={styles.editModalContent}>
-            <Card style={styles.editorCard}>
+            <Card style={[styles.editorCard, themedPanel]}>
               <Text style={styles.label}>대표 이모지</Text>
               <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
               <Text style={styles.label}>상태 메시지</Text>
@@ -851,8 +853,7 @@ const styles = StyleSheet.create({
   photoComposer: { gap: 10, padding: 12, borderRadius: 6, backgroundColor: colors.background },
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  photoTile: { width: "48%", borderRadius: 6, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  photoTileMobile: { width: "31%" },
+  photoTile: { width: "31%", maxWidth: 180, borderRadius: 6, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   photoImageWrap: { position: "relative" },
   photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },
