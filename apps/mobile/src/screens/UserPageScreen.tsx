@@ -1,4 +1,5 @@
 import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfileTheme, type RoomDecoration, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
@@ -86,6 +87,36 @@ const homeDecorItems: ReadonlyArray<{ id: RoomDecoration; icon: string; style: {
   { id: "TEDDY", icon: "🧸", style: { top: 1685, left: 18 } },
 ];
 
+type SavedRoomCustomization = {
+  wallpaper: RoomWallpaper;
+  decorations: RoomDecoration[];
+};
+
+const roomWallpaperIds = new Set(ROOM_WALLPAPERS.map((item) => item.id));
+const roomDecorationIds = new Set(ROOM_DECORATIONS.map((item) => item.id));
+
+function roomCustomizationKey(userId: string) {
+  return "meetfair:room-customization:" + userId;
+}
+
+async function readSavedRoomCustomization(userId: string): Promise<SavedRoomCustomization | null> {
+  try {
+    const raw = await AsyncStorage.getItem(roomCustomizationKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { wallpaper?: unknown; decorations?: unknown };
+    if (!roomWallpaperIds.has(parsed.wallpaper as RoomWallpaper) || !Array.isArray(parsed.decorations)) return null;
+    return {
+      wallpaper: parsed.wallpaper as RoomWallpaper,
+      decorations: parsed.decorations.filter((item): item is RoomDecoration => roomDecorationIds.has(item as RoomDecoration)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function writeSavedRoomCustomization(userId: string, wallpaper: RoomWallpaper, decorations: RoomDecoration[]) {
+  await AsyncStorage.setItem(roomCustomizationKey(userId), JSON.stringify({ wallpaper, decorations }));
+}
 function HomeDecorations({ decorations }: { decorations: RoomDecoration[] }) {
   return (
     <View pointerEvents="none" style={styles.homeDecorLayer}>
@@ -147,7 +178,12 @@ export function UserPageScreen({ navigation, route }: Props) {
     setMessage("");
     try {
       const data = await apiRequest<{ page: UserPageSummary }>("/users/" + route.params.userId + "/page");
-      applyPage(data.page);
+      const savedRoom = data.page.isOwner ? await readSavedRoomCustomization(data.page.user.id) : null;
+      applyPage(savedRoom ? {
+        ...data.page,
+        roomWallpaper: savedRoom.wallpaper,
+        roomDecorations: savedRoom.decorations,
+      } : data.page);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "개인 페이지를 불러오지 못했습니다.");
     } finally {
@@ -199,6 +235,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBusy(true);
     setMessage("");
     try {
+      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, roomWallpaper, roomDecorations);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
         body: JSON.stringify({
@@ -211,7 +248,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           musicTitle,
         }),
       });
-      applyPage(data.page);
+      applyPage({ ...data.page, roomWallpaper, roomDecorations });
       if (isCompactLayout) setEditing(false);
       setMessage("미니홈피 꾸미기를 저장했습니다.");
     } catch (caught) {
@@ -456,14 +493,15 @@ export function UserPageScreen({ navigation, route }: Props) {
     setRoomDecorations(nextDecorations);
     setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations } : current);
     try {
+      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, nextWallpaper, nextDecorations);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
         body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations }),
       });
       applyPage({
         ...data.page,
-        roomWallpaper: data.page.roomWallpaper ?? nextWallpaper,
-        roomDecorations: Array.isArray(data.page.roomDecorations) ? data.page.roomDecorations : nextDecorations,
+        roomWallpaper: nextWallpaper,
+        roomDecorations: nextDecorations,
       });
       setMessage("방 꾸미기가 자동 저장되었습니다.");
     } catch (caught) {
