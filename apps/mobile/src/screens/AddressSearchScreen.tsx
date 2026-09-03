@@ -35,6 +35,16 @@ export function AddressSearchScreen({ navigation, route }: Props) {
     setFocusTarget(candidate);
   }, []);
 
+  const handleResolved = useCallback((resolved: AddressSelection) => {
+    const candidate: AddressCandidate = {
+      ...resolved,
+      title: resolved.address,
+    };
+    setCandidates([candidate]);
+    setSelection(candidate);
+    setFocusTarget(candidate);
+  }, []);
+
   const handleSearch = () => {
     if (!input.trim()) return;
     setSelection(null);
@@ -97,6 +107,8 @@ export function AddressSearchScreen({ navigation, route }: Props) {
       <View style={styles.mapArea}>
         <KakaoAddressMap
           focusTarget={focusTarget}
+          interactive
+          onResolved={handleResolved}
           onResults={handleResults}
           query={query}
           requestId={requestId}

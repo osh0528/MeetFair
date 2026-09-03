@@ -6,7 +6,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/ui";
 import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
-import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { ApiError, apiRequest, createClientRequestId } from "../services/api";
 import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
@@ -548,14 +547,32 @@ export function MeetingScreen({ navigation, route }: Props) {
             </Pressable>
             <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
             {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
-            <View style={[styles.cardGrid, !isWideLayout && styles.cardGridNarrow]}>
+            <View style={[styles.recommendationResultLayout, !isWideLayout && styles.recommendationResultLayoutNarrow]}>
+              <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn]}>
+                <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
+                <Text style={styles.candidateOverviewCaption}>
+                  {candidateOverviewMarkers.length
+                    ? `추천 후보 ${candidateOverviewMarkers.length}곳을 지도에서 확인해 보세요.`
+                    : "장소를 추천받으면 후보 위치가 지도에 표시됩니다."}
+                </Text>
+                <View style={[styles.candidateOverviewMap, isWideLayout && styles.candidateOverviewMapWide]}>
+                  <ExpandableKakaoAddressMap
+                    focusTarget={candidateOverviewFocus}
+                    interactive
+                    mapMarkers={candidateOverviewMarkers}
+                    query=""
+                    requestId={0}
+                  />
+                </View>
+              </View>
+              <View style={styles.candidateStack}>
               {meeting.placeCandidates.map((candidate) => {
                 const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
                 return (
                   <Pressable
                     key={candidate.id}
                     onPress={() => vote(candidate.id)}
-                    style={[styles.cardGridItem, !isWideLayout && styles.cardGridItemNarrow]}
+                    style={styles.candidateStackItem}
                   >
                   <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
                     {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
@@ -582,22 +599,13 @@ export function MeetingScreen({ navigation, route }: Props) {
                   </Pressable>
                 );
               })}
-            </View>
-            {candidateOverviewMarkers.length ? (
-              <View style={styles.candidateOverviewSection}>
-                <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
-                <Text style={styles.candidateOverviewCaption}>추천 후보 {candidateOverviewMarkers.length}곳을 지도에서 확인해 보세요.</Text>
-                <View style={styles.candidateOverviewMap}>
-                  <KakaoAddressMap
-                    focusTarget={candidateOverviewFocus}
-                    interactive
-                    mapMarkers={candidateOverviewMarkers}
-                    query=""
-                    requestId={0}
-                  />
-                </View>
+                {!meeting.placeCandidates.length ? (
+                  <Card style={styles.emptyCandidateCard}>
+                    <Text style={styles.meta}>아직 추천된 후보가 없습니다.</Text>
+                  </Card>
+                ) : null}
               </View>
-            ) : null}
+            </View>
             <Button compact label="지도에서 장소 직접 추천" onPress={() => setShowPlacePicker((current) => !current)} variant="soft" />
             {showPlacePicker ? (
               <Card style={styles.placePickerCard}>
@@ -763,10 +771,12 @@ const styles = StyleSheet.create({
   sideColumn: { width: 320, flexShrink: 0, gap: 12 },
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },
-  cardGrid: { flexDirection: "row", alignItems: "stretch", gap: 10 },
-  cardGridNarrow: { flexDirection: "column" },
-  cardGridItem: { flexBasis: 0, flexGrow: 1, minWidth: 0 },
-  cardGridItemNarrow: { flexBasis: "auto", width: "100%" },
+  recommendationResultLayout: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  recommendationResultLayoutNarrow: { flexDirection: "column" },
+  recommendationMapColumn: { flex: 1.2, minWidth: 0 },
+  candidateStack: { flex: 0.8, minWidth: 0, gap: 10 },
+  candidateStackItem: { width: "100%" },
+  emptyCandidateCard: { minHeight: 100, alignItems: "center", justifyContent: "center" },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   actionButton: { paddingHorizontal: 12 },
   recommendButton: { minHeight: 104, borderRadius: 8, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
@@ -793,6 +803,7 @@ const styles = StyleSheet.create({
   candidateOverviewTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
   candidateOverviewCaption: { color: colors.muted, fontSize: 10 },
   candidateOverviewMap: { height: 230, borderRadius: 6, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  candidateOverviewMapWide: { height: 420 },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 6, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },

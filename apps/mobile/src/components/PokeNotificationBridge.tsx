@@ -1,4 +1,5 @@
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useRef } from "react";
@@ -8,6 +9,23 @@ import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
 import type { RootStackParamList } from "../../App";
 import { navigateForNotificationData, stringValue } from "../services/notification-navigation";
+import { apiRequest } from "../services/api";
+
+const POKE_CHANNEL_ID = "pokes-v3";
+const POKE_VIBRATION_PATTERN = [0, 250, 120, 250, 120, 400];
+
+async function configurePokeChannel() {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(POKE_CHANNEL_ID, {
+    name: "찌르기 알림",
+    description: "친구와 모임 참여자가 보낸 찌르기를 진동으로 알려줍니다.",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "default",
+    enableVibrate: true,
+    vibrationPattern: POKE_VIBRATION_PATTERN,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
@@ -19,13 +37,7 @@ if (Platform.OS !== "web") {
     }),
   });
   if (Platform.OS === "android") {
-    void Notifications.setNotificationChannelAsync("pokes-v2", {
-      name: "찌르기 알림",
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: "default",
-      vibrationPattern: [0, 180, 100, 180],
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    });
+    void configurePokeChannel();
   }
 }
 
@@ -61,6 +73,40 @@ export function PokeNotificationBridge() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const seenPokeIds = useRef<Set<string>>(new Set());
   const seenResponseIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !accessToken) return;
+    let active = true;
+
+    const saveToken = async (expoPushToken: string) => {
+      await apiRequest("/users/me/push-token", {
+        method: "PUT",
+        body: JSON.stringify({ expoPushToken }),
+      });
+    };
+    const register = async () => {
+      await configurePokeChannel();
+      const existingPermission = await Notifications.getPermissionsAsync();
+      const permission = existingPermission.granted
+        ? existingPermission
+        : await Notifications.requestPermissionsAsync();
+      if (!permission.granted || !active) return;
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      const token = projectId
+        ? await Notifications.getExpoPushTokenAsync({ projectId })
+        : await Notifications.getExpoPushTokenAsync();
+      if (active) await saveToken(token.data);
+    };
+
+    void register().catch((error) => console.warn("푸시 알림 등록에 실패했어요.", error));
+    const tokenSubscription = Notifications.addPushTokenListener((token) => {
+      void saveToken(token.data).catch((error) => console.warn("변경된 푸시 토큰 저장에 실패했어요.", error));
+    });
+    return () => {
+      active = false;
+      tokenSubscription.remove();
+    };
+  }, [accessToken]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -99,7 +145,7 @@ export function PokeNotificationBridge() {
         return;
       }
       // 진동은 효과음 설정과 별개로 동작시켜 무음 설정에서도 수신을 알립니다.
-      Vibration.vibrate([0, 180, 100, 180]);
+      Vibration.vibrate(POKE_VIBRATION_PATTERN);
       const permission = await Notifications.getPermissionsAsync();
       const granted = permission.granted ? permission : await Notifications.requestPermissionsAsync();
       if (!granted.granted) return;
@@ -108,7 +154,7 @@ export function PokeNotificationBridge() {
           title: `${poke.senderNickname}님이 찔렀어요`,
           body: poke.type === "MEETING" ? "모임에 늦은 친구가 도착했는지 확인해 주세요." : "친구가 MeetFair에서 찌르기를 보냈습니다.",
           ...(soundEnabled ? { sound: "default" as const } : {}),
-          ...(Platform.OS === "android" ? { channelId: "pokes-v2" } : {}),
+          ...(Platform.OS === "android" ? { channelId: POKE_CHANNEL_ID } : {}),
           data: { meetingId: poke.meetingId, pokeId: poke.pokeId },
         },
         trigger: null,

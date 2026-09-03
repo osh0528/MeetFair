@@ -43,6 +43,9 @@ async function sendExpoPush(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
+    const isPoke = notificationType === "CASUAL_POKE"
+      || notificationType === "MEETING_POKE"
+      || notificationType === "AUTOMATIC_MEETING_POKE";
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers,
@@ -50,6 +53,7 @@ async function sendExpoPush(
       body: JSON.stringify(tokens.map(({ expoPushToken }) => ({
         to: expoPushToken,
         sound: "default",
+        ...(isPoke ? { channelId: "pokes-v3", priority: "high" } : {}),
         title,
         body,
         data: { ...data, notificationType },

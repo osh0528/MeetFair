@@ -21,11 +21,11 @@ import { colors } from "../theme/colors";
 type Props = NativeStackScreenProps<RootStackParamList, "UserPage">;
 
 const themes: Record<ProfileTheme, { label: string; background: string; accent: string; soft: string }> = {
-  PURPLE: { label: "오프화이트", background: "#F6F6F4", accent: "#333333", soft: "#EAEAE8" },
-  PINK: { label: "웜그레이", background: "#F3F2F0", accent: "#5F5B57", soft: "#E7E4E1" },
-  BLUE: { label: "쿨그레이", background: "#F1F3F4", accent: "#4F5961", soft: "#E1E5E8" },
-  MINT: { label: "실버", background: "#F2F2F2", accent: "#666666", soft: "#E3E3E3" },
-  SUNSET: { label: "차콜", background: "#E7E7E7", accent: "#2B2B2B", soft: "#D5D5D5" },
+  PURPLE: { label: "포근한 방", background: "#F6F6F4", accent: "#333333", soft: "#EAEAE8" },
+  PINK: { label: "따뜻한 방", background: "#F3F2F0", accent: "#5F5B57", soft: "#E7E4E1" },
+  BLUE: { label: "차분한 방", background: "#F1F3F4", accent: "#4F5961", soft: "#E1E5E8" },
+  MINT: { label: "깔끔한 방", background: "#F2F2F2", accent: "#666666", soft: "#E3E3E3" },
+  SUNSET: { label: "밤의 방", background: "#E7E7E7", accent: "#2B2B2B", soft: "#D5D5D5" },
 };
 
 const darkThemes: Record<ProfileTheme, { label: string; background: string; accent: string; soft: string }> = {
@@ -456,6 +456,35 @@ export function UserPageScreen({ navigation, route }: Props) {
                 </View>
                 <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
               </View>
+              <View style={[styles.myRoom, { backgroundColor: palette.soft, borderColor: palette.accent }]}>
+                <View style={styles.roomTopRow}>
+                  <View>
+                    <Text style={[styles.roomEyebrow, { color: palette.accent }]}>MY LITTLE ROOM</Text>
+                    <Text style={styles.roomTitle}>{page.user.nickname}의 공간</Text>
+                  </View>
+                  {page.isOwner ? (
+                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { borderColor: palette.accent }]}>
+                      <Text style={[styles.roomEditText, { color: palette.accent }]}>꾸미기</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={[styles.roomWall, { backgroundColor: palette.background }]}>
+                  <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
+                    <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
+                    <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
+                    <Text style={styles.windowView}>☁️</Text>
+                  </View>
+                  <Text style={styles.roomCharacter}>{page.emoji}</Text>
+                  <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View>
+                  <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
+                    <View style={[styles.sofaBack, { backgroundColor: palette.accent }]} />
+                    <View style={styles.sofaCushion} />
+                    <View style={styles.sofaCushion} />
+                  </View>
+                  <Text style={styles.roomLamp}>💡</Text>
+                  <View style={[styles.roomFloor, { borderTopColor: palette.accent }]} />
+                </View>
+              </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
               </View>
@@ -497,7 +526,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   variant="soft"
                 />
                 {page.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-                <Text style={styles.label}>테마</Text>
+                <Text style={styles.label}>방 분위기</Text>
                 <View style={styles.themeRow}>
                   {(Object.keys(themes) as ProfileTheme[]).map((item) => (
                     <Pressable
@@ -555,12 +584,7 @@ export function UserPageScreen({ navigation, route }: Props) {
             </Card> : null}
             <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
               <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel]}>
-                <View style={styles.introSection}>
-                  <SectionHeading title="About me" />
-                  <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
-                </View>
-
-                <View style={styles.panelSection}>
+                <View style={styles.photoSection}>
                   <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
                   {page.isOwner ? (
                     <View style={styles.photoComposer}>
@@ -605,7 +629,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                             </View>
                           ) : null}
                           </View>
-                          {representative.caption ? <Text numberOfLines={2} style={styles.photoCaption}>{representative.caption}</Text> : null}
+                          {representative.caption ? <Text numberOfLines={isNarrowLayout ? 1 : 2} style={styles.photoCaption}>{representative.caption}</Text> : null}
                           <Pressable
                             accessibilityLabel={representative.likedByMe ? "사진 좋아요 취소" : "사진 좋아요"}
                             disabled={likingPhotoId === representative.id}
@@ -624,6 +648,11 @@ export function UserPageScreen({ navigation, route }: Props) {
                       })}
                     </View>
                   ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
+                </View>
+
+                <View style={styles.panelSection}>
+                  <SectionHeading title="About me" />
+                  <Text style={styles.bio}>{page.bio || "아직 소개글이 없습니다."}</Text>
                 </View>
               </Card>
 
@@ -683,7 +712,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
               <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
               {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-              <Text style={styles.label}>테마</Text>
+              <Text style={styles.label}>방 분위기</Text>
               <View style={styles.themeRow}>
                 {(Object.keys(themes) as ProfileTheme[]).map((item) => (
                   <Pressable key={item} onPress={() => setTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
@@ -768,6 +797,25 @@ const styles = StyleSheet.create({
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 6 },
   statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
+  myRoom: { borderRadius: 10, borderWidth: 1, padding: 10, gap: 9, overflow: "hidden" },
+  roomTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  roomEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
+  roomTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
+  roomEditButton: { minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  roomEditText: { fontSize: 11, fontWeight: "900" },
+  roomWall: { height: 156, borderRadius: 8, position: "relative", overflow: "hidden" },
+  roomWindow: { position: "absolute", left: 18, top: 18, width: 64, height: 54, borderWidth: 3, borderRadius: 5, backgroundColor: "#DDF2FF", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  windowLineVertical: { position: "absolute", top: 0, bottom: 0, width: 2 },
+  windowLineHorizontal: { position: "absolute", left: 0, right: 0, height: 2 },
+  windowView: { fontSize: 20 },
+  roomCharacter: { position: "absolute", alignSelf: "center", bottom: 28, fontSize: 48, zIndex: 3 },
+  roomPlant: { position: "absolute", right: 20, bottom: 20, zIndex: 2 },
+  roomItemEmoji: { fontSize: 35 },
+  roomSofa: { position: "absolute", left: 22, bottom: 20, width: 92, height: 42, borderRadius: 10, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 4, padding: 6, opacity: 0.9 },
+  sofaBack: { position: "absolute", left: 5, right: 5, top: -12, height: 26, borderRadius: 9, opacity: 0.88 },
+  sofaCushion: { width: 36, height: 21, borderRadius: 6, backgroundColor: "rgba(255,255,255,0.48)" },
+  roomLamp: { position: "absolute", right: 67, top: 19, fontSize: 28 },
+  roomFloor: { position: "absolute", left: 0, right: 0, bottom: 0, height: 35, borderTopWidth: 1, backgroundColor: "rgba(160,120,80,0.13)" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
@@ -797,20 +845,20 @@ const styles = StyleSheet.create({
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
   mobilePanel: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", alignSelf: "stretch", overflow: "hidden" },
-  introSection: { gap: 12 },
+  photoSection: { gap: 14 },
   panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
   bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
   photoComposer: { gap: 10, padding: 12, borderRadius: 6, backgroundColor: colors.background },
   photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   photoTile: { width: "48%", borderRadius: 6, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  photoTileMobile: { width: "100%" },
+  photoTileMobile: { width: "31%" },
   photoImageWrap: { position: "relative" },
   photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },
   photoGroupCount: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
-  photoLikeButton: { paddingHorizontal: 9, paddingBottom: 9 },
+  photoCaption: { color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "700", paddingHorizontal: 7, paddingTop: 6, minHeight: 28 },
+  photoLikeButton: { paddingHorizontal: 7, paddingBottom: 7, paddingTop: 3 },
   photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   photoLikeTextActive: { color: colors.red },
   photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
