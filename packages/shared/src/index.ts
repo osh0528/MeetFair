@@ -87,6 +87,29 @@ export interface PublicProfileSearchResult extends UserSummary {
 }
 
 export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
+export type RoomDecoration = "RUG" | "PLANT" | "LAMP" | "SOFA" | "WINDOW" | "BED" | "DESK" | "BOOKSHELF" | "TV" | "TABLE" | "CLOCK" | "POSTER" | "CAT" | "CACTUS" | "TEDDY";
+
+export const ROOM_DECORATIONS: ReadonlyArray<{
+  id: RoomDecoration;
+  label: string;
+  icon: string;
+}> = [
+  { id: "RUG", label: "포근한 러그", icon: "🟤" },
+  { id: "PLANT", label: "초록 화분", icon: "🌿" },
+  { id: "LAMP", label: "무드 조명", icon: "💡" },
+  { id: "SOFA", label: "편안한 소파", icon: "🛋️" },
+  { id: "WINDOW", label: "하늘 창문", icon: "🪟" },
+  { id: "BED", label: "포근한 침대", icon: "🛏️" },
+  { id: "DESK", label: "작업 책상", icon: "🖥️" },
+  { id: "BOOKSHELF", label: "책장", icon: "📚" },
+  { id: "TV", label: "텔레비전", icon: "📺" },
+  { id: "TABLE", label: "티 테이블", icon: "☕" },
+  { id: "CLOCK", label: "벽시계", icon: "🕰️" },
+  { id: "POSTER", label: "감성 포스터", icon: "🖼️" },
+  { id: "CAT", label: "고양이", icon: "🐈" },
+  { id: "CACTUS", label: "선인장", icon: "🌵" },
+  { id: "TEDDY", label: "곰인형", icon: "🧸" },
+];
 
 export interface ProfileGuestbookEntrySummary {
   id: string;
@@ -114,6 +137,7 @@ export interface UserPageSummary {
   bio: string | null;
   emoji: string;
   theme: ProfileTheme;
+  roomDecorations: RoomDecoration[];
   musicTitle: string | null;
   hasMusic: boolean;
   musicUpdatedAt: string | null;

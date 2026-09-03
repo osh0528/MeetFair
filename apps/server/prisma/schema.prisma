@@ -96,6 +96,7 @@ model User {
   profileBio      String?
   profileEmoji    String               @default("🌟")
   profileTheme    String               @default("PURPLE")
+  profileRoomDecor String[]            @default([])
   profileMusicTitle String?
   profileMusicData Bytes?
   profileMusicMimeType String?

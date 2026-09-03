@@ -1,4 +1,4 @@
-import type { ProfileTheme, UserPageSummary } from "@meetfair/shared";
+import { ROOM_DECORATIONS, type ProfileTheme, type RoomDecoration, type UserPageSummary } from "@meetfair/shared";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
@@ -51,6 +51,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [bio, setBio] = useState("");
   const [emoji, setEmoji] = useState("🌟");
   const [theme, setTheme] = useState<ProfileTheme>("PURPLE");
+  const [roomDecorations, setRoomDecorations] = useState<RoomDecoration[]>([]);
   const [musicTitle, setMusicTitle] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -76,6 +77,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBio(next.bio ?? "");
     setEmoji(next.emoji);
     setTheme(next.theme);
+    setRoomDecorations(next.roomDecorations);
     setMusicTitle(next.musicTitle ?? "");
   }, []);
 
@@ -143,6 +145,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           bio,
           emoji: emoji.trim(),
           theme,
+          roomDecorations,
           musicTitle,
         }),
       });
@@ -381,6 +384,40 @@ export function UserPageScreen({ navigation, route }: Props) {
   const activeTheme = page?.isOwner ? theme : page?.theme ?? theme;
   const palette = (mode === "DARK" ? darkThemes : themes)[activeTheme];
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
+  const toggleRoomDecoration = (decoration: RoomDecoration) => {
+    setRoomDecorations((current) => current.includes(decoration)
+      ? current.filter((item) => item !== decoration)
+      : [...current, decoration]);
+  };
+  const roomDecorEditor = page?.isOwner ? (
+    <View style={styles.decorEditor}>
+      <View style={styles.decorProgressHeader}>
+        <Text style={styles.label}>가구와 소품</Text>
+        <Text style={[styles.decorPoints, { color: palette.accent }]}>{roomDecorations.length}개 배치 중</Text>
+      </View>
+      <Text style={styles.decorHelp}>원하는 아이템을 눌러 자유롭게 배치하거나 치워보세요.</Text>
+      <View style={styles.decorChoices}>
+        {ROOM_DECORATIONS.map((item) => {
+          const selected = roomDecorations.includes(item.id);
+          return (
+            <Pressable
+              accessibilityLabel={`${item.label} ${selected ? "치우기" : "배치하기"}`}
+              key={item.id}
+              onPress={() => toggleRoomDecoration(item.id)}
+              style={[
+                styles.decorChoice,
+                selected && { borderColor: palette.accent, backgroundColor: palette.soft },
+              ]}
+            >
+              <Text style={styles.decorIcon}>{item.icon}</Text>
+              <Text numberOfLines={1} style={styles.decorLabel}>{item.label}</Text>
+              <Text style={styles.decorState}>{selected ? "배치됨" : "배치하기"}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  ) : null;
   const photoGroups = page ? Object.values(page.photos.reduce<Record<string, UserPageSummary["photos"]>>((groups, photo) => {
     const key = photo.groupId ?? photo.id;
     groups[key] ??= [];
@@ -471,20 +508,32 @@ export function UserPageScreen({ navigation, route }: Props) {
                   ) : null}
                 </View>
                 <View style={[styles.roomWall, { backgroundColor: palette.background }]}>
-                  <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
+                  {roomDecorations.includes("WINDOW") ? <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
                     <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
                     <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
                     <Text style={styles.windowView}>☁️</Text>
-                  </View>
+                  </View> : null}
                   <Text style={styles.roomCharacter}>{page.emoji}</Text>
-                  <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View>
-                  <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
+                  {roomDecorations.includes("PLANT") ? <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View> : null}
+                  {roomDecorations.includes("SOFA") ? <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
                     <View style={[styles.sofaBack, { backgroundColor: palette.accent }]} />
                     <View style={styles.sofaCushion} />
                     <View style={styles.sofaCushion} />
-                  </View>
-                  <Text style={styles.roomLamp}>💡</Text>
+                  </View> : null}
+                  {roomDecorations.includes("LAMP") ? <Text style={styles.roomLamp}>💡</Text> : null}
+                  {roomDecorations.includes("RUG") ? <View style={[styles.roomRug, { backgroundColor: palette.accent }]} /> : null}
+                  {roomDecorations.includes("BED") ? <Text style={[styles.roomEmojiItem, styles.roomBed]}>🛏️</Text> : null}
+                  {roomDecorations.includes("DESK") ? <Text style={[styles.roomEmojiItem, styles.roomDesk]}>🖥️</Text> : null}
+                  {roomDecorations.includes("BOOKSHELF") ? <Text style={[styles.roomEmojiItem, styles.roomBookshelf]}>📚</Text> : null}
+                  {roomDecorations.includes("TV") ? <Text style={[styles.roomEmojiItem, styles.roomTv]}>📺</Text> : null}
+                  {roomDecorations.includes("TABLE") ? <Text style={[styles.roomEmojiItem, styles.roomTable]}>☕</Text> : null}
+                  {roomDecorations.includes("CLOCK") ? <Text style={[styles.roomEmojiItem, styles.roomClock]}>🕰️</Text> : null}
+                  {roomDecorations.includes("POSTER") ? <Text style={[styles.roomEmojiItem, styles.roomPoster]}>🖼️</Text> : null}
+                  {roomDecorations.includes("CAT") ? <Text style={[styles.roomEmojiItem, styles.roomCat]}>🐈</Text> : null}
+                  {roomDecorations.includes("CACTUS") ? <Text style={[styles.roomEmojiItem, styles.roomCactus]}>🌵</Text> : null}
+                  {roomDecorations.includes("TEDDY") ? <Text style={[styles.roomEmojiItem, styles.roomTeddy]}>🧸</Text> : null}
                   <View style={[styles.roomFloor, { borderTopColor: palette.accent }]} />
+                  {!roomDecorations.length ? <Text style={styles.emptyRoomText}>활동하며 가구를 모아 빈집을 꾸며보세요</Text> : null}
                 </View>
               </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
@@ -547,6 +596,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     </Pressable>
                   ))}
                 </View>
+                {roomDecorEditor}
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
@@ -723,6 +773,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   </Pressable>
                 ))}
               </View>
+              {roomDecorEditor}
               <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
             </Card>
           </ScrollView>
@@ -817,7 +868,20 @@ const styles = StyleSheet.create({
   sofaBack: { position: "absolute", left: 5, right: 5, top: -12, height: 26, borderRadius: 9, opacity: 0.88 },
   sofaCushion: { width: 36, height: 21, borderRadius: 6, backgroundColor: "rgba(255,255,255,0.48)" },
   roomLamp: { position: "absolute", right: 67, top: 19, fontSize: 28 },
+  roomRug: { position: "absolute", alignSelf: "center", bottom: 12, width: 130, height: 30, borderRadius: 65, opacity: 0.22, zIndex: 1 },
+  roomEmojiItem: { position: "absolute", zIndex: 2 },
+  roomBed: { left: 8, bottom: 17, fontSize: 42 },
+  roomDesk: { right: 10, bottom: 18, fontSize: 34 },
+  roomBookshelf: { left: 92, top: 14, fontSize: 29 },
+  roomTv: { right: 108, top: 13, fontSize: 30 },
+  roomTable: { alignSelf: "center", bottom: 10, fontSize: 27 },
+  roomClock: { right: 18, top: 12, fontSize: 25 },
+  roomPoster: { left: 18, top: 15, fontSize: 29 },
+  roomCat: { right: 48, bottom: 12, fontSize: 27 },
+  roomCactus: { right: 15, bottom: 12, fontSize: 29 },
+  roomTeddy: { left: 73, bottom: 10, fontSize: 27 },
   roomFloor: { position: "absolute", left: 0, right: 0, bottom: 0, height: 35, borderTopWidth: 1, backgroundColor: "rgba(160,120,80,0.13)" },
+  emptyRoomText: { position: "absolute", left: 12, right: 12, bottom: 15, color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
@@ -828,6 +892,15 @@ const styles = StyleSheet.create({
   themeChoice: { minWidth: 66, padding: 9, borderRadius: 6, borderWidth: 2, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
   themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  decorEditor: { gap: 8, marginTop: 4 },
+  decorProgressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  decorPoints: { fontSize: 11, fontWeight: "900" },
+  decorHelp: { color: colors.muted, fontSize: 10 },
+  decorChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  decorChoice: { width: 96, minHeight: 92, borderRadius: 8, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surface, padding: 8, alignItems: "center", justifyContent: "center", gap: 3 },
+  decorIcon: { fontSize: 25 },
+  decorLabel: { color: colors.text, fontSize: 10, fontWeight: "900" },
+  decorState: { color: colors.muted, fontSize: 9, fontWeight: "700" },
   heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
   heroMusicMobile: { flex: 1, paddingLeft: 12 },
   heroMusicCard: { padding: 0, borderWidth: 0, borderRadius: 0, backgroundColor: "transparent" },

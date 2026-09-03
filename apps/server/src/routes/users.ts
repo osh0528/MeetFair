@@ -7,7 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { toProfileGuestbookEntry, toPublicUser, toUserSummary } from "../lib/serializers.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createNotification } from "../lib/notifications.js";
-import type { ProfilePhotoSummary, ProfileTheme, UserPageSummary } from "@meetfair/shared";
+import { ROOM_DECORATIONS, type ProfilePhotoSummary, type ProfileTheme, type RoomDecoration, type UserPageSummary } from "@meetfair/shared";
 import { isUserOnline } from "../realtime/presence.js";
 
 export const usersRouter = Router();
@@ -15,6 +15,7 @@ const avatarMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxAvatarBytes = 2 * 1024 * 1024;
 const maxPhotoBytes = 2 * 1024 * 1024;
 const maxProfilePhotos = 30;
+const roomDecorationIds = ROOM_DECORATIONS.map((item) => item.id) as [RoomDecoration, ...RoomDecoration[]];
 const musicMimeTypes = ["audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"] as const;
 const maxMusicBytes = 6 * 1024 * 1024;
 const profileThemes = ["PURPLE", "PINK", "BLUE", "MINT", "SUNSET"] as const;
@@ -229,6 +230,7 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
       profileBio: true,
       profileEmoji: true,
       profileTheme: true,
+      profileRoomDecor: true,
       profileMusicTitle: true,
       profileMusicUpdatedAt: true,
       profileUpdatedAt: true,
@@ -269,12 +271,16 @@ async function loadUserPage(ownerId: string, viewerId: string): Promise<UserPage
   const theme = profileThemes.includes(owner.profileTheme as typeof profileThemes[number])
     ? owner.profileTheme as ProfileTheme
     : "PURPLE";
+  const roomDecorations = owner.profileRoomDecor.filter(
+    (item): item is RoomDecoration => roomDecorationIds.includes(item as RoomDecoration),
+  );
   return {
     user: toUserSummary(owner),
     statusMessage: owner.profileStatus,
     bio: owner.profileBio,
     emoji: owner.profileEmoji,
     theme,
+    roomDecorations,
     musicTitle: owner.profileMusicTitle,
     hasMusic: Boolean(owner.profileMusicUpdatedAt),
     musicUpdatedAt: owner.profileMusicUpdatedAt?.toISOString() ?? null,
@@ -303,6 +309,7 @@ usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, ne
       bio: z.string().trim().max(500).nullable().optional(),
       emoji: z.string().trim().min(1).max(16).optional(),
       theme: z.enum(profileThemes).optional(),
+      roomDecorations: z.array(z.enum(roomDecorationIds)).max(roomDecorationIds.length).optional(),
       musicTitle: z.string().trim().max(100).nullable().optional(),
     }).refine(
       (value) => Object.values(value).some((item) => item !== undefined),
@@ -316,6 +323,7 @@ usersRouter.patch("/me/page", async (request: AuthenticatedRequest, response, ne
         profileBio: input.bio === "" ? null : input.bio,
         profileEmoji: input.emoji,
         profileTheme: input.theme,
+        profileRoomDecor: input.roomDecorations,
         profileMusicTitle: input.musicTitle === "" ? null : input.musicTitle,
         profileUpdatedAt: new Date(),
       },

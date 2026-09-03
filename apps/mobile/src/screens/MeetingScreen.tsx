@@ -484,7 +484,7 @@ export function MeetingScreen({ navigation, route }: Props) {
           <Button compact label={editing ? "수정 닫기" : "정보 수정"} onPress={() => setEditing((current) => !current)} variant="secondary" />
         ) : undefined}
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, !isWideLayout && styles.contentNarrow]}>
         <View style={styles.row}><Pill label={meeting.status} tone="green" /><Text style={styles.meta}>{new Date(meeting.scheduledAt).toLocaleString("ko-KR")}</Text></View>
         <Text style={styles.title}>{meeting.title}</Text>
         <Text style={styles.meta}>위치 공유: {meeting.locationShareMode}{meeting.shareMinutesBefore ? ` · ${meeting.shareMinutesBefore}분 전` : ""}</Text>
@@ -534,7 +534,7 @@ export function MeetingScreen({ navigation, route }: Props) {
             <Pressable
               disabled={busyAction === "recommendation"}
               onPress={() => void receiveRecommendedPlace()}
-              style={({ pressed }) => [styles.recommendButton, pressed && styles.recommendButtonPressed]}
+              style={({ pressed }) => [styles.recommendButton, !isWideLayout && styles.recommendButtonNarrow, pressed && styles.recommendButtonPressed]}
             >
               <View style={styles.recommendGlow} />
               <Text style={styles.recommendSparkle}>✦</Text>
@@ -576,7 +576,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   >
                   <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
                     {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
-                    <View style={styles.row}><Text style={[styles.cardTitle, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                    <View style={styles.candidateHeaderRow}><Text numberOfLines={2} style={[styles.cardTitle, styles.candidateName, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
                     <Text style={styles.meta}>{candidate.address}</Text>
                     {stats ? (
                       <>
@@ -669,7 +669,7 @@ export function MeetingScreen({ navigation, route }: Props) {
             return (
               <Card key={participant.userId} style={styles.card}>
               <View style={styles.row}>
-                <View><Text style={styles.cardTitle}>{participant.user.nickname}</Text><Text style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
+                <View style={styles.identityCopy}><Text numberOfLines={2} style={styles.cardTitle}>{participant.user.nickname}</Text><Text numberOfLines={2} style={styles.meta}>@{participant.user.accountId} · {participant.arrivedAt ? "도착" : late ? "지각" : "도착 전"}</Text></View>
                 <View style={styles.compactActions}>
                   {late && me?.arrivedAt && participant.userId !== user?.id ? <Button compact disabled={!!pokeCooldowns[participant.userId]} label={pokeCooldowns[participant.userId] ? `${pokeCooldowns[participant.userId]}초` : "찌르기"} onPress={() => void poke(participant.userId)} variant="soft" /> : null}
                   {isHost && participant.userId !== user?.id && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
@@ -723,7 +723,7 @@ export function MeetingScreen({ navigation, route }: Props) {
         {isHost && meeting.memberStatuses.filter((member) => member.status === "PENDING").map((member) => (
           <Card key={member.invitationId ?? member.userId} style={styles.card}>
             <View style={styles.row}>
-              <View><Text style={styles.cardTitle}>{member.nickname}</Text><Text style={styles.meta}>@{member.accountId}</Text></View>
+              <View style={styles.identityCopy}><Text numberOfLines={2} style={styles.cardTitle}>{member.nickname}</Text><Text numberOfLines={2} style={styles.meta}>@{member.accountId}</Text></View>
               {member.invitationId ? <Button compact disabled={busyAction === member.invitationId} label={busyAction === member.invitationId ? "처리 중..." : "초대 취소"} onPress={() => cancelInvitation(member.invitationId!)} variant="secondary" /> : null}
             </View>
           </Card>
@@ -762,6 +762,7 @@ function confirmAction(title: string, message: string, onConfirm: () => void) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12, paddingBottom: 40 },
+  contentNarrow: { paddingHorizontal: 14, paddingTop: 14 },
   loading: { padding: 20, color: colors.muted },
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
@@ -780,17 +781,20 @@ const styles = StyleSheet.create({
   actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   actionButton: { paddingHorizontal: 12 },
   recommendButton: { minHeight: 104, borderRadius: 8, overflow: "hidden", paddingHorizontal: 18, paddingVertical: 17, backgroundColor: "#172554", borderWidth: 1, borderColor: "#60A5FA", flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#2563EB", shadowOpacity: 0.38, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  recommendButtonNarrow: { paddingHorizontal: 13, gap: 9 },
   recommendButtonPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   recommendGlow: { position: "absolute", width: 150, height: 150, borderRadius: 75, right: -35, top: -70, backgroundColor: "rgba(96,165,250,0.32)" },
-  recommendSparkle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 25, lineHeight: 46, textAlign: "center", fontWeight: "900", borderWidth: 1, borderColor: "#93C5FD" },
-  recommendCopy: { flex: 1, gap: 3 },
+  recommendSparkle: { width: 46, height: 46, flexShrink: 0, borderRadius: 23, backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 25, lineHeight: 46, textAlign: "center", fontWeight: "900", borderWidth: 1, borderColor: "#93C5FD" },
+  recommendCopy: { flex: 1, minWidth: 0, gap: 3 },
   recommendEyebrow: { color: "#93C5FD", fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
-  recommendTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
-  recommendDescription: { color: "#DBEAFE", fontSize: 10, lineHeight: 15 },
-  recommendArrow: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
+  recommendTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900", flexShrink: 1 },
+  recommendDescription: { color: "#DBEAFE", fontSize: 10, lineHeight: 15, flexShrink: 1 },
+  recommendArrow: { color: "#FFFFFF", fontSize: 24, fontWeight: "700", flexShrink: 0 },
   recommendedCard: { borderWidth: 2, borderColor: "#3B82F6", backgroundColor: "#EFF6FF", shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 7 },
   recommendedBadge: { alignSelf: "flex-start", borderRadius: 5, paddingHorizontal: 10, paddingVertical: 5, overflow: "hidden", backgroundColor: "#2563EB", color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   recommendedCardTitle: { color: "#1D4ED8", fontSize: 16 },
+  candidateHeaderRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  candidateName: { flex: 1, minWidth: 0 },
   travelMetrics: { flexDirection: "row", borderRadius: 6, backgroundColor: "rgba(37,99,235,0.07)", paddingVertical: 10 },
   travelMetricItem: { flex: 1, alignItems: "center", gap: 3 },
   travelMetricCaption: { color: colors.muted, fontSize: 9, fontWeight: "800" },
@@ -817,11 +821,12 @@ const styles = StyleSheet.create({
   placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
   voteCountdown: { color: colors.red, fontWeight: "900", fontSize: 13 },
   selectedCard: { borderColor: colors.primary },
-  cardTitle: { color: colors.text, fontWeight: "900" },
+  cardTitle: { color: colors.text, fontWeight: "900", flexShrink: 1 },
   input: { minHeight: 50, borderRadius: 6, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
   compactActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 },
   selection: { color: colors.primary, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  identityCopy: { flex: 1, minWidth: 0 },
+  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 },
   message: { color: colors.primary, fontWeight: "800" },
 });
