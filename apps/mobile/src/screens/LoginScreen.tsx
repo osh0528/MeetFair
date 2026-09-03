@@ -132,7 +132,7 @@ export function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background, justifyContent: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
-  container: { padding: 24, gap: 14 },
+  container: { width: "100%", maxWidth: 560, alignSelf: "center", padding: 24, gap: 14 },
   brand: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   title: { color: colors.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
   input: { height: 54, borderRadius: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },

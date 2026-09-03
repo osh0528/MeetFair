@@ -2,7 +2,7 @@ import { DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@r
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddressSearchScreen } from "./src/screens/AddressSearchScreen";
 import { CreateMeetingScreen } from "./src/screens/CreateMeetingScreen";
@@ -28,7 +28,7 @@ import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
-import { ThemeProvider } from "./src/services/theme";
+import { ThemeProvider, useAppTheme } from "./src/services/theme";
 import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
 import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
 import { MeetingChatScreen } from "./src/screens/MeetingChatScreen";
@@ -90,6 +90,9 @@ export default function App() {
 
 function AppNavigator() {
   const { user } = useSession();
+  const { mode } = useAppTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const [currentRoute, setCurrentRoute] = useState<keyof RootStackParamList>("Login");
   const bottomNavHidden = currentRoute === "Login" || currentRoute === "Register" || currentRoute === "VideoCall";
@@ -107,11 +110,22 @@ function AppNavigator() {
       onReady={updateCurrentRoute}
       onStateChange={updateCurrentRoute}
     >
-      <StatusBar style="dark" />
+      <StatusBar style={mode === "DARK" ? "light" : "dark"} />
       <PokeNotificationBridge />
       <WebNotificationToast />
-      <View style={styles.appShell}>
-        <Stack.Navigator
+      <View style={[styles.appShell, isDesktop && styles.appShellDesktop]}>
+        {user && !bottomNavHidden && isDesktop ? (
+          <AppBottomNavigation
+            layout="sidebar"
+            currentRoute={currentRoute}
+            onMeetings={() => navigationRef.navigate("Home")}
+            onFriends={() => navigationRef.navigate("Friends")}
+            onSettings={() => navigationRef.navigate("Settings")}
+            onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
+          />
+        ) : null}
+        <View style={styles.navigatorShell}>
+          <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
             headerShown: false,
@@ -142,9 +156,11 @@ function AppNavigator() {
           <Stack.Screen name="MeetingBoard" component={MeetingBoardScreen} />
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
           <Stack.Screen name="MiniHome" component={MiniHomeScreen} />
-        </Stack.Navigator>
-        {user && !bottomNavHidden ? (
+          </Stack.Navigator>
+        </View>
+        {user && !bottomNavHidden && !isDesktop ? (
           <AppBottomNavigation
+            layout="bottom"
             currentRoute={currentRoute}
             onMeetings={() => navigationRef.navigate("Home")}
             onFriends={() => navigationRef.navigate("Friends")}
@@ -159,4 +175,6 @@ function AppNavigator() {
 
 const styles = StyleSheet.create({
   appShell: { flex: 1 },
+  appShellDesktop: { flexDirection: "row" },
+  navigatorShell: { flex: 1, minWidth: 0 },
 });

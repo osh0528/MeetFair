@@ -2,7 +2,7 @@ import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummar
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
@@ -22,14 +22,24 @@ function meetingSortGroup(meeting: MeetingSummary, now: number) {
   return 2;
 }
 
+function meetingStatusTone(status: MeetingSummary["status"]): "purple" | "green" | "amber" | "red" {
+  if (status === "COMPLETED") return "green";
+  if (status === "CANCELLED") return "red";
+  if (status === "TRACKING") return "amber";
+  return "purple";
+}
 function ScheduledMeetingCard({
   meeting,
   onPress,
+  twoColumn = false,
 }: {
   meeting: MeetingSummary;
   onPress: () => void;
+  twoColumn?: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const pulse = useRef(new Animated.Value(0)).current;
   const timeUntilMeeting = new Date(meeting.scheduledAt).getTime() - now;
   const isUpcomingStatus = meeting.status === "PLANNING" || meeting.status === "CONFIRMED";
@@ -61,14 +71,14 @@ function ScheduledMeetingCard({
   const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.018] });
 
   return (
-    <Pressable onPress={onPress} style={styles.meetingPressable}>
+    <Pressable onBlur={() => setFocused(false)} onFocus={() => setFocused(true)} onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)} onPress={onPress} style={[styles.meetingPressable, twoColumn && styles.meetingPressableTwoColumn]}>
       {isStartingSoon ? (
         <Animated.View
           pointerEvents="none"
           style={[styles.soonGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
         />
       ) : null}
-      <Card style={[styles.card, isStartingSoon && styles.startingSoonCard]}>
+      <Card style={[styles.card, (hovered || focused) && styles.cardHover, focused && styles.cardFocus, isStartingSoon && styles.startingSoonCard]}>
         {isStartingSoon ? (
           <>
             <View style={styles.soonBanner}>
@@ -82,8 +92,8 @@ function ScheduledMeetingCard({
           </>
         ) : null}
         <View style={styles.row}>
-          <Text style={[styles.cardTitle, isStartingSoon && styles.startingSoonTitle]}>{meeting.title}</Text>
-          <Pill label={isStartingSoon ? "SOON" : meeting.status} tone={isStartingSoon ? "red" : "green"} />
+          <Text numberOfLines={2} style={[styles.cardTitle, styles.meetingCardTitle, isStartingSoon && styles.startingSoonTitle]}>{meeting.title}</Text>
+          <Pill label={isStartingSoon ? "SOON" : meeting.status} tone={isStartingSoon ? "amber" : meetingStatusTone(meeting.status)} />
         </View>
         <Text style={[styles.meta, isStartingSoon && styles.startingSoonMeta]}>
           {new Date(meeting.scheduledAt).toLocaleString("ko-KR")}
@@ -95,6 +105,11 @@ function ScheduledMeetingCard({
 
 export function HomeScreen({ navigation }: Props) {
   const { accessToken, user } = useSession();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isDesktop = width >= 1024;
+  const isCompactTablet = width >= 768 && width < 900;
+  const useTwoColumnMeetingGrid = width >= 900;
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
   const [invitations, setInvitations] = useState<MeetingInvitationSummary[]>([]);
   const [activities, setActivities] = useState<FriendActivitySummary[]>([]);
@@ -207,7 +222,8 @@ export function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>MeetFair</Text></View>
+        <View style={[styles.headerInner, isMobile && styles.headerInnerMobile]}>
+          <View style={styles.brand}><LogoMark compact /><Text style={styles.brandText}>MeetFair</Text></View>
         <View style={styles.headerActions}>
           <Button compact label="＋ 모임" onPress={() => navigation.navigate("CreateMeeting")} />
           <Pressable accessibilityLabel="알림" onPress={() => navigation.navigate("Notifications")} style={styles.notificationButton}>
@@ -219,15 +235,16 @@ export function HomeScreen({ navigation }: Props) {
             ) : null}
           </Pressable>
         </View>
+        </View>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, isMobile && styles.contentMobile, isCompactTablet && styles.contentCompactTablet]}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
-        <View style={styles.meetingDashboard}>
-          <View style={styles.meetingColumn}>
+        <View style={[styles.meetingDashboard, (isMobile || isCompactTablet) && styles.meetingDashboardStacked]}>
+          <View style={[styles.meetingColumn, isDesktop && styles.invitationColumn]}>
             <View style={styles.columnSection}>
               <SectionHeading title="받은 초대" action={`${invitations.length}개`} />
               {invitations.map((item) => (
@@ -241,16 +258,19 @@ export function HomeScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <View style={styles.meetingColumn}>
+          <View style={[styles.meetingColumn, isDesktop && styles.invitationColumn]}>
             <View style={styles.columnSection}>
               <SectionHeading title="예정된 모임" action={`${meetings.length}개`} />
+              <View style={styles.meetingGrid}>
               {orderedMeetings.map((meeting) => (
                 <ScheduledMeetingCard
                   key={meeting.id}
                   meeting={meeting}
+                  twoColumn={useTwoColumnMeetingGrid}
                   onPress={() => navigation.navigate("Meeting", { meetingId: meeting.id })}
                 />
               ))}
+              </View>
               {!meetings.length ? <Text style={styles.empty}>예정된 모임이 없습니다.</Text> : null}
             </View>
           </View>
@@ -298,23 +318,34 @@ export function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  header: { height: 64, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  header: { minHeight: 64, backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.border },
+  headerInner: { width: "100%", maxWidth: 1320, minHeight: 64, paddingHorizontal: 40, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  headerInnerMobile: { minHeight: 60, paddingHorizontal: 16 },
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
-  notificationButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center", position: "relative" },
+  notificationButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", position: "relative" },
   bell: { fontSize: 25 },
   notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
   notificationBadgeText: { color: colors.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
-  content: { padding: 20, gap: 14, paddingBottom: 28 },
+  content: { width: "100%", maxWidth: 1320, alignSelf: "center", paddingHorizontal: 40, paddingTop: 28, gap: 16, paddingBottom: 40 },
+  contentMobile: { paddingHorizontal: 16, paddingTop: 18, gap: 14, paddingBottom: 104 },
+  contentCompactTablet: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 104 },
   hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
-  accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
+  accountId: { color: colors.muted, fontWeight: "700", marginTop: -8 },
   card: { gap: 9 },
-  meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  cardHover: { backgroundColor: colors.surfaceHover, borderColor: colors.borderStrong, shadowOpacity: 0.12, transform: [{ translateY: -1 }] },
+  cardFocus: { borderColor: colors.primary, shadowColor: colors.primary, shadowOpacity: 0.2, shadowRadius: 6 },
+  meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 32 },
+  meetingDashboardStacked: { flexDirection: "column", gap: 28 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
+  invitationColumn: { flex: 0.8 },
+  upcomingColumn: { flex: 2 },
   columnSection: { gap: 10 },
   columnCard: { gap: 9, padding: 14, borderRadius: 6 },
-  meetingPressable: { position: "relative" },
+  meetingGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  meetingPressable: { position: "relative", width: "100%", minWidth: 0 },
+  meetingPressableTwoColumn: { width: "auto", flexGrow: 1, flexBasis: 280, maxWidth: "100%" },
   soonGlow: {
     position: "absolute",
     top: -4,
@@ -322,14 +353,14 @@ const styles = StyleSheet.create({
     bottom: -4,
     left: -4,
     borderRadius: 10,
-    backgroundColor: "#FF3B6B",
+    backgroundColor: colors.warning,
   },
   startingSoonCard: {
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "#FF3B6B",
+    borderColor: colors.warningBorder,
     backgroundColor: colors.surface,
-    shadowColor: "#FF3B6B",
+    shadowColor: colors.warning,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 18,
@@ -345,20 +376,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#FF3B6B",
+    backgroundColor: colors.warning,
   },
-  soonBannerText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
-  soonSparkle: { color: "#FFE36E", fontSize: 17, fontWeight: "900" },
-  soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: "#FFD7E1" },
-  soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: "#FF3B6B" },
+  soonBannerText: { color: colors.primaryContrast, fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
+  soonSparkle: { color: colors.warningSoft, fontSize: 17, fontWeight: "900" },
+  soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: colors.warningSoft },
+  soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: colors.warning },
   startingSoonTitle: { color: colors.text, fontSize: 17 },
   startingSoonMeta: { color: colors.red, fontWeight: "800" },
   callCard: { gap: 9, borderColor: colors.red },
   cardActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   callCopy: { flex: 1, gap: 4 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, minWidth: 0 },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  meetingCardTitle: { flex: 1, minWidth: 0, lineHeight: 21 },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  empty: { color: colors.muted, fontSize: 12 },
+  empty: { color: colors.muted, fontSize: 12, lineHeight: 18, backgroundColor: colors.surfaceSubtle, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 16, textAlign: "center" },
   error: { color: colors.red, fontSize: 12 },
 });

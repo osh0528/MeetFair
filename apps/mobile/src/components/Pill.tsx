@@ -10,16 +10,16 @@ export function Pill({ label, tone = "purple" }: { label: string; tone?: PillTon
 }
 
 const styles = StyleSheet.create({
-  pill: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
   text: { fontSize: 12, fontWeight: "800" },
-  purplePill: { backgroundColor: colors.primarySoft },
-  purpleText: { color: colors.primary },
-  greenPill: { backgroundColor: colors.mint },
-  greenText: { color: colors.green },
-  amberPill: { backgroundColor: colors.amberSoft },
-  amberText: { color: "#626262" },
-  redPill: { backgroundColor: colors.redSoft },
-  redText: { color: colors.red },
-  grayPill: { backgroundColor: colors.background },
+  purplePill: { backgroundColor: colors.primarySoft, borderColor: colors.borderStrong },
+  purpleText: { color: colors.blue },
+  greenPill: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
+  greenText: { color: colors.success },
+  amberPill: { backgroundColor: colors.warningSoft, borderColor: colors.warningBorder },
+  amberText: { color: colors.warning },
+  redPill: { backgroundColor: colors.dangerSoft, borderColor: colors.dangerBorder },
+  redText: { color: colors.danger },
+  grayPill: { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
   grayText: { color: colors.muted },
 });
