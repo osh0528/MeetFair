@@ -1,4 +1,4 @@
-import { ROOM_DECORATIONS, type ProfileTheme, type RoomDecoration, type UserPageSummary } from "@meetfair/shared";
+import { ROOM_DECORATIONS, ROOM_WALLPAPERS, type ProfileTheme, type RoomDecoration, type RoomWallpaper, type UserPageSummary } from "@meetfair/shared";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
@@ -36,6 +36,38 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
   SUNSET: { label: "차콜", background: "#202020", accent: "#F0F0F0", soft: "#363636" },
 };
 
+const wallpapers: Record<RoomWallpaper, { background: string; pattern: string; patternColor: string }> = {
+  CREAM: { background: "#FFF4DC", pattern: "plain", patternColor: "transparent" },
+  STRIPES: { background: "#F8EDE3", pattern: "stripes", patternColor: "rgba(197, 137, 112, 0.18)" },
+  CHECK: { background: "#F5F1E8", pattern: "check", patternColor: "rgba(113, 139, 121, 0.16)" },
+  FLORAL: { background: "#FFF0F3", pattern: "floral", patternColor: "#D98E9F" },
+  SKY: { background: "#E8F5FF", pattern: "clouds", patternColor: "rgba(255, 255, 255, 0.9)" },
+  FOREST: { background: "#DDEBDD", pattern: "leaves", patternColor: "#65966B" },
+  NIGHT: { background: "#29324A", pattern: "stars", patternColor: "#FFE9A6" },
+  BRICK: { background: "#E9C1A7", pattern: "bricks", patternColor: "rgba(145, 82, 61, 0.22)" },
+};
+
+function WallpaperPattern({ pattern, color, compact = false }: { pattern: string; color: string; compact?: boolean }) {
+  if (pattern === "plain") return null;
+  if (pattern === "stripes") return (
+    <View pointerEvents="none" style={styles.wallpaperPatternLayer}>
+      {[0, 1, 2, 3, 4, 5, 6].map((item) => <View key={item} style={[styles.wallpaperStripe, { backgroundColor: color, left: item * (compact ? 22 : 56) - 18 }]} />)}
+    </View>
+  );
+  if (pattern === "check" || pattern === "bricks") return (
+    <View pointerEvents="none" style={styles.wallpaperPatternLayer}>
+      {[1, 2, 3, 4].map((item) => <View key={"h" + item} style={[styles.wallpaperHorizontal, { backgroundColor: color, top: item * (compact ? 12 : 30) }]} />)}
+      {[1, 2, 3, 4, 5, 6].map((item) => <View key={"v" + item} style={[styles.wallpaperVertical, { backgroundColor: color, left: item * (compact ? 22 : 52) }]} />)}
+    </View>
+  );
+  const symbols = pattern === "floral" ? ["✿", "❀", "✿", "❀", "✿"] : pattern === "clouds" ? ["☁", "☁", "☁", "☁"] : pattern === "leaves" ? ["❧", "❧", "❧", "❧", "❧"] : ["✦", "·", "✧", "·", "✦", "✧"] ;
+  return (
+    <View pointerEvents="none" style={styles.wallpaperPatternLayer}>
+      {symbols.map((symbol, item) => <Text key={item} style={[styles.wallpaperMotif, { color, left: 10 + item * (compact ? 19 : 58), top: compact ? (item % 2) * 24 + 6 : (item % 3) * 38 + 10 }]}>{symbol}</Text>)}
+    </View>
+  );
+}
+
 export function UserPageScreen({ navigation, route }: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactLayout = windowWidth < 768;
@@ -51,6 +83,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [bio, setBio] = useState("");
   const [emoji, setEmoji] = useState("🌟");
   const [theme, setTheme] = useState<ProfileTheme>("PURPLE");
+  const [roomWallpaper, setRoomWallpaper] = useState<RoomWallpaper>("CREAM");
   const [roomDecorations, setRoomDecorations] = useState<RoomDecoration[]>([]);
   const [musicTitle, setMusicTitle] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
@@ -77,6 +110,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBio(next.bio ?? "");
     setEmoji(next.emoji);
     setTheme(next.theme);
+    setRoomWallpaper(next.roomWallpaper ?? "CREAM");
     setRoomDecorations(Array.isArray(next.roomDecorations) ? next.roomDecorations : []);
     setMusicTitle(next.musicTitle ?? "");
   }, []);
@@ -145,6 +179,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           bio,
           emoji: emoji.trim(),
           theme,
+          roomWallpaper,
           roomDecorations,
           musicTitle,
         }),
@@ -383,12 +418,35 @@ export function UserPageScreen({ navigation, route }: Props) {
 
   const activeTheme = page?.isOwner ? theme : page?.theme ?? theme;
   const palette = (mode === "DARK" ? darkThemes : themes)[activeTheme];
+  const activeWallpaper = page?.isOwner ? roomWallpaper : page?.roomWallpaper ?? roomWallpaper;
+  const wallpaper = wallpapers[activeWallpaper];
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const toggleRoomDecoration = (decoration: RoomDecoration) => {
     setRoomDecorations((current) => current.includes(decoration)
       ? current.filter((item) => item !== decoration)
       : [...current, decoration]);
   };
+  const wallpaperEditor = page?.isOwner ? (
+    <View style={styles.wallpaperEditor}>
+      <Text style={styles.label}>벽지</Text>
+      <Text style={styles.decorHelp}>모든 벽지를 자유롭게 골라 사용할 수 있어요.</Text>
+      <View style={styles.wallpaperChoices}>
+        {ROOM_WALLPAPERS.map((item) => {
+          const selected = roomWallpaper === item.id;
+          const preview = wallpapers[item.id];
+          return (
+            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => setRoomWallpaper(item.id)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
+              <View style={[styles.wallpaperPreview, { backgroundColor: preview.background }]}>
+                <WallpaperPattern color={preview.patternColor} compact pattern={preview.pattern} />
+                {selected ? <Text style={styles.wallpaperCheck}>✓</Text> : null}
+              </View>
+              <Text numberOfLines={1} style={styles.wallpaperLabel}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  ) : null;
   const roomDecorEditor = page?.isOwner ? (
     <View style={styles.decorEditor}>
       <View style={styles.decorProgressHeader}>
@@ -495,19 +553,20 @@ export function UserPageScreen({ navigation, route }: Props) {
                 </View>
                 <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
               </View>
-              <View style={[styles.myRoom, { backgroundColor: palette.soft, borderColor: palette.accent }]}>
+              <View style={[styles.myRoom, { backgroundColor: palette.soft }]}>
                 <View style={styles.roomTopRow}>
                   <View>
                     <Text style={[styles.roomEyebrow, { color: palette.accent }]}>MY LITTLE ROOM</Text>
                     <Text style={styles.roomTitle}>{page.user.nickname}의 공간</Text>
                   </View>
                   {page.isOwner ? (
-                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { borderColor: palette.accent }]}>
+                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { backgroundColor: palette.background }]}>
                       <Text style={[styles.roomEditText, { color: palette.accent }]}>꾸미기</Text>
                     </Pressable>
                   ) : null}
                 </View>
-                <View style={[styles.roomWall, { backgroundColor: palette.background }]}>
+                <View style={[styles.roomWall, { backgroundColor: wallpaper.background }]}>
+                  <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
                   {roomDecorations.includes("WINDOW") ? <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
                     <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
                     <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
@@ -532,8 +591,8 @@ export function UserPageScreen({ navigation, route }: Props) {
                   {roomDecorations.includes("CAT") ? <Text style={[styles.roomEmojiItem, styles.roomCat]}>🐈</Text> : null}
                   {roomDecorations.includes("CACTUS") ? <Text style={[styles.roomEmojiItem, styles.roomCactus]}>🌵</Text> : null}
                   {roomDecorations.includes("TEDDY") ? <Text style={[styles.roomEmojiItem, styles.roomTeddy]}>🧸</Text> : null}
-                  <View style={[styles.roomFloor, { borderTopColor: palette.accent }]} />
-                  {!roomDecorations.length ? <Text style={styles.emptyRoomText}>활동하며 가구를 모아 빈집을 꾸며보세요</Text> : null}
+                  <View style={styles.roomFloor} />
+                  {!roomDecorations.length ? <Text style={styles.emptyRoomText}>원하는 가구를 골라 나만의 집을 꾸며보세요</Text> : null}
                 </View>
               </View>
               <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
@@ -596,6 +655,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     </Pressable>
                   ))}
                 </View>
+                {wallpaperEditor}
                 {roomDecorEditor}
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
@@ -773,6 +833,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   </Pressable>
                 ))}
               </View>
+              {wallpaperEditor}
               {roomDecorEditor}
               <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
             </Card>
@@ -850,13 +911,13 @@ const styles = StyleSheet.create({
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 6 },
   statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
-  myRoom: { borderRadius: 10, borderWidth: 1, padding: 10, gap: 9, overflow: "hidden" },
+  myRoom: { borderRadius: 16, padding: 12, gap: 9, overflow: "hidden" },
   roomTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   roomEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
   roomTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
-  roomEditButton: { minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  roomEditButton: { minHeight: 32, borderRadius: 16, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   roomEditText: { fontSize: 11, fontWeight: "900" },
-  roomWall: { height: 156, borderRadius: 8, position: "relative", overflow: "hidden" },
+  roomWall: { height: 156, borderRadius: 12, position: "relative", overflow: "hidden" },
   roomWindow: { position: "absolute", left: 18, top: 18, width: 64, height: 54, borderWidth: 3, borderRadius: 5, backgroundColor: "#DDF2FF", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   windowLineVertical: { position: "absolute", top: 0, bottom: 0, width: 2 },
   windowLineHorizontal: { position: "absolute", left: 0, right: 0, height: 2 },
@@ -880,7 +941,7 @@ const styles = StyleSheet.create({
   roomCat: { right: 48, bottom: 12, fontSize: 27 },
   roomCactus: { right: 15, bottom: 12, fontSize: 29 },
   roomTeddy: { left: 73, bottom: 10, fontSize: 27 },
-  roomFloor: { position: "absolute", left: 0, right: 0, bottom: 0, height: 35, borderTopWidth: 1, backgroundColor: "rgba(160,120,80,0.13)" },
+  roomFloor: { position: "absolute", left: 0, right: 0, bottom: 0, height: 35, backgroundColor: "rgba(139,100,69,0.14)" },
   emptyRoomText: { position: "absolute", left: 12, right: 12, bottom: 15, color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
@@ -889,7 +950,7 @@ const styles = StyleSheet.create({
   input: { minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12 },
   multiline: { minHeight: 112 },
   themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  themeChoice: { minWidth: 66, padding: 9, borderRadius: 6, borderWidth: 2, flexDirection: "row", alignItems: "center", gap: 6 },
+  themeChoice: { minWidth: 66, padding: 9, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
   themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
   decorEditor: { gap: 8, marginTop: 4 },
@@ -897,7 +958,18 @@ const styles = StyleSheet.create({
   decorPoints: { fontSize: 11, fontWeight: "900" },
   decorHelp: { color: colors.muted, fontSize: 10 },
   decorChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  decorChoice: { width: 96, minHeight: 92, borderRadius: 8, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surface, padding: 8, alignItems: "center", justifyContent: "center", gap: 3 },
+  decorChoice: { width: 96, minHeight: 92, borderRadius: 12, backgroundColor: colors.surface, padding: 8, alignItems: "center", justifyContent: "center", gap: 3 },
+  wallpaperEditor: { gap: 8, marginTop: 4 },
+  wallpaperChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  wallpaperChoice: { width: 112, borderRadius: 12, padding: 6, gap: 5 },
+  wallpaperPreview: { height: 58, borderRadius: 10, overflow: "hidden", position: "relative" },
+  wallpaperLabel: { color: colors.text, fontSize: 10, fontWeight: "800", textAlign: "center" },
+  wallpaperCheck: { position: "absolute", right: 6, top: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(30,30,30,0.72)", color: "#FFFFFF", textAlign: "center", lineHeight: 20, fontSize: 12, fontWeight: "900" },
+  wallpaperPatternLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
+  wallpaperStripe: { position: "absolute", top: -20, width: 12, height: 220, transform: [{ rotate: "18deg" }] },
+  wallpaperHorizontal: { position: "absolute", left: 0, right: 0, height: 2 },
+  wallpaperVertical: { position: "absolute", top: 0, bottom: 0, width: 2 },
+  wallpaperMotif: { position: "absolute", fontSize: 13 },
   decorIcon: { fontSize: 25 },
   decorLabel: { color: colors.text, fontSize: 10, fontWeight: "900" },
   decorState: { color: colors.muted, fontSize: 9, fontWeight: "700" },

@@ -87,7 +87,22 @@ export interface PublicProfileSearchResult extends UserSummary {
 }
 
 export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
+export type RoomWallpaper = "CREAM" | "STRIPES" | "CHECK" | "FLORAL" | "SKY" | "FOREST" | "NIGHT" | "BRICK";
 export type RoomDecoration = "RUG" | "PLANT" | "LAMP" | "SOFA" | "WINDOW" | "BED" | "DESK" | "BOOKSHELF" | "TV" | "TABLE" | "CLOCK" | "POSTER" | "CAT" | "CACTUS" | "TEDDY";
+
+export const ROOM_WALLPAPERS: ReadonlyArray<{
+  id: RoomWallpaper;
+  label: string;
+}> = [
+  { id: "CREAM", label: "포근한 크림" },
+  { id: "STRIPES", label: "잔잔한 줄무늬" },
+  { id: "CHECK", label: "작은 체크" },
+  { id: "FLORAL", label: "꽃무늬 정원" },
+  { id: "SKY", label: "맑은 하늘" },
+  { id: "FOREST", label: "숲속 오두막" },
+  { id: "NIGHT", label: "별빛 밤" },
+  { id: "BRICK", label: "따뜻한 벽돌" },
+];
 
 export const ROOM_DECORATIONS: ReadonlyArray<{
   id: RoomDecoration;
@@ -137,6 +152,7 @@ export interface UserPageSummary {
   bio: string | null;
   emoji: string;
   theme: ProfileTheme;
+  roomWallpaper: RoomWallpaper;
   roomDecorations: RoomDecoration[];
   musicTitle: string | null;
   hasMusic: boolean;
