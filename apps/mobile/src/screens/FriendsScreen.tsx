@@ -107,10 +107,6 @@ export function FriendsScreen({ navigation }: Props) {
 
   const onlineFriends = friends.filter((friend) => onlineUserIds.includes(friend.userId));
 
-  async function sendRequest() {
-    await sendFriendRequest(accountId);
-  }
-
   async function sendFriendRequest(recipientAccountId: string) {
     if (submitting) return;
     setSubmitting(true);
@@ -197,27 +193,27 @@ export function FriendsScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.addRow, isMobile && styles.addRowMobile]}>
           <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 또는 닉네임 검색" placeholderTextColor={colors.subtle} style={styles.input} value={accountId} />
-          <Pressable disabled={submitting || !accountId.trim()} onPress={sendRequest} style={[styles.addButton, (submitting || !accountId.trim()) && styles.disabled]}>
-            <Text style={styles.addText}>{submitting ? "전송 중" : "요청"}</Text>
-          </Pressable>
         </View>
         {accountSuggestions.length ? (
           <View style={styles.suggestionList}>
             {accountSuggestions.map((suggestion) => (
-              <Pressable key={suggestion.id} onPress={() => setAccountId(suggestion.accountId)} style={styles.suggestionRow}>
-                <Avatar imageUrl={avatarUrl(suggestion.id, suggestion.avatarUpdatedAt)} name={suggestion.nickname} size={34} />
-                <View style={styles.suggestionCopy}>
-                  <Text style={styles.suggestionName}>{suggestion.nickname}</Text>
-                  <Text style={styles.suggestionId}>@{suggestion.accountId}</Text>
-                </View>
-                <Text style={styles.suggestionAction}>선택</Text>
-              </Pressable>
+              <View key={suggestion.id} style={styles.suggestionRow}>
+                <Pressable accessibilityLabel={`${suggestion.nickname} 홈피 보기`} onPress={() => navigation.navigate("UserPage", { userId: suggestion.id })} style={styles.suggestionProfile}>
+                  <Avatar imageUrl={avatarUrl(suggestion.id, suggestion.avatarUpdatedAt)} name={suggestion.nickname} size={34} />
+                  <View style={styles.suggestionCopy}>
+                    <Text style={styles.suggestionName}>{suggestion.nickname}</Text>
+                    <Text style={styles.suggestionId}>@{suggestion.accountId}</Text>
+                  </View>
+                </Pressable>
+                <Pressable disabled={submitting} onPress={() => void sendFriendRequest(suggestion.accountId)} style={[styles.suggestionRequestButton, submitting && styles.disabled]}>
+                  <Text style={styles.suggestionRequestText}>{submitting ? "전송 중" : "요청"}</Text>
+                </Pressable>
+              </View>
             ))}
           </View>
         ) : null}
         <View style={[styles.quickActions, isMobile && styles.quickActionsMobile]}>
           <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
-          <Button label="홈피 검색" onPress={() => navigation.navigate("MiniHomeSearch")} variant="soft" style={styles.quickAction} />
           <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
         </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
@@ -290,17 +286,17 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: "row", gap: 8 },
   addRowMobile: { flexDirection: "column", alignItems: "stretch" },
   input: { flex: 1, height: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
-  addButton: { minHeight: 48, paddingHorizontal: 18, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   quickActions: { flexDirection: "row", gap: 8 },
   quickActionsMobile: { flexDirection: "column", gap: 8 },
   quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6, minWidth: 0 },
-  addText: { color: colors.surface, fontWeight: "900" },
   suggestionList: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
   suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   suggestionCopy: { flex: 1, gap: 2 },
   suggestionName: { color: colors.text, fontSize: 13, fontWeight: "900" },
   suggestionId: { color: colors.muted, fontSize: 11 },
-  suggestionAction: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  suggestionRequestButton: { minHeight: 34, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  suggestionRequestText: { color: colors.surface, fontSize: 11, fontWeight: "900" },
   message: { color: colors.primary, fontSize: 12 },
   onlineRow: { gap: 16, paddingVertical: 4, paddingRight: 20 },
   recommendationRow: { gap: 10, paddingRight: 20 },

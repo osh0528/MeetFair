@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 32 },
   meetingDashboardStacked: { flexDirection: "column", gap: 28 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
-  meetingColumnStacked: { flex: 0, width: "100%" },
+  meetingColumnStacked: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" },
   invitationColumn: { flex: 0.8 },
   upcomingColumn: { flex: 2 },
   columnSection: { gap: 10 },

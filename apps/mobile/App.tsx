@@ -124,7 +124,7 @@ function AppNavigator() {
             onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
           />
         ) : null}
-        <View style={[styles.navigatorShell, user && !bottomNavHidden && !isDesktop && styles.navigatorShellWithBottomNav]}>
+        <View style={styles.navigatorShell}>
           <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
@@ -177,5 +177,4 @@ const styles = StyleSheet.create({
   appShell: { flex: 1 },
   appShellDesktop: { flexDirection: "row" },
   navigatorShell: { flex: 1, minWidth: 0 },
-  navigatorShellWithBottomNav: { paddingBottom: 78 },
 });

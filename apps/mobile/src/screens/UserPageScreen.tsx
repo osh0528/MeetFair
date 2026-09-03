@@ -584,6 +584,9 @@ export function UserPageScreen({ navigation, route }: Props) {
   const wallpaperPanelColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.28)" : "rgba(255,255,255,0.42)";
   const wallpaperInputColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.38)" : "rgba(255,255,255,0.58)";
   const wallpaperInputBorder = activeWallpaper === "NIGHT" ? "rgba(255,255,255,0.18)" : "rgba(90,70,50,0.16)";
+  const photoCardBackground = mode === "DARK" ? "#1A1C24" : "#FFFFFF";
+  const photoCardTextColor = mode === "DARK" ? "#F4F5F8" : "#171923";
+  const photoCardMutedColor = mode === "DARK" ? "#9CA2B1" : "#697080";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
   async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[], nextLayout: RoomDecorationPlacement[] = roomLayout) {
@@ -680,7 +683,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   }, {})) : [];
 
   const musicPlayerCard = page ? (
-    <Card style={[styles.musicCard, styles.heroMusicCard]}>
+    <View style={styles.musicCard}>
       <Pressable
         disabled={!page.hasMusic}
         onPress={() => void toggleMusic()}
@@ -689,8 +692,8 @@ export function UserPageScreen({ navigation, route }: Props) {
         <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
       </Pressable>
       <View style={styles.musicCopy}>
-        <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
-        <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
+        <Text style={[styles.musicLabel, { color: wallpaperMutedColor }]}>MY BGM</Text>
+        <Text style={[styles.musicTitle, { color: wallpaperTextColor }]}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
         {page.hasMusic ? (
           <>
             <View style={[styles.progressTrack, { backgroundColor: mode === "DARK" ? "#525252" : "#D1D1D1" }]}>
@@ -706,14 +709,14 @@ export function UserPageScreen({ navigation, route }: Props) {
                 ]}
               />
             </View>
-            <Text style={styles.musicTime}>
+            <Text style={[styles.musicTime, { color: wallpaperMutedColor }]}>
               {musicStatus.isBuffering ? "불러오는 중..." : formatTime(musicStatus.currentTime) + " / " + formatTime(musicStatus.duration)}
             </Text>
             {musicStatus.error ? <Text style={styles.musicError}>음원을 재생하지 못했습니다.</Text> : null}
           </>
         ) : null}
       </View>
-    </Card>
+    </View>
   ) : null;
 
   return (
@@ -751,7 +754,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={80} />
                   <View style={styles.profileText}>
                     <Text style={[styles.nickname, { color: wallpaperTextColor }]}> {page.user.nickname}</Text>
-                    <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
+                    <Text style={[styles.accountId, { color: wallpaperMutedColor }]}>@{page.user.accountId}</Text>
                   </View>
                 </View>
                 <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
@@ -830,7 +833,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
               </Pressable>
               <View style={styles.musicCopy}>
-                <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
+                <Text style={[styles.musicLabel, { color: wallpaperMutedColor }]}>MY BGM</Text>
                 <Text style={styles.musicTitle}>{page?.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
                 {page!.hasMusic ? (
                   <>
@@ -847,7 +850,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         ]}
                       />
                     </View>
-                    <Text style={styles.musicTime}>
+                    <Text style={[styles.musicTime, { color: wallpaperMutedColor }]}>
                       {musicStatus.isBuffering ? "불러오는 중..." : formatTime(musicStatus.currentTime) + " / " + formatTime(musicStatus.duration)}
                     </Text>
                     {musicStatus.error ? <Text style={styles.musicError}>음원을 재생하지 못했습니다.</Text> : null}
@@ -888,7 +891,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         <Pressable
                           key={representative.id}
                           onPress={() => setSelectedPhotoId(representative.id)}
-                          style={[styles.photoTile, { borderColor: wallpaperInputBorder }]}
+                          style={[styles.photoTile, { backgroundColor: photoCardBackground, borderColor: wallpaperInputBorder }]}
                         >
                           <View style={styles.photoImageWrap}>
                           <Image
@@ -902,7 +905,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                             </View>
                           ) : null}
                           </View>
-                          {representative.caption ? <Text numberOfLines={isNarrowLayout ? 1 : 2} style={[styles.photoCaption, { color: wallpaperTextColor }]}> {representative.caption}</Text> : null}
+                          {representative.caption ? <Text numberOfLines={isNarrowLayout ? 1 : 2} style={[styles.photoCaption, { color: photoCardTextColor }]}> {representative.caption}</Text> : null}
                           <Pressable
                             accessibilityLabel={representative.likedByMe ? "사진 좋아요 취소" : "사진 좋아요"}
                             disabled={likingPhotoId === representative.id}
@@ -912,7 +915,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                             }}
                             style={styles.photoLikeButton}
                           >
-                            <Text style={[styles.photoLikeText, representative.likedByMe && styles.photoLikeTextActive]}>
+                            <Text style={[styles.photoLikeText, { color: photoCardMutedColor }, representative.likedByMe && styles.photoLikeTextActive]}>
                               {representative.likedByMe ? "♥" : "♡"} {representative.likesCount}
                             </Text>
                           </Pressable>
@@ -1111,7 +1114,6 @@ const styles = StyleSheet.create({
   decorState: { color: colors.muted, fontSize: 9, fontWeight: "700" },
   heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
   heroMusicMobile: { flex: 1, paddingLeft: 0, borderLeftWidth: 0 },
-  heroMusicCard: { padding: 0, borderWidth: 0, borderRadius: 0, backgroundColor: "transparent" },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   musicControl: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   musicControlText: { color: colors.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
