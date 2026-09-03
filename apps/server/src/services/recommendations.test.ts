@@ -8,12 +8,12 @@ const odsayMocks = vi.hoisted(() => ({
   getTransitDirections: vi.fn(),
 }));
 const searchMocks = vi.hoisted(() => ({
-  searchLocalPlaces: vi.fn(),
+  searchNearbyKakaoPlaces: vi.fn(),
 }));
 
 vi.mock("../lib/naver-maps.js", () => naverMocks);
 vi.mock("../lib/kakao-transit.js", () => odsayMocks);
-vi.mock("../lib/naver-search.js", () => searchMocks);
+vi.mock("../lib/kakao-local.js", () => searchMocks);
 vi.mock("../lib/prisma.js", () => ({
   prisma: {
     meeting: { findUnique: vi.fn(), update: vi.fn().mockResolvedValue({}) },
@@ -65,10 +65,10 @@ describe("recommendations - transit and routing", () => {
     vi.clearAllMocks();
     const { clearRouteCacheForTest } = await import("./recommendations.js");
     clearRouteCacheForTest();
-    searchMocks.searchLocalPlaces.mockResolvedValue([
-      { title: "Place A", address: "Addr A", roadAddress: "Addr A", category: "cafe", latitude: 37.568, longitude: 126.98 },
-      { title: "Place B", address: "Addr B", roadAddress: "Addr B", category: "cafe", latitude: 37.569, longitude: 126.981 },
-      { title: "Place C", address: "Addr C", roadAddress: "Addr C", category: "cafe", latitude: 37.567, longitude: 126.979 },
+    searchMocks.searchNearbyKakaoPlaces.mockResolvedValue([
+      { id: "kakao-1", name: "Place A", address: "Addr A", category: "cafe", latitude: 37.568, longitude: 126.98, distanceMeters: 100 },
+      { id: "kakao-2", name: "Place B", address: "Addr B", category: "cafe", latitude: 37.569, longitude: 126.981, distanceMeters: 200 },
+      { id: "kakao-3", name: "Place C", address: "Addr C", category: "cafe", latitude: 37.567, longitude: 126.979, distanceMeters: 150 },
     ]);
     naverMocks.reverseGeocode.mockResolvedValue({ roadAddress: "서울 중구", address: "서울 중구" });
   });
@@ -128,8 +128,8 @@ describe("recommendations - transit and routing", () => {
       .mockRejectedValueOnce(new AppError(502, "TRANSIT_NO_ROUTE", "no route"))
       .mockResolvedValue({ durationMinutes: 10, distanceMeters: 2000 });
     // Need at least one place where first origin fails -> whole place skipped, so we expect fewer candidates than places
-    searchMocks.searchLocalPlaces.mockResolvedValue([
-      { title: "Place X", address: "Addr X", roadAddress: "Addr X", category: "cafe", latitude: 37.568, longitude: 126.98 },
+    searchMocks.searchNearbyKakaoPlaces.mockResolvedValue([
+      { id: "kakao-x", name: "Place X", address: "Addr X", category: "cafe", latitude: 37.568, longitude: 126.98, distanceMeters: 100 },
     ]);
     const { generateRecommendations } = await import("./recommendations.js");
     const result = await generateRecommendations("m1", "u1");

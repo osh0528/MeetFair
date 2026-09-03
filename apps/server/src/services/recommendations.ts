@@ -2,7 +2,7 @@ import { AppError } from "../lib/app-error.js";
 import { haversineDistance, midpointOf } from "../lib/geo.js";
 import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
-import { searchLocalPlaces } from "../lib/naver-search.js";
+import { searchNearbyKakaoPlaces } from "../lib/kakao-local.js";
 import { prisma } from "../lib/prisma.js";
 import type { MeetingRecommendation } from "@meetfair/shared";
 
@@ -177,7 +177,22 @@ export async function generateRecommendations(meetingId: string, requesterId: st
   }
 
   const query = meeting.title || "맛집";
-  const places = await searchLocalPlaces(query);
+  const center = midpointOf(origins[0]!, origins[1] ?? origins[0]!);
+  const kakaoPlaces = await searchNearbyKakaoPlaces({
+    query,
+    latitude: center.latitude,
+    longitude: center.longitude,
+    radiusMeters: 3000,
+  });
+  const places = kakaoPlaces.map((p) => ({
+    title: p.name,
+    address: p.address,
+    roadAddress: p.address,
+    category: p.category,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    providerPlaceId: p.id,
+  }));
 
   const candidates: Array<{
     name: string;
@@ -237,7 +252,7 @@ export async function generateRecommendations(meetingId: string, requesterId: st
       latitude: place.latitude,
       longitude: place.longitude,
       category: place.category,
-      providerPlaceId: null,
+      providerPlaceId: place.providerPlaceId ?? null,
       travelTimes,
     });
   }
@@ -399,7 +414,21 @@ export async function generateMidpointRecommendations(
   } catch {
   }
 
-  const places = await searchLocalPlaces(query);
+  const kakaoPlaces2 = await searchNearbyKakaoPlaces({
+    query,
+    latitude: midpoint.latitude,
+    longitude: midpoint.longitude,
+    radiusMeters: 3000,
+  });
+  const places = kakaoPlaces2.map((p) => ({
+    title: p.name,
+    address: p.address,
+    roadAddress: p.address,
+    category: p.category,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    providerPlaceId: p.id,
+  }));
 
   const candidates: Array<{
     name: string;
