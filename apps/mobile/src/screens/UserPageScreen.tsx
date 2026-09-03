@@ -421,6 +421,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const activeWallpaper = page?.isOwner ? roomWallpaper : page?.roomWallpaper ?? roomWallpaper;
   const wallpaper = wallpapers[activeWallpaper];
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
+  const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
   const toggleRoomDecoration = (decoration: RoomDecoration) => {
     setRoomDecorations((current) => current.includes(decoration)
       ? current.filter((item) => item !== decoration)
@@ -540,8 +541,9 @@ export function UserPageScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
         {page ? (
-          <>
-            <Card style={[styles.heroCard, themedPanel]}>
+          <View style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
+            <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
+            <Card style={[styles.heroCard, housePanel]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
                 <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
@@ -695,7 +697,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               </View>
             </Card> : null}
             <View style={[styles.pageColumns, isCompactLayout && styles.pageColumnsMobile]}>
-              <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel, themedPanel]}>
+              <Card style={[styles.aboutPhotoPanel, isCompactLayout && styles.mobilePanel, housePanel]}>
                 <View style={styles.photoSection}>
                   <SectionHeading title="사진첩" action={page.photos.length + " / 30"} />
                   {page.isOwner ? (
@@ -768,7 +770,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 </View>
               </Card>
 
-              <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel, themedPanel]}>
+              <Card style={[styles.guestbookPanel, isCompactLayout && styles.mobilePanel, housePanel]}>
                 <SectionHeading title="방명록" action={page.guestbook.length + "개"} />
                 <View style={styles.guestbookComposer}>
                   <TextInput
@@ -803,7 +805,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 {!page.guestbook.length ? <Text style={styles.empty}>첫 번째 방명록을 남겨 보세요.</Text> : null}
               </Card>
             </View>
-          </>
+          </View>
         ) : !loading ? <Button label="다시 시도" onPress={() => void load()} variant="secondary" /> : null}
       </ScrollView>
       <Modal animationType="slide" onRequestClose={() => setEditing(false)} visible={editing && page?.isOwner}>
@@ -900,6 +902,7 @@ const styles = StyleSheet.create({
   editModalHeader: { paddingHorizontal: 4 },
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
+  houseShell: { borderRadius: 24, padding: 14, gap: 12, overflow: "hidden", position: "relative" },
   heroCard: { gap: 12, overflow: "hidden" },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
   heroRowMobile: { gap: 10 },
