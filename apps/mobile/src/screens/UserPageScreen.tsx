@@ -77,7 +77,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBio(next.bio ?? "");
     setEmoji(next.emoji);
     setTheme(next.theme);
-    setRoomDecorations(next.roomDecorations);
+    setRoomDecorations(Array.isArray(next.roomDecorations) ? next.roomDecorations : []);
     setMusicTitle(next.musicTitle ?? "");
   }, []);
 
