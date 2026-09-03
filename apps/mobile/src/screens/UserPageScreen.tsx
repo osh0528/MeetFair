@@ -68,6 +68,33 @@ function WallpaperPattern({ pattern, color, compact = false }: { pattern: string
   );
 }
 
+const homeDecorItems: ReadonlyArray<{ id: RoomDecoration; icon: string; style: { top: number; left?: number; right?: number } }> = [
+  { id: "WINDOW", icon: "🪟", style: { top: 115, left: 18 } },
+  { id: "PLANT", icon: "🌿", style: { top: 245, right: 20 } },
+  { id: "SOFA", icon: "🛋️", style: { top: 365, left: 16 } },
+  { id: "LAMP", icon: "💡", style: { top: 475, right: 24 } },
+  { id: "RUG", icon: "🧶", style: { top: 585, left: 24 } },
+  { id: "BED", icon: "🛏️", style: { top: 695, right: 15 } },
+  { id: "DESK", icon: "🖥️", style: { top: 805, left: 18 } },
+  { id: "BOOKSHELF", icon: "📚", style: { top: 915, right: 22 } },
+  { id: "TV", icon: "📺", style: { top: 1025, left: 20 } },
+  { id: "TABLE", icon: "☕", style: { top: 1135, right: 24 } },
+  { id: "CLOCK", icon: "🕰️", style: { top: 1245, left: 22 } },
+  { id: "POSTER", icon: "🖼️", style: { top: 1355, right: 18 } },
+  { id: "CAT", icon: "🐈", style: { top: 1465, left: 20 } },
+  { id: "CACTUS", icon: "🌵", style: { top: 1575, right: 22 } },
+  { id: "TEDDY", icon: "🧸", style: { top: 1685, left: 18 } },
+];
+
+function HomeDecorations({ decorations }: { decorations: RoomDecoration[] }) {
+  return (
+    <View pointerEvents="none" style={styles.homeDecorLayer}>
+      {homeDecorItems.filter((item) => decorations.includes(item.id)).map((item) => (
+        <Text key={item.id} style={[styles.homeDecorItem, item.style]}>{item.icon}</Text>
+      ))}
+    </View>
+  );
+}
 export function UserPageScreen({ navigation, route }: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactLayout = windowWidth < 768;
@@ -565,6 +592,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         {page ? (
           <View style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
             <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
+            <HomeDecorations decorations={roomDecorations} />
             <Card style={[styles.heroCard, housePanel]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
@@ -744,49 +772,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   ) : <Text style={styles.empty}>아직 사진첩에 등록된 사진이 없습니다.</Text>}
                 </View>
 
-                <View style={[styles.myRoom, { backgroundColor: palette.soft }]}>
-                <View style={styles.roomTopRow}>
-                  <View>
-                    <Text style={[styles.roomEyebrow, { color: palette.accent }]}>MY LITTLE ROOM</Text>
-                    <Text style={[styles.roomTitle, { color: wallpaperTextColor }]}> {page.user.nickname}의 공간</Text>
-                  </View>
-                  {page.isOwner ? (
-                    <Pressable onPress={() => setEditing(true)} style={[styles.roomEditButton, { backgroundColor: palette.background }]}>
-                      <Text style={[styles.roomEditText, { color: palette.accent }]}>꾸미기</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <View style={[styles.roomWall, { backgroundColor: wallpaper.background }]}>
-                  <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
-                  {roomDecorations.includes("WINDOW") ? <View style={[styles.roomWindow, { borderColor: palette.accent }]}>
-                    <View style={[styles.windowLineVertical, { backgroundColor: palette.accent }]} />
-                    <View style={[styles.windowLineHorizontal, { backgroundColor: palette.accent }]} />
-                    <Text style={styles.windowView}>☁️</Text>
-                  </View> : null}
-                  <Text style={styles.roomCharacter}>{page.emoji}</Text>
-                  {roomDecorations.includes("PLANT") ? <View style={styles.roomPlant}><Text style={styles.roomItemEmoji}>🌿</Text></View> : null}
-                  {roomDecorations.includes("SOFA") ? <View style={[styles.roomSofa, { backgroundColor: palette.accent }]}>
-                    <View style={[styles.sofaBack, { backgroundColor: palette.accent }]} />
-                    <View style={styles.sofaCushion} />
-                    <View style={styles.sofaCushion} />
-                  </View> : null}
-                  {roomDecorations.includes("LAMP") ? <Text style={styles.roomLamp}>💡</Text> : null}
-                  {roomDecorations.includes("RUG") ? <View style={[styles.roomRug, { backgroundColor: palette.accent }]} /> : null}
-                  {roomDecorations.includes("BED") ? <Text style={[styles.roomEmojiItem, styles.roomBed]}>🛏️</Text> : null}
-                  {roomDecorations.includes("DESK") ? <Text style={[styles.roomEmojiItem, styles.roomDesk]}>🖥️</Text> : null}
-                  {roomDecorations.includes("BOOKSHELF") ? <Text style={[styles.roomEmojiItem, styles.roomBookshelf]}>📚</Text> : null}
-                  {roomDecorations.includes("TV") ? <Text style={[styles.roomEmojiItem, styles.roomTv]}>📺</Text> : null}
-                  {roomDecorations.includes("TABLE") ? <Text style={[styles.roomEmojiItem, styles.roomTable]}>☕</Text> : null}
-                  {roomDecorations.includes("CLOCK") ? <Text style={[styles.roomEmojiItem, styles.roomClock]}>🕰️</Text> : null}
-                  {roomDecorations.includes("POSTER") ? <Text style={[styles.roomEmojiItem, styles.roomPoster]}>🖼️</Text> : null}
-                  {roomDecorations.includes("CAT") ? <Text style={[styles.roomEmojiItem, styles.roomCat]}>🐈</Text> : null}
-                  {roomDecorations.includes("CACTUS") ? <Text style={[styles.roomEmojiItem, styles.roomCactus]}>🌵</Text> : null}
-                  {roomDecorations.includes("TEDDY") ? <Text style={[styles.roomEmojiItem, styles.roomTeddy]}>🧸</Text> : null}
-                  <View style={styles.roomFloor} />
-                  {!roomDecorations.length ? <Text style={[styles.emptyRoomText, { color: wallpaperMutedColor }]}> 원하는 가구를 골라 나만의 집을 꾸며보세요</Text> : null}
-                </View>
-              </View>
-              <View style={styles.panelSection}>
+                <View style={styles.panelSection}>
                   <SectionHeading color={wallpaperTextColor} title="About me" />
                   <Text style={[styles.bio, { color: wallpaperTextColor }]}> {page.bio || "아직 소개글이 없습니다."}</Text>
                 </View>
@@ -925,7 +911,9 @@ const styles = StyleSheet.create({
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   houseShell: { borderRadius: 24, padding: 14, gap: 12, overflow: "hidden", position: "relative" },
-  heroCard: { gap: 12, overflow: "hidden" },
+  homeDecorLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
+  homeDecorItem: { position: "absolute", fontSize: 38, opacity: 0.38 },
+  heroCard: { gap: 12, overflow: "hidden", position: "relative", zIndex: 1 },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
   heroRowMobile: { gap: 10 },
   profileIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 0.9, minWidth: 0 },
@@ -936,38 +924,6 @@ const styles = StyleSheet.create({
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 6 },
   statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
-  myRoom: { borderRadius: 16, padding: 12, gap: 9, overflow: "hidden" },
-  roomTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  roomEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
-  roomTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
-  roomEditButton: { minHeight: 32, borderRadius: 16, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  roomEditText: { fontSize: 11, fontWeight: "900" },
-  roomWall: { height: 156, borderRadius: 12, position: "relative", overflow: "hidden" },
-  roomWindow: { position: "absolute", left: 18, top: 18, width: 64, height: 54, borderWidth: 3, borderRadius: 5, backgroundColor: "#DDF2FF", alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  windowLineVertical: { position: "absolute", top: 0, bottom: 0, width: 2 },
-  windowLineHorizontal: { position: "absolute", left: 0, right: 0, height: 2 },
-  windowView: { fontSize: 20 },
-  roomCharacter: { position: "absolute", alignSelf: "center", bottom: 28, fontSize: 48, zIndex: 3 },
-  roomPlant: { position: "absolute", right: 20, bottom: 20, zIndex: 2 },
-  roomItemEmoji: { fontSize: 35 },
-  roomSofa: { position: "absolute", left: 22, bottom: 20, width: 92, height: 42, borderRadius: 10, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 4, padding: 6, opacity: 0.9 },
-  sofaBack: { position: "absolute", left: 5, right: 5, top: -12, height: 26, borderRadius: 9, opacity: 0.88 },
-  sofaCushion: { width: 36, height: 21, borderRadius: 6, backgroundColor: "rgba(255,255,255,0.48)" },
-  roomLamp: { position: "absolute", right: 67, top: 19, fontSize: 28 },
-  roomRug: { position: "absolute", alignSelf: "center", bottom: 12, width: 130, height: 30, borderRadius: 65, opacity: 0.22, zIndex: 1 },
-  roomEmojiItem: { position: "absolute", zIndex: 2 },
-  roomBed: { left: 8, bottom: 17, fontSize: 42 },
-  roomDesk: { right: 10, bottom: 18, fontSize: 34 },
-  roomBookshelf: { left: 92, top: 14, fontSize: 29 },
-  roomTv: { right: 108, top: 13, fontSize: 30 },
-  roomTable: { alignSelf: "center", bottom: 10, fontSize: 27 },
-  roomClock: { right: 18, top: 12, fontSize: 25 },
-  roomPoster: { left: 18, top: 15, fontSize: 29 },
-  roomCat: { right: 48, bottom: 12, fontSize: 27 },
-  roomCactus: { right: 15, bottom: 12, fontSize: 29 },
-  roomTeddy: { left: 73, bottom: 10, fontSize: 27 },
-  roomFloor: { position: "absolute", left: 0, right: 0, bottom: 0, height: 35, backgroundColor: "rgba(139,100,69,0.14)" },
-  emptyRoomText: { position: "absolute", left: 12, right: 12, bottom: 15, color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
