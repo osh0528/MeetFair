@@ -239,14 +239,6 @@ export function MeetingScreen({ navigation, route }: Props) {
     latitude: candidate.latitude,
     longitude: candidate.longitude,
   }));
-  const firstCandidate = meeting.placeCandidates[0];
-  const candidateOverviewFocus: AddressSelection | null = firstCandidate
-    ? {
-        address: firstCandidate.address,
-        latitude: firstCandidate.latitude,
-        longitude: firstCandidate.longitude,
-      }
-    : null;
 
   async function vote(placeCandidateId: string) {
     try {
@@ -555,8 +547,6 @@ export function MeetingScreen({ navigation, route }: Props) {
                 </Text>
                 <View style={[styles.candidateOverviewMap, isWideLayout && styles.candidateOverviewMapWide]}>
                   <ExpandableKakaoAddressMap
-                    fitMarkers={false}
-                    focusTarget={candidateOverviewFocus}
                     interactive
                     mapMarkers={candidateOverviewMarkers}
                     query=""
