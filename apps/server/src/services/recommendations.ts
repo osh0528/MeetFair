@@ -227,9 +227,10 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const origins: Origin[] = meeting.participants.flatMap((participant) => {
-    const usesHome = participant.originType === "HOME";
-    const latitude = usesHome ? participant.user.homeLatitude : participant.originLatitude;
-    const longitude = usesHome ? participant.user.homeLongitude : participant.originLongitude;
+    // Recommendations always use the latest profile home address. Meeting-specific
+    // origins are intentionally excluded so changing a home address changes the result.
+    const latitude = participant.user.homeLatitude;
+    const longitude = participant.user.homeLongitude;
     return latitude != null && longitude != null
       ? [{
           userId: participant.userId,
