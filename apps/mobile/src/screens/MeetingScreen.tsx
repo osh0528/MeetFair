@@ -546,7 +546,7 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
             <View style={[styles.recommendationResultLayout, !isWideLayout && styles.recommendationResultLayoutNarrow]}>
-              <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn]}>
+              <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn, !isWideLayout && styles.recommendationColumnNarrow]}>
                 <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
                 <Text style={styles.candidateOverviewCaption}>
                   {candidateOverviewMarkers.length
@@ -563,7 +563,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   />
                 </View>
               </View>
-              <View style={styles.candidateStack}>
+              <View style={[styles.candidateStack, !isWideLayout && styles.recommendationColumnNarrow]}>
                 <SectionHeading title="장소 투표" action={meeting.voteCountdownEndsAt ? "1분 마감 진행 중" : undefined} />
                 {voteCountdownSeconds != null ? <Text style={styles.voteCountdown}>모두 투표했습니다. {voteCountdownSeconds}초 후 장소가 확정됩니다.</Text> : null}
               {meeting.placeCandidates.map((candidate) => {
@@ -773,9 +773,10 @@ const styles = StyleSheet.create({
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },
   recommendationResultLayout: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  recommendationResultLayoutNarrow: { flexDirection: "column" },
+  recommendationResultLayoutNarrow: { flexDirection: "column", alignItems: "stretch", width: "100%", gap: 20 },
   recommendationMapColumn: { flex: 1.2, minWidth: 0 },
   candidateStack: { flex: 0.8, minWidth: 0, gap: 10 },
+  recommendationColumnNarrow: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" },
   candidateStackItem: { width: "100%" },
   emptyCandidateCard: { minHeight: 100, alignItems: "center", justifyContent: "center" },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
@@ -803,7 +804,7 @@ const styles = StyleSheet.create({
   participantTimeChip: { borderRadius: 5, backgroundColor: colors.background, paddingHorizontal: 9, paddingVertical: 6 },
   participantTimeText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
   travelEstimateNotice: { color: colors.subtle, fontSize: 9, textAlign: "right" },
-  candidateOverviewSection: { gap: 6, marginTop: 2 },
+  candidateOverviewSection: { gap: 6, marginTop: 2, width: "100%" },
   candidateOverviewTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
   candidateOverviewCaption: { color: colors.muted, fontSize: 10 },
   candidateOverviewMap: { height: 230, borderRadius: 6, overflow: "hidden", borderWidth: 1, borderColor: colors.border },

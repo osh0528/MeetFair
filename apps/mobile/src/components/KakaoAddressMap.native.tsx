@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
@@ -36,6 +36,7 @@ export interface KakaoAddressMapProps {
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
+const EMPTY_MAP_MARKERS: MapDisplayMarker[] = [];
 
 function buildMapHtml(appKey: string, interactive: boolean): string {
   const head =
@@ -210,12 +211,16 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = EMPTY_MAP_MARKERS, fitMarkers = true }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
+  const webViewSource = useMemo(() => ({
+    html: buildMapHtml(appConfig.kakaoMapJsKey, interactive),
+    baseUrl: "https://localhost",
+  }), [interactive]);
 
   const runSearch = useCallback((searchQuery: string) => {
     webViewRef.current?.injectJavaScript(`window.meetfairSearch(${JSON.stringify(searchQuery)}); true;`);
@@ -304,7 +309,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
-        source={{ html: buildMapHtml(appConfig.kakaoMapJsKey, interactive), baseUrl: "https://localhost" }}
+        source={webViewSource}
         javaScriptEnabled
         domStorageEnabled
         onMessage={handleMessage}
