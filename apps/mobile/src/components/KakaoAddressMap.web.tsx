@@ -80,6 +80,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const displayMarkersRef = useRef<any[]>([]);
+  const hasFitMarkersRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -247,14 +248,16 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         yAnchor: 1,
       });
     });
-    if (fitMarkers && mapMarkers.length > 1) {
+    if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length > 1) {
       const bounds = new window.kakao.maps.LatLngBounds();
       for (const item of mapMarkers) {
         bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
       }
       mapRef.current.setBounds(bounds, 48, 48, 48, 48);
-    } else if (fitMarkers && mapMarkers.length === 1) {
+      hasFitMarkersRef.current = true;
+    } else if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length === 1) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(mapMarkers[0]!.latitude, mapMarkers[0]!.longitude));
+      hasFitMarkersRef.current = true;
     }
   }, [fitMarkers, mapMarkers, ready]);
 

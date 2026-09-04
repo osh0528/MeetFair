@@ -102,6 +102,23 @@ function AppNavigator() {
     if (routeName) setCurrentRoute(routeName);
   }
 
+  function openMeetingsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Home" }] });
+  }
+
+  function openFriendsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Friends" }] });
+  }
+
+  function openSettingsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Settings" }] });
+  }
+
+  function openUserPageTab() {
+    if (!user) return;
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "UserPage", params: { userId: user.id } }] });
+  }
+
   return (
     <NavigationContainer
       documentTitle={{ formatter: () => "MeetFair | 공평한 약속 장소와 실시간 모임 관리" }}
@@ -118,10 +135,10 @@ function AppNavigator() {
           <AppBottomNavigation
             layout="sidebar"
             currentRoute={currentRoute}
-            onMeetings={() => navigationRef.navigate("Home")}
-            onFriends={() => navigationRef.navigate("Friends")}
-            onSettings={() => navigationRef.navigate("Settings")}
-            onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
+            onMeetings={openMeetingsTab}
+            onFriends={openFriendsTab}
+            onSettings={openSettingsTab}
+            onUserPage={openUserPageTab}
           />
         ) : null}
         <View style={styles.navigatorShell}>
@@ -162,10 +179,10 @@ function AppNavigator() {
           <AppBottomNavigation
             layout="bottom"
             currentRoute={currentRoute}
-            onMeetings={() => navigationRef.navigate("Home")}
-            onFriends={() => navigationRef.navigate("Friends")}
-            onSettings={() => navigationRef.navigate("Settings")}
-            onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
+            onMeetings={openMeetingsTab}
+            onFriends={openFriendsTab}
+            onSettings={openSettingsTab}
+            onUserPage={openUserPageTab}
           />
         ) : null}
       </View>
