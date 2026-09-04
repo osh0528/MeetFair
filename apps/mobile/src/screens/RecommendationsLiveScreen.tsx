@@ -283,6 +283,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                 <Text style={styles.mapSubtitle}>추천 장소 2곳을 지도에서 간략하게 확인해 보세요.</Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
+                    fitMarkers={false}
                     query=""
                     requestId={0}
                     focusTarget={{ address: selected.address, latitude: selected.latitude, longitude: selected.longitude }}

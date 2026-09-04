@@ -555,6 +555,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                 </Text>
                 <View style={[styles.candidateOverviewMap, isWideLayout && styles.candidateOverviewMapWide]}>
                   <ExpandableKakaoAddressMap
+                    fitMarkers={false}
                     focusTarget={candidateOverviewFocus}
                     interactive
                     mapMarkers={candidateOverviewMarkers}
@@ -628,6 +629,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                 </View>
                 <View style={styles.placeMap}>
                   <ExpandableKakaoAddressMap
+                    fitMarkers={false}
                     focusTarget={placeFocusTarget}
                     interactive
                     mapMarkers={placeMapMarkers}
