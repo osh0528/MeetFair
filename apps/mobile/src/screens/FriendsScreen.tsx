@@ -213,8 +213,8 @@ export function FriendsScreen({ navigation }: Props) {
           </View>
         ) : null}
         <View style={[styles.quickActions, isMobile && styles.quickActionsMobile]}>
-          <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={styles.quickAction} />
-          <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={styles.quickAction} />
+          <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={[styles.quickAction, styles.directMessageAction]} />
+          <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={[styles.quickAction, styles.friendRequestAction]} />
         </View>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -287,8 +287,10 @@ const styles = StyleSheet.create({
   addRowMobile: { flexDirection: "column", alignItems: "stretch" },
   input: { flex: 1, height: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
   quickActions: { flexDirection: "row", gap: 8 },
-  quickActionsMobile: { flexDirection: "column", gap: 8 },
-  quickAction: { flex: 1, minHeight: 48, paddingHorizontal: 6, minWidth: 0 },
+  quickActionsMobile: { flexDirection: "row", gap: 8 },
+  quickAction: { minHeight: 48, paddingHorizontal: 6, minWidth: 0 },
+  directMessageAction: { flex: 4 },
+  friendRequestAction: { flex: 1 },
   suggestionList: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
   suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   suggestionProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },

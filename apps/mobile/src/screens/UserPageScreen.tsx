@@ -137,7 +137,9 @@ function EditableDecoration({
   latest.current = placement;
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => editable,
+    onStartShouldSetPanResponderCapture: () => editable,
     onMoveShouldSetPanResponder: () => editable,
+    onMoveShouldSetPanResponderCapture: () => editable,
     onPanResponderGrant: (event) => {
       const touches = event.nativeEvent.touches;
       const first = touches[0];
@@ -179,6 +181,7 @@ function EditableDecoration({
     },
     onPanResponderRelease: () => onChange(latest.current, true),
     onPanResponderTerminate: () => onChange(latest.current, true),
+    onPanResponderTerminationRequest: () => false,
   }), [editable, height, onChange, width]);
   return (
     <View
@@ -736,7 +739,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         ) : undefined}
       />
       {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
-      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!decorating}>
+      <ScrollView contentContainerStyle={styles.content}>
         {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
         {page ? (
           <View onLayout={(event) => setHouseSize(event.nativeEvent.layout)} style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
@@ -1065,7 +1068,7 @@ const styles = StyleSheet.create({
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   houseShell: { borderRadius: 24, padding: 14, gap: 12, overflow: "hidden", position: "relative" },
-  homeDecorLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
+  homeDecorLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden", zIndex: 4 },
   homeDecorItem: { position: "absolute", width: 52, height: 52, alignItems: "center", justifyContent: "center", zIndex: 3 },
   homeDecorItemEditing: { backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 26 },
   homeDecorEmoji: { fontSize: 38 },
