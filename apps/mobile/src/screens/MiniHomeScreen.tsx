@@ -1,12 +1,13 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState , useMemo} from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { avatarUrl } from "../services/avatar";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { UserSummary } from "@meetfair/shared";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MiniHome">;
@@ -41,6 +42,8 @@ type VisitsResponse = {
 };
 
 export function MiniHomeScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { userId, nickname } = route.params;
   const [home, setHome] = useState<MiniHomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +125,7 @@ export function MiniHomeScreen({ navigation, route }: Props) {
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
       {loading && !home ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={palette.primary} />
         </View>
       ) : error && !home ? (
         <View style={styles.center}>
@@ -189,7 +192,7 @@ export function MiniHomeScreen({ navigation, route }: Props) {
           ListEmptyComponent={
             visitsLoading ? (
               <View style={styles.centerInline}>
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator color={palette.primary} />
               </View>
             ) : (
               <Text style={styles.empty}>아직 방문자가 없습니다.</Text>
@@ -224,8 +227,12 @@ export function MiniHomeScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   centerInline: { alignItems: "center", justifyContent: "center", padding: 24 },
   content: { padding: 20, gap: 12, paddingBottom: 32 },
@@ -233,28 +240,32 @@ const styles = StyleSheet.create({
   profileCard: { gap: 12 },
   profileHeader: { flexDirection: "row", alignItems: "center", gap: 14 },
   profileCopy: { flex: 1, gap: 2 },
-  nickname: { color: colors.text, fontSize: 20, fontWeight: "900" },
-  accountId: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  nickname: { color: palette.text, fontSize: 20, fontWeight: "900" },
+  accountId: { color: palette.muted, fontSize: 13, fontWeight: "700" },
   emoji: { fontSize: 28, marginTop: 4 },
   themeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  themeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
-  themeText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  divider: { height: 1, backgroundColor: colors.border },
+  themeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.primary },
+  themeText: { color: palette.muted, fontSize: 12, fontWeight: "700" },
+  divider: { height: 1, backgroundColor: palette.border },
   infoRow: { gap: 4 },
-  infoLabel: { color: colors.muted, fontSize: 11, fontWeight: "800" },
-  infoValue: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  updatedAt: { color: colors.subtle, fontSize: 11, textAlign: "right" },
+  infoLabel: { color: palette.muted, fontSize: 11, fontWeight: "800" },
+  infoValue: { color: palette.text, fontSize: 14, lineHeight: 20, fontWeight: "700" },
+  updatedAt: { color: palette.subtle, fontSize: 11, textAlign: "right" },
   countCard: { gap: 6 },
-  countNote: { color: colors.subtle, fontSize: 11 },
+  countNote: { color: palette.subtle, fontSize: 11 },
   visitorHeader: { marginTop: 4 },
   visitCard: { padding: 14 },
   visitRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   visitCopy: { flex: 1, gap: 2 },
-  visitName: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  visitAccount: { color: colors.subtle, fontSize: 11, fontWeight: "700" },
-  visitTime: { color: colors.muted, fontSize: 11 },
-  empty: { color: colors.muted, fontSize: 12, textAlign: "center", padding: 16 },
-  error: { color: colors.red, fontSize: 13, textAlign: "center" },
-  success: { color: colors.green, fontSize: 13, fontWeight: "700", textAlign: "center" },
+  visitName: { color: palette.text, fontSize: 14, fontWeight: "900" },
+  visitAccount: { color: palette.subtle, fontSize: 11, fontWeight: "700" },
+  visitTime: { color: palette.muted, fontSize: 11 },
+  empty: { color: palette.muted, fontSize: 12, textAlign: "center", padding: 16 },
+  error: { color: palette.red, fontSize: 13, textAlign: "center" },
+  success: { color: palette.green, fontSize: 13, fontWeight: "700", textAlign: "center" },
   footerAction: { marginTop: 8 },
-});
+
+      }),
+    [palette],
+  );
+}

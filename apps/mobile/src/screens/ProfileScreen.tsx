@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,7 +10,8 @@ import { Avatar, Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { avatarUrl } from "../services/avatar";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "Profile">;
 const cropFrameSize = 260;
@@ -22,6 +23,8 @@ type PendingAvatar = {
 };
 
 export function ProfileScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const session = useSession();
   const [nickname, setNickname] = useState(session.user?.nickname ?? "");
   const [email, setEmail] = useState(session.user?.email ?? "");
@@ -352,6 +355,8 @@ export function ProfileScreen({ navigation }: Props) {
 }
 
 function AdjustButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.adjustButton, pressed && styles.adjustPressed]}>
       <Text style={styles.adjustText}>{label}</Text>
@@ -360,56 +365,66 @@ function AdjustButton({ label, onPress }: { label: string; onPress: () => void }
 }
 
 function Field({ label, ...props }: React.ComponentProps<typeof TextInput> & { label: string }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         {...props}
-        placeholderTextColor={colors.subtle}
+        placeholderTextColor={palette.subtle}
         style={[styles.input, props.editable === false && styles.readOnly]}
       />
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 14 },
   form: { gap: 10 },
-  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
-  label: { color: colors.text, fontSize: 13, fontWeight: "800", marginTop: 4 },
+  sectionTitle: { color: palette.text, fontSize: 17, fontWeight: "900" },
+  label: { color: palette.text, fontSize: 13, fontWeight: "800", marginTop: 4 },
   input: {
     height: 52,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     paddingHorizontal: 15,
-    color: colors.text,
+    color: palette.text,
   },
-  readOnly: { backgroundColor: colors.background, color: colors.muted },
-  note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  address: { color: colors.text, fontSize: 13, lineHeight: 20, fontWeight: "700" },
-  success: { color: colors.green, fontSize: 13, fontWeight: "700" },
-  error: { color: colors.red, fontSize: 13 },
-  dangerCard: { gap: 10, borderColor: colors.red },
-  dangerTitle: { color: colors.red, fontSize: 17, fontWeight: "900" },
+  readOnly: { backgroundColor: palette.background, color: palette.muted },
+  note: { color: palette.muted, fontSize: 12, lineHeight: 18 },
+  address: { color: palette.text, fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  success: { color: palette.green, fontSize: 13, fontWeight: "700" },
+  error: { color: palette.red, fontSize: 13 },
+  dangerCard: { gap: 10, borderColor: palette.red },
+  dangerTitle: { color: palette.red, fontSize: 17, fontWeight: "900" },
   avatarCard: { alignItems: "center", gap: 10 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(25,26,32,0.55)", justifyContent: "flex-end" },
-  editorSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, alignItems: "center", gap: 12 },
-  editorTitle: { color: colors.text, fontSize: 20, fontWeight: "900" },
-  editorNote: { color: colors.muted, fontSize: 12 },
-  cropFrame: { width: cropFrameSize, height: cropFrameSize, borderRadius: cropFrameSize / 2, overflow: "hidden", backgroundColor: colors.charcoal, borderWidth: 4, borderColor: colors.primary },
+  editorSheet: { backgroundColor: palette.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, alignItems: "center", gap: 12 },
+  editorTitle: { color: palette.text, fontSize: 20, fontWeight: "900" },
+  editorNote: { color: palette.muted, fontSize: 12 },
+  cropFrame: { width: cropFrameSize, height: cropFrameSize, borderRadius: cropFrameSize / 2, overflow: "hidden", backgroundColor: palette.charcoal, borderWidth: 4, borderColor: palette.primary },
   cropGuideVertical: { position: "absolute", top: 0, bottom: 0, left: "50%", width: 1, backgroundColor: "rgba(255,255,255,0.45)" },
   cropGuideHorizontal: { position: "absolute", left: 0, right: 0, top: "50%", height: 1, backgroundColor: "rgba(255,255,255,0.45)" },
   zoomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  zoomText: { minWidth: 92, textAlign: "center", color: colors.text, fontSize: 13, fontWeight: "800" },
+  zoomText: { minWidth: 92, textAlign: "center", color: palette.text, fontSize: 13, fontWeight: "800" },
   directionPad: { alignItems: "center", gap: 6 },
   directionRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  adjustButton: { width: 44, height: 40, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  adjustButton: { width: 44, height: 40, borderRadius: 13, backgroundColor: palette.primarySoft, alignItems: "center", justifyContent: "center" },
   adjustPressed: { opacity: 0.7 },
-  adjustText: { color: colors.primary, fontSize: 22, fontWeight: "900" },
-  resetButton: { width: 72, height: 40, borderRadius: 13, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
-  resetText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  adjustText: { color: palette.primary, fontSize: 22, fontWeight: "900" },
+  resetButton: { width: 72, height: 40, borderRadius: 13, backgroundColor: palette.background, alignItems: "center", justifyContent: "center" },
+  resetText: { color: palette.text, fontSize: 12, fontWeight: "800" },
   editorActions: { alignSelf: "stretch", gap: 8, marginTop: 2 },
-});
+
+      }),
+    [palette],
+  );
+}

@@ -1,15 +1,18 @@
 import type { PublicProfileSearchResult } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "MiniHomeSearch">;
 
 export function MiniHomeSearchScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PublicProfileSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,12 +44,12 @@ export function MiniHomeSearchScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.searchBox}>
           <Text style={styles.searchIcon}>⌕</Text>
-          <TextInput autoCapitalize="none" autoFocus onChangeText={setQuery} placeholder="닉네임 또는 ID 검색" placeholderTextColor={colors.subtle} style={styles.input} value={query} />
+          <TextInput autoCapitalize="none" autoFocus onChangeText={setQuery} placeholder="닉네임 또는 ID 검색" placeholderTextColor={palette.subtle} style={styles.input} value={query} />
           {query ? <Pressable onPress={() => setQuery("")}><Text style={styles.clear}>×</Text></Pressable> : null}
         </View>
         <Text style={styles.notice}>친구가 아니어도 공개 미니홈피를 검색해서 볼 수 있어요.</Text>
         <Text style={styles.resultTitle}>{query ? "검색 결과" : "추천 미니홈피"} <Text style={styles.count}>{results.length}명</Text></Text>
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {loading ? <ActivityIndicator color={palette.primary} /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {results.map((user) => (
           <Pressable key={user.id} onPress={() => navigation.navigate("UserPage", { userId: user.id })}>
@@ -67,23 +70,31 @@ export function MiniHomeSearchScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 14 },
-  searchBox: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  searchIcon: { color: colors.muted, fontSize: 24, lineHeight: 24 },
-  input: { flex: 1, color: colors.text, fontSize: 14 },
-  clear: { color: colors.muted, fontSize: 24, lineHeight: 24 },
-  notice: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  resultTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  count: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  searchBox: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface },
+  searchIcon: { color: palette.muted, fontSize: 24, lineHeight: 24 },
+  input: { flex: 1, color: palette.text, fontSize: 14 },
+  clear: { color: palette.muted, fontSize: 24, lineHeight: 24 },
+  notice: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  resultTitle: { color: palette.text, fontSize: 16, fontWeight: "900" },
+  count: { color: palette.muted, fontSize: 12, fontWeight: "700" },
   resultCard: { flexDirection: "row", alignItems: "center", gap: 12 },
   copy: { flex: 1, gap: 4 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  nickname: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  accountId: { color: colors.muted, fontSize: 11 },
-  bio: { color: colors.muted, fontSize: 12 },
-  link: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 2 },
-  empty: { color: colors.muted, textAlign: "center", paddingVertical: 40 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  nickname: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  accountId: { color: palette.muted, fontSize: 11 },
+  bio: { color: palette.muted, fontSize: 12 },
+  link: { color: palette.primary, fontSize: 11, fontWeight: "900", marginTop: 2 },
+  empty: { color: palette.muted, textAlign: "center", paddingVertical: 40 },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

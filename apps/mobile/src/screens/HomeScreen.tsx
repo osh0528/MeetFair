@@ -1,7 +1,7 @@
 import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary, NotificationSummary } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState , useMemo} from "react";
 import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -9,7 +9,8 @@ import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 const MEETING_HIGHLIGHT_WINDOW_MS = 60 * 60_000;
@@ -29,6 +30,8 @@ function ScheduledMeetingCard({
   meeting: MeetingSummary;
   onPress: () => void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const [now, setNow] = useState(Date.now());
   const pulse = useRef(new Animated.Value(0)).current;
   const timeUntilMeeting = new Date(meeting.scheduledAt).getTime() - now;
@@ -94,6 +97,8 @@ function ScheduledMeetingCard({
 }
 
 export function HomeScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { accessToken, user } = useSession();
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
   const [invitations, setInvitations] = useState<MeetingInvitationSummary[]>([]);
@@ -211,7 +216,7 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {loading ? <ActivityIndicator color={palette.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
         <View style={styles.meetingDashboard}>
@@ -281,18 +286,22 @@ export function HomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   header: { height: 64, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
-  brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
+  brandText: { color: palette.text, fontSize: 19, fontWeight: "900" },
   notificationButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center", position: "relative" },
   bell: { fontSize: 25 },
-  notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
-  notificationBadgeText: { color: colors.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
+  notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: palette.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: palette.background },
+  notificationBadgeText: { color: palette.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
   content: { padding: 20, gap: 14, paddingBottom: 28 },
-  hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
-  accountId: { color: colors.primary, fontWeight: "800", marginTop: -8 },
+  hello: { color: palette.text, fontSize: 26, fontWeight: "900" },
+  accountId: { color: palette.primary, fontWeight: "800", marginTop: -8 },
   card: { gap: 9 },
   meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
@@ -312,7 +321,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "#FF3B6B",
-    backgroundColor: colors.surface,
+    backgroundColor: palette.surface,
     shadowColor: "#FF3B6B",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -335,13 +344,17 @@ const styles = StyleSheet.create({
   soonSparkle: { color: "#FFE36E", fontSize: 17, fontWeight: "900" },
   soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: "#FFD7E1" },
   soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: "#FF3B6B" },
-  startingSoonTitle: { color: colors.text, fontSize: 17 },
-  startingSoonMeta: { color: colors.red, fontWeight: "800" },
-  callCard: { gap: 9, borderColor: colors.red },
+  startingSoonTitle: { color: palette.text, fontSize: 17 },
+  startingSoonMeta: { color: palette.red, fontWeight: "800" },
+  callCard: { gap: 9, borderColor: palette.red },
   callCopy: { flex: 1, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  empty: { color: colors.muted, fontSize: 12 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  cardTitle: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  meta: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  empty: { color: palette.muted, fontSize: 12 },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

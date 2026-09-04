@@ -1,12 +1,13 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Room, RoomEvent, Track, type LocalTrack, type RemoteTrack } from "livekit-client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState , useMemo} from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { apiRequest, ApiError } from "../services/api";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
 interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string }
@@ -20,6 +21,8 @@ function formatRemainingTime(remainingMs: number) {
 }
 
 function BrowserTrack({ entry }: { entry: TrackEntry }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const containerRef = useRef<View>(null);
 
   useEffect(() => {
@@ -47,6 +50,8 @@ function BrowserTrack({ entry }: { entry: TrackEntry }) {
 }
 
 export function VideoCallScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { callId, meetingId } = route.params;
   const [room, setRoom] = useState<Room | null>(null);
   const [tracks, setTracks] = useState<TrackEntry[]>([]);
@@ -298,6 +303,8 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   label: string;
   onPress(): void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <Pressable
       disabled={disabled}
@@ -314,27 +321,35 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.charcoal },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.charcoal },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
-  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
-  statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
+  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: palette.text },
+  statusText: { color: palette.surface, fontSize: 12, fontWeight: "800" },
   grid: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", padding: 6 },
-  videoTile: { width: "48%", height: 280, margin: "1%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
+  videoTile: { width: "48%", height: 280, margin: "1%", borderRadius: 16, overflow: "hidden", backgroundColor: palette.text },
   video: { flex: 1 },
   hiddenTrack: { width: 0, height: 0, overflow: "hidden" },
-  participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  waiting: { color: colors.surface, textAlign: "center", padding: 24 },
-  error: { color: colors.red, textAlign: "center", padding: 8 },
-  recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  participantName: { position: "absolute", left: 10, bottom: 9, color: palette.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  waiting: { color: palette.surface, textAlign: "center", padding: 24 },
+  error: { color: palette.red, textAlign: "center", padding: 8 },
+  recordingNotice: { color: palette.surface, backgroundColor: palette.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingPendingNotice: { color: palette.surface, backgroundColor: palette.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingDisabledNotice: { color: palette.surface, backgroundColor: palette.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
-  controls: { flexDirection: "row", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
-  controlButton: { minHeight: 44, minWidth: "28%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  dangerButton: { backgroundColor: colors.red },
+  controls: { flexDirection: "row", justifyContent: "center", gap: 8, padding: 12, backgroundColor: palette.text },
+  controlButton: { minHeight: 44, minWidth: "28%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.surface },
+  dangerButton: { backgroundColor: palette.red },
   controlPressed: { opacity: 0.75 },
   controlDisabled: { opacity: 0.4 },
-  controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  dangerText: { color: colors.surface },
-});
+  controlText: { color: palette.text, fontSize: 12, fontWeight: "900" },
+  dangerText: { color: palette.surface },
+
+      }),
+    [palette],
+  );
+}

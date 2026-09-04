@@ -23,6 +23,8 @@ const palettes = {
   },
 };
 
+export type Palette = (typeof palettes)[ThemeMode];
+
 interface Value {
   mode: ThemeMode;
   setMode(mode: ThemeMode): Promise<void>;
@@ -64,4 +66,9 @@ export function useAppTheme() {
   const value = useContext(Context);
   if (!value) throw new Error("useAppTheme must be used inside ThemeProvider");
   return value;
+}
+
+export function useAppColors(): Palette {
+  const { mode } = useAppTheme();
+  return palettes[mode];
 }

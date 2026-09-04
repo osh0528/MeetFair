@@ -7,7 +7,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+import { useMemo } from "react";
+
 
 export function Card({
   children,
@@ -16,6 +18,8 @@ export function Card({
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
@@ -30,6 +34,8 @@ export function ScreenHeader({
   onBack?: () => void;
   right?: ReactNode;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       {onBack ? (
@@ -61,6 +67,8 @@ export function SectionHeading({
   title: string;
   action?: string;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeading}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -69,13 +77,17 @@ export function SectionHeading({
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: palette.surface,
     borderRadius: 22,
     padding: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: palette.border,
   },
   header: {
     minHeight: 64,
@@ -88,22 +100,26 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: palette.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: palette.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 32, marginTop: -2 },
+  backText: { color: palette.text, fontSize: 30, lineHeight: 32, marginTop: -2 },
   backSpacer: { width: 40 },
   headerCopy: { flex: 1, alignItems: "center" },
-  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "800" },
-  headerSubtitle: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  headerTitle: { color: palette.text, fontSize: 17, fontWeight: "800" },
+  headerSubtitle: { color: palette.muted, fontSize: 11, marginTop: 2 },
   sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: "900" },
-  sectionAction: { color: colors.primary, fontSize: 13, fontWeight: "800" },
-});
+  sectionTitle: { color: palette.text, fontSize: 19, fontWeight: "900" },
+  sectionAction: { color: palette.primary, fontSize: 13, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

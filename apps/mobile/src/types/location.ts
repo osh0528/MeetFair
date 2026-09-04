@@ -11,5 +11,5 @@ export interface AddressCandidate extends AddressSelection {
 export interface MapDisplayMarker extends AddressSelection {
   id: string;
   label: string;
-  kind: "HOME";
+  kind: "HOME" | "LIVE" | "PLACE";
 }

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NaverMapMarkerOverlay, NaverMapView } from "@mj-studio/react-native-naver-map";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
+import type { MapDisplayMarker } from "../types/location";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
@@ -11,7 +12,8 @@ import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 const TASK_NAME = "meetfair-meeting-location";
 const TASK_STATE_KEY = "meetfair.location-task";
@@ -61,29 +63,9 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
 
-function LiveLocationMarker({ item, mine }: { item: LocationItem; mine: boolean }) {
-  return (
-    <NaverMapMarkerOverlay width={110} height={52} anchor={{ x: 0.5, y: 0.35 }} latitude={item.latitude!} longitude={item.longitude!}>
-      <View collapsable={false} style={styles.liveMarker}>
-        <View style={styles.liveDot} />
-        <Text numberOfLines={1} style={styles.liveLabel}>{mine ? `${item.nickname} (나)` : item.nickname}</Text>
-      </View>
-    </NaverMapMarkerOverlay>
-  );
-}
-
-function HomeLocationMarker({ item }: { item: LocationItem }) {
-  return (
-    <NaverMapMarkerOverlay width={110} height={58} anchor={{ x: 0.5, y: 0.4 }} latitude={item.homeLatitude!} longitude={item.homeLongitude!}>
-      <View collapsable={false} style={styles.homeMarker}>
-        <Text style={styles.homeIcon}>🏠</Text>
-        <Text numberOfLines={1} style={styles.homeLabel}>{item.nickname}</Text>
-      </View>
-    </NaverMapMarkerOverlay>
-  );
-}
-
 export function TrackingScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const meetingId = route.params.meetingId;
   const { accessToken, user } = useSession();
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
@@ -137,10 +119,51 @@ export function TrackingScreen({ navigation, route }: Props) {
     };
   }, [accessToken, meetingId]);
 
-  const mapCenter = useMemo(() => {
-    const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
-    return meeting?.confirmedPlace ?? (mine ? { latitude: mine.latitude!, longitude: mine.longitude! } : { latitude: 37.5665, longitude: 126.978 });
+  const mapMarkers = useMemo<MapDisplayMarker[]>(() => {
+    const markers: MapDisplayMarker[] = [];
+    if (meeting?.confirmedPlace) {
+      markers.push({
+        id: `place:${meeting.id}`,
+        label: `약속 장소 · ${meeting.confirmedPlace.name}`,
+        address: meeting.confirmedPlace.name,
+        latitude: meeting.confirmedPlace.latitude,
+        longitude: meeting.confirmedPlace.longitude,
+        kind: "PLACE",
+      });
+    }
+    for (const item of locations) {
+      if (item.homeLatitude != null && item.homeLongitude != null) {
+        markers.push({
+          id: `home:${item.userId}`,
+          label: item.nickname,
+          address: "",
+          latitude: item.homeLatitude,
+          longitude: item.homeLongitude,
+          kind: "HOME",
+        });
+      }
+      if (item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null) {
+        markers.push({
+          id: `live:${item.userId}`,
+          label: item.userId === user?.id ? `${item.nickname} (나)` : item.nickname,
+          address: "",
+          latitude: item.latitude,
+          longitude: item.longitude,
+          kind: "LIVE",
+        });
+      }
+    }
+    return markers;
   }, [locations, meeting, user?.id]);
+
+  const focusTarget = useMemo(() => {
+    if (!meeting?.confirmedPlace) return null;
+    return {
+      address: meeting.confirmedPlace.name,
+      latitude: meeting.confirmedPlace.latitude,
+      longitude: meeting.confirmedPlace.longitude,
+    };
+  }, [meeting]);
 
   async function startSharing() {
     if (!accessToken) return;
@@ -221,25 +244,12 @@ export function TrackingScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
       {meeting ? (
-        <NaverMapView
-          style={styles.map}
-          initialRegion={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
-          isShowLocationButton
-        >
-          {meeting.confirmedPlace ? (
-            <NaverMapMarkerOverlay
-              latitude={meeting.confirmedPlace.latitude}
-              longitude={meeting.confirmedPlace.longitude}
-              caption={{ text: `약속 장소 · ${meeting.confirmedPlace.name}` }}
-            />
-          ) : null}
-          {locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null).map((item) => (
-            <HomeLocationMarker item={item} key={`home:${item.userId}`} />
-          ))}
-          {locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).map((item) => (
-            <LiveLocationMarker item={item} key={`live:${item.userId}`} mine={item.userId === user?.id} />
-          ))}
-        </NaverMapView>
+        <KakaoAddressMap
+          query=""
+          requestId={0}
+          focusTarget={focusTarget}
+          mapMarkers={mapMarkers}
+        />
       ) : (
         <View style={[styles.map, styles.mapLoading]}>
           <Text style={styles.meta}>지도를 준비하고 있습니다.</Text>
@@ -266,22 +276,24 @@ export function TrackingScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   map: { flex: 1, minHeight: 300 },
-  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
-  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
+  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: palette.primarySoft },
+  panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 18, fontWeight: "900" },
   person: { padding: 10 },
-  personName: { color: colors.text, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  personName: { color: palette.text, fontWeight: "800" },
+  meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
   actions: { gap: 8 },
-  liveMarker: { width: 110, alignItems: "center", gap: 3 },
-  liveDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#1677FF", borderWidth: 4, borderColor: "#FFFFFF", shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 5 },
-  liveLabel: { maxWidth: 105, borderRadius: 10, overflow: "hidden", backgroundColor: "#1677FF", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
-  homeMarker: { width: 110, alignItems: "center", gap: 1 },
-  homeIcon: { fontSize: 25 },
-  homeLabel: { maxWidth: 105, borderRadius: 10, overflow: "hidden", backgroundColor: "#303030", color: "#FFFFFF", paddingHorizontal: 7, paddingVertical: 3, fontSize: 11, fontWeight: "900" },
-});
+
+      }),
+    [palette],
+  );
+}

@@ -1,5 +1,5 @@
 import type { MeetingPostSummary } from "@meetfair/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState , useMemo} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,8 @@ import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "MeetingBoard">;
 
@@ -23,6 +24,8 @@ type PostsResponse = { posts: MeetingPostSummary[]; nextCursor: string | null };
 type PostResponse = { post: MeetingPostSummary };
 
 export function MeetingBoardScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { meetingId, meetingTitle } = route.params;
   const { user } = useSession();
 
@@ -150,7 +153,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
               value={title}
               onChangeText={setTitle}
               placeholder="제목"
-              placeholderTextColor={colors.subtle}
+              placeholderTextColor={palette.subtle}
               style={styles.titleInput}
               maxLength={100}
             />
@@ -159,7 +162,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
               value={content}
               onChangeText={setContent}
               placeholder="내용"
-              placeholderTextColor={colors.subtle}
+              placeholderTextColor={palette.subtle}
               style={styles.contentInput}
               maxLength={5000}
               multiline
@@ -186,7 +189,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
       ) : null}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={palette.primary} />
         </View>
       ) : (
         <FlatList
@@ -205,7 +208,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.footerLoading}>
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator color={palette.primary} />
               </View>
             ) : null
           }
@@ -253,30 +256,34 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  error: { color: colors.red, paddingHorizontal: 16, paddingTop: 8, fontSize: 12 },
-  meta: { color: colors.subtle, fontSize: 13, textAlign: "center" },
+  error: { color: palette.red, paddingHorizontal: 16, paddingTop: 8, fontSize: 12 },
+  meta: { color: palette.subtle, fontSize: 13, textAlign: "center" },
   headerButton: {
     paddingHorizontal: 14,
     height: 36,
     borderRadius: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: palette.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerButtonText: { color: colors.surface, fontSize: 13, fontWeight: "800" },
+  headerButtonText: { color: palette.surface, fontSize: 13, fontWeight: "800" },
   createBox: { paddingHorizontal: 16, paddingTop: 8 },
   createCard: { gap: 10, padding: 16 },
-  createLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  createLabel: { color: palette.text, fontSize: 13, fontWeight: "800" },
   titleInput: {
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    color: palette.text,
     paddingHorizontal: 12,
   },
   contentInput: {
@@ -284,9 +291,9 @@ const styles = StyleSheet.create({
     maxHeight: 140,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    color: palette.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -294,18 +301,22 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, gap: 12 },
   card: { padding: 14, gap: 8 },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  cardTitle: { flex: 1, fontSize: 15, fontWeight: "800", color: colors.text },
-  preview: { fontSize: 13, color: colors.muted, lineHeight: 18 },
+  cardTitle: { flex: 1, fontSize: 15, fontWeight: "800", color: palette.text },
+  preview: { fontSize: 13, color: palette.muted, lineHeight: 18 },
   cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  time: { fontSize: 11, color: colors.subtle },
+  time: { fontSize: 11, color: palette.subtle },
   deleteButton: {
     paddingHorizontal: 10,
     height: 30,
     borderRadius: 10,
-    backgroundColor: colors.redSoft,
+    backgroundColor: palette.redSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  deleteButtonText: { color: colors.red, fontSize: 12, fontWeight: "800" },
+  deleteButtonText: { color: palette.red, fontSize: 12, fontWeight: "800" },
   footerLoading: { paddingVertical: 16, alignItems: "center" },
-});
+
+      }),
+    [palette],
+  );
+}

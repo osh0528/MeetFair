@@ -1,16 +1,19 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, LogoMark } from "../components/ui";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export function LoginScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const session = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +41,7 @@ export function LoginScreen({ navigation }: Props) {
   }
 
   if (session.loading) {
-    return <SafeAreaView style={styles.center}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
+    return <SafeAreaView style={styles.center}><ActivityIndicator color={palette.primary} /></SafeAreaView>;
   }
   if (session.user) {
     navigation.replace("Home");
@@ -56,7 +59,7 @@ export function LoginScreen({ navigation }: Props) {
           keyboardType="email-address"
           onChangeText={setEmail}
           placeholder="이메일"
-          placeholderTextColor={colors.subtle}
+          placeholderTextColor={palette.subtle}
           style={styles.input}
           value={email}
         />
@@ -64,7 +67,7 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           onChangeText={setPassword}
           placeholder="비밀번호"
-          placeholderTextColor={colors.subtle}
+          placeholderTextColor={palette.subtle}
           secureTextEntry
           style={styles.input}
           value={password}
@@ -100,19 +103,27 @@ export function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background, justifyContent: "center" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background, justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: palette.background },
   container: { padding: 24, gap: 14 },
-  brand: { color: colors.primary, fontSize: 17, fontWeight: "900" },
-  title: { color: colors.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
-  input: { height: 54, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },
+  brand: { color: palette.primary, fontSize: 17, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
+  input: { height: 54, borderRadius: 16, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 16, color: palette.text },
   rememberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
-  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
-  checkmark: { color: colors.surface, fontSize: 14, fontWeight: "900" },
+  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
+  checkboxChecked: { borderColor: palette.primary, backgroundColor: palette.primary },
+  checkmark: { color: palette.surface, fontSize: 14, fontWeight: "900" },
   rememberCopy: { flex: 1, gap: 2 },
-  rememberLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  rememberHelp: { color: colors.muted, fontSize: 10, lineHeight: 14 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  rememberLabel: { color: palette.text, fontSize: 13, fontWeight: "800" },
+  rememberHelp: { color: palette.muted, fontSize: 10, lineHeight: 14 },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

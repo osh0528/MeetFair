@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -7,12 +7,14 @@ import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { isPokeSoundEnabled, setPokeSoundEnabled } from "../services/poke-sound";
-import { colors } from "../theme/colors";
-import { useAppTheme } from "../services/theme";
+
+import { useAppTheme, useAppColors } from "../services/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export function SettingsScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const session = useSession();
   const { mode, setMode } = useAppTheme();
   const [location, setLocation] = useState(Boolean(session.user?.shareExactLocationWithFriends));
@@ -101,8 +103,8 @@ export function SettingsScreen({ navigation }: Props) {
         <Card style={styles.formCard}>
           <Text style={styles.title}>찌르기 방해 금지 시간</Text>
           <Text style={styles.note}>이 시간에는 일반 찌르기 푸시를 모아서 나중에 알려줍니다.</Text>
-          <TextInput onChangeText={setQuietStart} placeholder="23:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietStart} />
-          <TextInput onChangeText={setQuietEnd} placeholder="08:00" placeholderTextColor={colors.subtle} style={styles.input} value={quietEnd} />
+          <TextInput onChangeText={setQuietStart} placeholder="23:00" placeholderTextColor={palette.subtle} style={styles.input} value={quietStart} />
+          <TextInput onChangeText={setQuietEnd} placeholder="08:00" placeholderTextColor={palette.subtle} style={styles.input} value={quietEnd} />
           <Button disabled={saving} label={saving ? "저장 중..." : "방해 금지 시간 저장"} onPress={saveQuietTime} variant="soft" />
         </Card>
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -112,8 +114,12 @@ export function SettingsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 12 },
   card: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   themeCard: { gap: 12 },
@@ -123,20 +129,24 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: palette.border,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: palette.background,
   },
-  themeOptionSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  themeOptionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
-  themeOptionTextSelected: { color: colors.surface },
+  themeOptionSelected: { backgroundColor: palette.primary, borderColor: palette.primary },
+  themeOptionText: { color: palette.muted, fontSize: 12, fontWeight: "800" },
+  themeOptionTextSelected: { color: palette.surface },
   formCard: { gap: 9 },
-  input: { height: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, color: colors.text },
-  title: { flex: 1, color: colors.text, fontWeight: "900", paddingRight: 10 },
-  note: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-});
+  input: { height: 48, borderWidth: 1, borderColor: palette.border, borderRadius: 14, paddingHorizontal: 14, color: palette.text },
+  title: { flex: 1, color: palette.text, fontWeight: "900", paddingRight: 10 },
+  note: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+
+      }),
+    [palette],
+  );
+}
 
 function minutesToTime(minutes: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;

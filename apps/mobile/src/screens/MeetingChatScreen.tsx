@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState , useMemo} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,8 @@ import { Card, ScreenHeader } from "../components/ui";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { MeetingChatMessageSummary } from "@meetfair/shared";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MeetingChat">;
@@ -32,6 +33,8 @@ type MeetingParticipantsResponse = {
 };
 
 export function MeetingChatScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { meetingId, meetingTitle } = route.params;
   const { accessToken, user } = useSession();
 
@@ -220,7 +223,7 @@ export function MeetingChatScreen({ navigation, route }: Props) {
               value={content}
               onChangeText={setContent}
               placeholder="메시지 입력"
-              placeholderTextColor={colors.subtle}
+              placeholderTextColor={palette.subtle}
               style={styles.input}
               maxLength={2000}
               multiline={Platform.OS !== "web"}
@@ -243,58 +246,66 @@ export function MeetingChatScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  error: { color: colors.red, paddingHorizontal: 16, paddingTop: 8 },
-  meta: { color: colors.subtle, fontSize: 14, textAlign: "center" },
+  error: { color: palette.red, paddingHorizontal: 16, paddingTop: 8 },
+  meta: { color: palette.subtle, fontSize: 14, textAlign: "center" },
   threadContainer: { flex: 1 },
   messagesContent: { padding: 16, gap: 8 },
   bubbleRow: { flexDirection: "row", marginVertical: 4 },
   bubbleRowMe: { justifyContent: "flex-end" },
   bubbleRowOther: { justifyContent: "flex-start" },
   bubble: { maxWidth: "78%", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
-  bubbleMe: { backgroundColor: colors.primary },
-  bubbleOther: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  videoBubble: { maxWidth: "90%", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  bubbleMe: { backgroundColor: palette.primary },
+  bubbleOther: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
+  videoBubble: { maxWidth: "90%", backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
   bubbleText: { fontSize: 14, lineHeight: 18 },
-  bubbleTextMe: { color: colors.surface },
-  bubbleTextOther: { color: colors.text },
-  bubbleTime: { fontSize: 10, color: colors.subtle },
+  bubbleTextMe: { color: palette.surface },
+  bubbleTextOther: { color: palette.text },
+  bubbleTime: { fontSize: 10, color: palette.subtle },
   videoCard: { minWidth: 230, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
-  videoIcon: { color: colors.text, fontSize: 24 },
+  videoIcon: { color: palette.text, fontSize: 24 },
   videoTextGroup: { flex: 1, gap: 2 },
-  videoTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  videoSubtitle: { color: colors.subtle, fontSize: 11 },
+  videoTitle: { color: palette.text, fontSize: 14, fontWeight: "800" },
+  videoSubtitle: { color: palette.subtle, fontSize: 11 },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
+    borderTopColor: palette.border,
+    backgroundColor: palette.surface,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: palette.border,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: colors.text,
-    backgroundColor: colors.background,
+    color: palette.text,
+    backgroundColor: palette.background,
   },
   sendButton: {
     height: 44,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: palette.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   sendButtonDisabled: { opacity: 0.45 },
-  sendButtonText: { color: colors.surface, fontWeight: "800" },
-});
+  sendButtonText: { color: palette.surface, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

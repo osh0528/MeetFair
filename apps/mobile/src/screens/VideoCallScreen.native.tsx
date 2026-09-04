@@ -12,13 +12,14 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
 import { requestRecordingPermissionsAsync } from "expo-audio";
 import { ConnectionState, Track } from "livekit-client";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { apiRequest, ApiError } from "../services/api";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 registerGlobals();
 
@@ -29,6 +30,8 @@ interface SwitchableMediaStreamTrack {
 }
 
 function ParticipantGrid() {
+  const palette = useAppColors();
+  const styles = useStyles();
   const tracks = useTracks([Track.Source.Camera]);
   return (
     <FlatList
@@ -66,6 +69,8 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   onLeave(): void;
   onError(message: string): void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const {
     cameraTrack,
     isCameraEnabled,
@@ -130,6 +135,8 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   label: string;
   onPress(): void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -152,6 +159,8 @@ function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
   onError(message: string): void;
   onLeave(): void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const connectionState = useConnectionState();
   const participants = useParticipants();
   return (
@@ -167,6 +176,8 @@ function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
 }
 
 export function VideoCallScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { callId, meetingId } = route.params;
   const [credentials, setCredentials] = useState<CallToken | null>(null);
   const [message, setMessage] = useState("통화 연결 준비 중...");
@@ -286,26 +297,34 @@ export function VideoCallScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.charcoal },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.charcoal },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   grid: { flexGrow: 1, padding: 6 },
-  videoTile: { flex: 1, minWidth: "47%", height: 280, margin: 4, borderRadius: 16, overflow: "hidden", backgroundColor: colors.text },
+  videoTile: { flex: 1, minWidth: "47%", height: 280, margin: 4, borderRadius: 16, overflow: "hidden", backgroundColor: palette.text },
   video: { flex: 1 },
-  participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  waiting: { color: colors.surface, textAlign: "center", padding: 24 },
-  error: { color: colors.red, textAlign: "center", padding: 8 },
-  recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  participantName: { position: "absolute", left: 10, bottom: 9, color: palette.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  waiting: { color: palette.surface, textAlign: "center", padding: 24 },
+  error: { color: palette.red, textAlign: "center", padding: 8 },
+  recordingNotice: { color: palette.surface, backgroundColor: palette.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingPendingNotice: { color: palette.surface, backgroundColor: palette.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingDisabledNotice: { color: palette.surface, backgroundColor: palette.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
-  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
-  statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
-  controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
-  controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  dangerButton: { backgroundColor: colors.red },
+  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: palette.text },
+  statusText: { color: palette.surface, fontSize: 12, fontWeight: "800" },
+  controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: palette.text },
+  controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.surface },
+  dangerButton: { backgroundColor: palette.red },
   controlPressed: { opacity: 0.75 },
   controlDisabled: { opacity: 0.4 },
-  controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  dangerText: { color: colors.surface },
-});
+  controlText: { color: palette.text, fontSize: 12, fontWeight: "900" },
+  dangerText: { color: palette.surface },
+
+      }),
+    [palette],
+  );
+}

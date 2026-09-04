@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState , useMemo} from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -7,7 +7,8 @@ import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import { appConfig } from "../config/env";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
@@ -58,6 +59,8 @@ function loadKakaoMaps() {
 }
 
 function LocationMap({ locations, meeting }: { locations: LocationItem[]; meeting: MeetingLocationDetail | null }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -137,6 +140,8 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
 }
 
 export function TrackingScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const meetingId = route.params.meetingId;
   const { accessToken, user } = useSession();
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
@@ -257,23 +262,31 @@ export function TrackingScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  locationMap: { flex: 1, minHeight: 300, backgroundColor: colors.primarySoft },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
+  locationMap: { flex: 1, minHeight: 300, backgroundColor: palette.primarySoft },
   map: { flex: 1, minHeight: 300 },
-  mapError: { color: colors.red, textAlign: "center", padding: 14 },
-  mapHint: { color: colors.muted, textAlign: "center", padding: 14 },
+  mapError: { color: palette.red, textAlign: "center", padding: 14 },
+  mapHint: { color: palette.muted, textAlign: "center", padding: 14 },
   legacyMapPlaceholder: { display: "none" },
-  mapIcon: { color: colors.primary, fontSize: 52, fontWeight: "900" },
-  mapTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
-  mapBody: { color: colors.muted, textAlign: "center", marginTop: 8 },
-  place: { color: colors.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
-  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
+  mapIcon: { color: palette.primary, fontSize: 52, fontWeight: "900" },
+  mapTitle: { color: palette.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
+  mapBody: { color: palette.muted, textAlign: "center", marginTop: 8 },
+  place: { color: palette.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
+  panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 18, fontWeight: "900" },
   person: { padding: 10 },
-  personName: { color: colors.text, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  personName: { color: palette.text, fontWeight: "800" },
+  meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
   actions: { gap: 8 },
-});
+
+      }),
+    [palette],
+  );
+}

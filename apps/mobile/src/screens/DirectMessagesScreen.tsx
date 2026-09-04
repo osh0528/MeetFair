@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState , useMemo} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,7 +18,8 @@ import { Avatar, Card, ScreenHeader } from "../components/ui";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type {
   DirectConversationSummary,
   DirectMessageSummary,
@@ -32,6 +33,8 @@ type ConversationResponse = { conversation: DirectConversationSummary };
 type MessageResponse = { message: DirectMessageSummary };
 
 export function DirectMessagesScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { accessToken, user } = useSession();
   const initialConversationId = route.params?.conversationId ?? null;
   const initialFriendUserId = route.params?.friendUserId ?? null;
@@ -334,7 +337,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
                 value={content}
                 onChangeText={setContent}
                 placeholder="메시지 입력"
-                placeholderTextColor={colors.subtle}
+                placeholderTextColor={palette.subtle}
                 style={styles.input}
                 maxLength={2000}
                 multiline={Platform.OS !== "web"}
@@ -366,7 +369,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
           autoCapitalize="none"
           onChangeText={setConversationQuery}
           placeholder="친구 이름 또는 ID 검색"
-          placeholderTextColor={colors.subtle}
+          placeholderTextColor={palette.subtle}
           style={styles.searchInput}
           value={conversationQuery}
         />
@@ -417,43 +420,51 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  error: { color: colors.red, paddingHorizontal: 16, paddingTop: 8 },
-  meta: { color: colors.subtle, fontSize: 14, textAlign: "center" },
+  error: { color: palette.red, paddingHorizontal: 16, paddingTop: 8 },
+  meta: { color: palette.subtle, fontSize: 14, textAlign: "center" },
   listContent: { padding: 16, gap: 12 },
   card: { padding: 14 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   cardMain: { flex: 1, gap: 4 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
-  accountId: { fontSize: 13, color: colors.subtle },
-  preview: { fontSize: 13, color: colors.subtle },
-  time: { fontSize: 11, color: colors.subtle },
-  badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  badgeText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: palette.text },
+  accountId: { fontSize: 13, color: palette.subtle },
+  preview: { fontSize: 13, color: palette.subtle },
+  time: { fontSize: 11, color: palette.subtle },
+  badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  badgeText: { color: palette.surface, fontSize: 12, fontWeight: "800" },
   threadContainer: { flex: 1 },
-  threadHeader: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  threadHeader: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: palette.border, backgroundColor: palette.surface },
   threadHeaderCopy: { gap: 2 },
-  threadHeaderName: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  threadHeaderAccount: { color: colors.subtle, fontSize: 11 },
+  threadHeaderName: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  threadHeaderAccount: { color: palette.subtle, fontSize: 11 },
   searchBox: { marginHorizontal: 16, marginTop: 8, marginBottom: 4 },
-  searchInput: { height: 46, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14 },
+  searchInput: { height: 46, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, color: palette.text, paddingHorizontal: 14 },
   messagesContent: { padding: 16, gap: 8 },
   bubbleRow: { flexDirection: "row", marginVertical: 4 },
   bubbleRowMe: { justifyContent: "flex-end" },
   bubbleRowOther: { justifyContent: "flex-start" },
   bubble: { maxWidth: "78%", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
-  bubbleMe: { backgroundColor: colors.primary },
-  bubbleOther: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  bubbleMe: { backgroundColor: palette.primary },
+  bubbleOther: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
   bubbleText: { fontSize: 14, lineHeight: 18 },
-  bubbleTextMe: { color: colors.surface },
-  bubbleTextOther: { color: colors.text },
-  bubbleTime: { fontSize: 10, color: colors.subtle },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
-  input: { flex: 1, minHeight: 44, maxHeight: 100, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, backgroundColor: colors.background },
-  sendButton: { height: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  bubbleTextMe: { color: palette.surface },
+  bubbleTextOther: { color: palette.text },
+  bubbleTime: { fontSize: 10, color: palette.subtle },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: palette.border, backgroundColor: palette.surface },
+  input: { flex: 1, minHeight: 44, maxHeight: 100, borderWidth: 1, borderColor: palette.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: palette.text, backgroundColor: palette.background },
+  sendButton: { height: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center" },
   sendButtonDisabled: { opacity: 0.45 },
-  sendButtonText: { color: colors.surface, fontWeight: "800" },
-});
+  sendButtonText: { color: palette.surface, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

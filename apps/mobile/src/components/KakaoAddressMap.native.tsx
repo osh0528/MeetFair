@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState , useMemo} from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
@@ -162,14 +163,24 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   window.meetfairSetMarkers = function (items) {
     displayOverlays.forEach(function (overlay) { overlay.setMap(null); });
     displayOverlays = (items || []).map(function (item) {
+      var kind = item.kind || "HOME";
       var content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       var icon = document.createElement("div");
-      icon.textContent = "🏠";
-      icon.style.cssText = "font-size:25px;";
       var label = document.createElement("div");
       label.textContent = item.label;
-      label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      if (kind === "LIVE") {
+        icon.style.cssText = "width:20px;height:20px;border-radius:50%;background:#1677ff;border:4px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35);box-sizing:border-box;";
+        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      } else if (kind === "PLACE") {
+        icon.textContent = "📍";
+        icon.style.cssText = "font-size:25px;";
+        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      } else {
+        icon.textContent = "🏠";
+        icon.style.cssText = "font-size:25px;";
+        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
+      }
       content.appendChild(icon);
       content.appendChild(label);
       return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
@@ -191,6 +202,8 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
 }
 
 export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -306,9 +319,17 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB", overflow: "hidden" },
   fallback: { alignItems: "center", justifyContent: "center", padding: 16 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
-});
+  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  message: { color: palette.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
+
+      }),
+    [palette],
+  );
+}

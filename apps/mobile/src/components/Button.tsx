@@ -1,5 +1,7 @@
 import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+import { useMemo } from "react";
+
 
 type ButtonVariant = "primary" | "secondary" | "soft";
 
@@ -13,6 +15,8 @@ interface ButtonProps {
 }
 
 export function Button({ label, onPress, variant = "primary", leftLabel, disabled = false, style }: ButtonProps) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const backgroundStyle = variant === "primary" ? styles.primaryButton : variant === "soft" ? styles.softButton : styles.secondaryButton;
   const textStyle = variant === "primary" ? styles.primaryButtonText : variant === "soft" ? styles.softButtonText : styles.secondaryButtonText;
 
@@ -34,19 +38,27 @@ export function Button({ label, onPress, variant = "primary", leftLabel, disable
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   button: { minHeight: 54, borderRadius: 16, paddingHorizontal: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 9 },
-  primaryButton: { backgroundColor: colors.primary },
-  secondaryButton: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  softButton: { backgroundColor: colors.primarySoft },
+  primaryButton: { backgroundColor: palette.primary },
+  secondaryButton: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
+  softButton: { backgroundColor: palette.primarySoft },
   pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.45 },
   buttonText: { fontSize: 16, fontWeight: "800" },
-  primaryButtonText: { color: colors.surface },
-  secondaryButtonText: { color: colors.text },
-  softButtonText: { color: colors.primary },
+  primaryButtonText: { color: palette.surface },
+  secondaryButtonText: { color: palette.text },
+  softButtonText: { color: palette.primary },
   buttonIcon: { width: 26, height: 26, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
-  buttonIconLight: { backgroundColor: colors.surface },
-  buttonIconText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
-  buttonIconTextDark: { color: colors.primary },
-});
+  buttonIconLight: { backgroundColor: palette.surface },
+  buttonIconText: { color: palette.surface, fontSize: 13, fontWeight: "900" },
+  buttonIconTextDark: { color: palette.primary },
+
+      }),
+    [palette],
+  );
+}

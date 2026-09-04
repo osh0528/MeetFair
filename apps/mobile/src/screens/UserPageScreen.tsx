@@ -5,7 +5,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState , useMemo} from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -15,8 +15,8 @@ import { avatarUrl } from "../services/avatar";
 import { profileMusicUrl } from "../services/profileMusic";
 import { profilePhotoUrl } from "../services/profilePhoto";
 import { useSession } from "../services/session";
-import { useAppTheme } from "../services/theme";
-import { colors } from "../theme/colors";
+import { useAppTheme, useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "UserPage">;
 
@@ -37,6 +37,8 @@ const darkThemes: Record<ProfileTheme, { label: string; background: string; acce
 };
 
 export function UserPageScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactLayout = windowWidth < 768;
   const { user } = useSession();
@@ -377,7 +379,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     }
   }
 
-  const palette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
+  const profilePalette = (mode === "DARK" ? darkThemes : themes)[page?.theme ?? theme];
   const photoGroups = page ? Object.values(page.photos.reduce<Record<string, UserPageSummary["photos"]>>((groups, photo) => {
     const key = photo.groupId ?? photo.id;
     groups[key] ??= [];
@@ -390,12 +392,12 @@ export function UserPageScreen({ navigation, route }: Props) {
       <Pressable
         disabled={!page.hasMusic}
         onPress={() => void toggleMusic()}
-        style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : colors.subtle }]}
+        style={[styles.musicControl, { backgroundColor: page.hasMusic ? profilePalette.accent : palette.subtle }]}
       >
         <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
       </Pressable>
       <View style={styles.musicCopy}>
-        <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
+        <Text style={[styles.musicLabel, { color: profilePalette.accent }]}>MY BGM</Text>
         <Text style={styles.musicTitle}>{page.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
         {page.hasMusic ? (
           <>
@@ -404,7 +406,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                 style={[
                   styles.progressFill,
                   {
-                    backgroundColor: palette.accent,
+                    backgroundColor: profilePalette.accent,
                     width: ((musicStatus.duration > 0
                       ? Math.max(2, Math.min(100, musicStatus.currentTime / musicStatus.duration * 100))
                       : 0) + "%") as `${number}%`,
@@ -423,7 +425,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   ) : null;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: profilePalette.background }]}>
       <ScreenHeader
         title={page ? page.user.nickname + "의 미니홈피" : "미니홈피"}
         subtitle={page ? "@" + page.user.accountId : undefined}
@@ -438,24 +440,24 @@ export function UserPageScreen({ navigation, route }: Props) {
           </Pressable>
         ) : undefined}
       />
-      {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
+      {loading && !page ? <ActivityIndicator color={profilePalette.accent} style={styles.loader} /> : null}
       <ScrollView contentContainerStyle={styles.content}>
-        {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
+        {message ? <Text style={[styles.message, { color: profilePalette.accent }]}>{message}</Text> : null}
         {page ? (
           <>
-            <Card style={[styles.heroCard, { borderColor: palette.soft }]}>
+            <Card style={[styles.heroCard, { borderColor: profilePalette.soft }]}>
               <Text style={styles.emoji}>{page.emoji}</Text>
               <View style={[styles.heroRow, isCompactLayout && styles.heroRowMobile]}>
                 <View style={[styles.profileIdentity, isCompactLayout && styles.profileIdentityMobile]}>
                   <Avatar imageUrl={avatarUrl(page.user.id, page.user.avatarUpdatedAt)} name={page.user.nickname} size={80} />
                   <View style={styles.profileText}>
                     <Text style={styles.nickname}>{page.user.nickname}</Text>
-                    <Text style={[styles.accountId, { color: palette.accent }]}>@{page.user.accountId}</Text>
+                    <Text style={[styles.accountId, { color: profilePalette.accent }]}>@{page.user.accountId}</Text>
                   </View>
                 </View>
-                <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: palette.soft }]}>{musicPlayerCard}</View>
+                <View style={[styles.heroMusic, isCompactLayout && styles.heroMusicMobile, { borderLeftColor: profilePalette.soft }]}>{musicPlayerCard}</View>
               </View>
-              <View style={[styles.statusBox, { backgroundColor: palette.soft }]}>
+              <View style={[styles.statusBox, { backgroundColor: profilePalette.soft }]}>
                 <Text style={styles.statusText}>{page.statusMessage || "오늘의 기분을 남겨 보세요."}</Text>
               </View>
             </Card>
@@ -483,11 +485,11 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Text style={styles.label}>대표 이모지</Text>
                 <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
                 <Text style={styles.label}>상태 메시지</Text>
-                <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={colors.subtle} style={styles.input} value={statusMessage} />
+                <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={palette.subtle} style={styles.input} value={statusMessage} />
                 <Text style={styles.label}>소개글</Text>
-                <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
+                <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={palette.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
                 <Text style={styles.label}>BGM 제목</Text>
-                <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+                <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={palette.subtle} style={styles.input} value={musicTitle} />
                 <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
                 <Button
                   disabled={musicBusy || !musicTitle.trim()}
@@ -506,28 +508,28 @@ export function UserPageScreen({ navigation, route }: Props) {
                         styles.themeChoice,
                         {
                           backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background,
-                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border,
+                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : palette.border,
                         },
                       ]}
                     >
                       <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
+                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? palette.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                     </Pressable>
                   ))}
                 </View>
                 <Button disabled={busy || !emoji.trim()} label={busy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
               </Card>
             ) : null}
-            {page && false ? <Card style={[styles.musicCard, { backgroundColor: palette.soft, borderColor: palette.soft }]}>
+            {page && false ? <Card style={[styles.musicCard, { backgroundColor: profilePalette.soft, borderColor: profilePalette.soft }]}>
               <Pressable
                 disabled={!page!.hasMusic}
                 onPress={() => void toggleMusic()}
-                style={[styles.musicControl, { backgroundColor: page!.hasMusic ? palette.accent : colors.subtle }]}
+                style={[styles.musicControl, { backgroundColor: page!.hasMusic ? profilePalette.accent : palette.subtle }]}
               >
                 <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
               </Pressable>
               <View style={styles.musicCopy}>
-                <Text style={[styles.musicLabel, { color: palette.accent }]}>MY BGM</Text>
+                <Text style={[styles.musicLabel, { color: profilePalette.accent }]}>MY BGM</Text>
                 <Text style={styles.musicTitle}>{page?.musicTitle || "아직 설정한 BGM이 없습니다."}</Text>
                 {page!.hasMusic ? (
                   <>
@@ -536,7 +538,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         style={[
                           styles.progressFill,
                           {
-                            backgroundColor: palette.accent,
+                            backgroundColor: profilePalette.accent,
                             width: ((musicStatus.duration > 0
                               ? Math.max(2, Math.min(100, musicStatus.currentTime / musicStatus.duration * 100))
                               : 0) + "%") as `${number}%`,
@@ -567,7 +569,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                         maxLength={150}
                         onChangeText={setPhotoCaption}
                         placeholder="사진 설명을 입력해 주세요. (선택)"
-                        placeholderTextColor={colors.subtle}
+                        placeholderTextColor={palette.subtle}
                         style={styles.input}
                         value={photoCaption}
                       />
@@ -630,7 +632,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     multiline
                     onChangeText={setGuestbookContent}
                     placeholder="따뜻한 한마디를 남겨 주세요."
-                    placeholderTextColor={colors.subtle}
+                    placeholderTextColor={palette.subtle}
                     style={[styles.input, styles.guestbookInput]}
                     textAlignVertical="top"
                     value={guestbookContent}
@@ -661,7 +663,7 @@ export function UserPageScreen({ navigation, route }: Props) {
         ) : !loading ? <Button label="다시 시도" onPress={() => void load()} variant="secondary" /> : null}
       </ScrollView>
       <Modal animationType="slide" onRequestClose={() => setEditing(false)} visible={editing && page?.isOwner}>
-        <SafeAreaView style={[styles.editModalSafeArea, { backgroundColor: palette.background }]}>
+        <SafeAreaView style={[styles.editModalSafeArea, { backgroundColor: profilePalette.background }]}>
           <View style={styles.editModalHeader}>
             <ScreenHeader title="홈피 편집" onBack={() => setEditing(false)} />
           </View>
@@ -670,20 +672,20 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.label}>대표 이모지</Text>
               <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
               <Text style={styles.label}>상태 메시지</Text>
-              <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={colors.subtle} style={styles.input} value={statusMessage} />
+              <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={palette.subtle} style={styles.input} value={statusMessage} />
               <Text style={styles.label}>소개글</Text>
-              <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
+              <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={palette.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
               <Text style={styles.label}>BGM 제목</Text>
-              <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+              <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={palette.subtle} style={styles.input} value={musicTitle} />
               <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
               <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
               {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
               <Text style={styles.label}>테마</Text>
               <View style={styles.themeRow}>
                 {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                  <Pressable key={item} onPress={() => setTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
+                  <Pressable key={item} onPress={() => setTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : palette.border }]}>
                     <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
+                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? palette.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -732,7 +734,11 @@ export function UserPageScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   safeArea: { flex: 1 },
   loader: { marginTop: 40 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
@@ -742,12 +748,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerEditButtonText: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  headerEditButtonText: { color: palette.text, fontSize: 12, fontWeight: "900" },
   editModalSafeArea: { flex: 1 },
   editModalHeader: { paddingHorizontal: 4 },
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
@@ -759,75 +765,79 @@ const styles = StyleSheet.create({
   profileIdentityMobile: { flex: 1 },
   profileText: { flex: 1, minWidth: 0 },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
-  nickname: { color: colors.text, fontSize: 23, fontWeight: "900" },
+  nickname: { color: palette.text, fontSize: 23, fontWeight: "900" },
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 14 },
-  statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
+  statusText: { color: palette.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
-  label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
-  input: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12 },
+  label: { color: palette.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
+  input: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, color: palette.text, paddingHorizontal: 14, paddingVertical: 12 },
   multiline: { minHeight: 112 },
   themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   themeChoice: { minWidth: 66, padding: 9, borderRadius: 13, borderWidth: 2, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
-  themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  themeLabel: { color: palette.text, fontSize: 11, fontWeight: "800" },
   heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
   heroMusicMobile: { flex: 1, paddingLeft: 12 },
   heroMusicCard: { padding: 0, borderWidth: 0, borderRadius: 0, backgroundColor: "transparent" },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   musicControl: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  musicControlText: { color: colors.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
+  musicControlText: { color: palette.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
   musicCopy: { flex: 1, gap: 3 },
   musicLabel: { fontSize: 10, fontWeight: "900" },
-  musicTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  musicHelp: { color: colors.muted, fontSize: 11 },
+  musicTitle: { color: palette.text, fontSize: 14, fontWeight: "800" },
+  musicHelp: { color: palette.muted, fontSize: 11 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.75)", overflow: "hidden", marginTop: 5 },
   progressFill: { height: 4, borderRadius: 2 },
-  musicTime: { color: colors.muted, fontSize: 10 },
-  musicError: { color: colors.red, fontSize: 10 },
+  musicTime: { color: palette.muted, fontSize: 10 },
+  musicError: { color: palette.red, fontSize: 10 },
   pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   pageColumnsMobile: { flexDirection: "column", alignItems: "stretch", width: "100%" },
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
   mobilePanel: { flex: 0, width: "100%", alignSelf: "stretch" },
   introSection: { gap: 12 },
-  panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
-  bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
-  photoComposer: { gap: 10, padding: 12, borderRadius: 16, backgroundColor: colors.background },
-  photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
+  panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 18 },
+  bio: { color: palette.text, fontSize: 14, lineHeight: 22 },
+  photoComposer: { gap: 10, padding: 12, borderRadius: 16, backgroundColor: palette.background },
+  photoHelp: { color: palette.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  photoTile: { width: "48%", borderRadius: 16, overflow: "hidden", backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
   photoImageWrap: { position: "relative" },
-  photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
+  photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: palette.background },
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },
   photoGroupCount: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  photoCaption: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
+  photoCaption: { color: palette.text, fontSize: 11, lineHeight: 16, fontWeight: "700", padding: 9, minHeight: 42 },
   photoLikeButton: { paddingHorizontal: 9, paddingBottom: 9 },
-  photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
-  photoLikeTextActive: { color: colors.red },
+  photoLikeText: { color: palette.muted, fontSize: 12, fontWeight: "900" },
+  photoLikeTextActive: { color: palette.red },
   photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
   photoModalContent: { flex: 1, padding: 18, justifyContent: "center", gap: 14 },
   photoModalHeader: { position: "absolute", top: 16, left: 18, right: 18, zIndex: 2, flexDirection: "row", justifyContent: "space-between" },
   photoModalButton: { minWidth: 60, height: 42, borderRadius: 14, paddingHorizontal: 14, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
-  photoModalButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
+  photoModalButtonText: { color: palette.surface, fontSize: 13, fontWeight: "900" },
   photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
   photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
   photoDetailScroller: { flex: 1, width: "100%" },
   photoDetail: { width: "100%", maxWidth: "100%", backgroundColor: "#0B0B0C" },
   photoGroupDetail: { flexGrow: 1, alignItems: "center" },
   photoDetailPage: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
-  photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
-  photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
+  photoDetailCaption: { color: palette.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
+  photoDetailDate: { color: palette.subtle, fontSize: 11, textAlign: "center" },
   guestbookComposer: { gap: 10, paddingBottom: 14 },
   guestbookInput: { minHeight: 80 },
-  guestbookCard: { gap: 11, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
+  guestbookCard: { gap: 11, borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 14 },
   guestbookHeader: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 },
   guestbookAuthor: { flex: 1, gap: 2 },
-  authorName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  date: { color: colors.muted, fontSize: 10 },
-  deleteText: { color: colors.red, fontSize: 11, fontWeight: "800" },
-  guestbookText: { color: colors.text, fontSize: 13, lineHeight: 20 },
-  empty: { color: colors.muted, fontSize: 12, textAlign: "center", padding: 12 },
-});
+  authorName: { color: palette.text, fontSize: 13, fontWeight: "900" },
+  date: { color: palette.muted, fontSize: 10 },
+  deleteText: { color: palette.red, fontSize: 11, fontWeight: "800" },
+  guestbookText: { color: palette.text, fontSize: 13, lineHeight: 20 },
+  empty: { color: palette.muted, fontSize: 12, textAlign: "center", padding: 12 },
+
+      }),
+    [palette],
+  );
+}

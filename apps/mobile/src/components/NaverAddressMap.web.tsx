@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState , useMemo} from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { AddressSelection } from "../types/location";
 
 export interface NaverAddressMapProps {
@@ -34,6 +35,8 @@ function loadNaverMaps(keyId: string): Promise<void> {
 }
 
 export function NaverAddressMap({ query, requestId, onResolved }: NaverAddressMapProps) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -106,9 +109,17 @@ export function NaverAddressMap({ query, requestId, onResolved }: NaverAddressMa
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   wrapper: { flex: 1, minHeight: 280, backgroundColor: "#E8EEE9" },
   map: { flex: 1, minHeight: 280 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
-});
+  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  message: { color: palette.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
+
+      }),
+    [palette],
+  );
+}

@@ -1,19 +1,23 @@
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { useState , useMemo} from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
-import { requestCameraAccess } from "../services/camera-permission";
-import { colors } from "../theme/colors";
+import { useRequestCameraAccess } from "../services/camera-permission";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "MeetingInvitation">;
 
 export function MeetingInvitationScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const invitation = route.params.invitation as MeetingInvitationSummary;
   const [error, setError] = useState("");
+  const requestCameraAccess = useRequestCameraAccess();
 
   async function respond(action: "accept" | "reject") {
     setError("");
@@ -54,12 +58,20 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 12 },
   card: { gap: 9 },
-  title: { color: colors.text, fontSize: 22, fontWeight: "900" },
-  meta: { color: colors.muted },
-  notice: { color: colors.red, fontSize: 12, lineHeight: 19 },
-  error: { color: colors.red },
-});
+  title: { color: palette.text, fontSize: 22, fontWeight: "900" },
+  meta: { color: palette.muted },
+  notice: { color: palette.red, fontSize: 12, lineHeight: 19 },
+  error: { color: palette.red },
+
+      }),
+    [palette],
+  );
+}

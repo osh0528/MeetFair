@@ -1,6 +1,6 @@
 import type { FriendSummary, MeetingMemberStatusEntry, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -8,7 +8,8 @@ import { Button, Card, Pill, ScreenHeader, SectionHeading } from "../components/
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest, createClientRequestId } from "../services/api";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
@@ -63,6 +64,8 @@ interface JoinRequest {
 }
 
 export function MeetingScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { user } = useSession();
   const meetingId = route.params.meetingId;
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
@@ -385,8 +388,8 @@ export function MeetingScreen({ navigation, route }: Props) {
             <Button label={editing ? "수정 닫기" : "모임 정보 수정"} onPress={() => setEditing((current) => !current)} variant="secondary" />
             {editing ? (
               <Card style={styles.card}>
-                <TextInput onChangeText={setEditTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={editTitle} />
-                <TextInput autoCapitalize="none" onChangeText={setEditScheduledAt} placeholder="2026-08-24T18:00" placeholderTextColor={colors.subtle} style={styles.input} value={editScheduledAt} />
+                <TextInput onChangeText={setEditTitle} placeholder="모임 이름" placeholderTextColor={palette.subtle} style={styles.input} value={editTitle} />
+                <TextInput autoCapitalize="none" onChangeText={setEditScheduledAt} placeholder="2026-08-24T18:00" placeholderTextColor={palette.subtle} style={styles.input} value={editScheduledAt} />
                 <Button disabled={busyAction === "save" || !editTitle.trim()} label={busyAction === "save" ? "저장 중..." : "수정 저장"} onPress={saveMeeting} />
               </Card>
             ) : null}
@@ -414,14 +417,14 @@ export function MeetingScreen({ navigation, route }: Props) {
             {showPlacePicker ? (
               <Card style={styles.placePickerCard}>
                 <Text style={styles.cardTitle}>지도를 눌러 장소를 선택하세요</Text>
-                <TextInput onChangeText={setPlaceName} placeholder="장소 이름" placeholderTextColor={colors.subtle} style={styles.input} value={placeName} />
-                <TextInput onChangeText={setPlaceCategory} placeholder="장소 종류 (선택)" placeholderTextColor={colors.subtle} style={styles.input} value={placeCategory} />
+                <TextInput onChangeText={setPlaceName} placeholder="장소 이름" placeholderTextColor={palette.subtle} style={styles.input} value={placeName} />
+                <TextInput onChangeText={setPlaceCategory} placeholder="장소 종류 (선택)" placeholderTextColor={palette.subtle} style={styles.input} value={placeCategory} />
                 <View style={styles.placeSearchRow}>
                   <TextInput
                     onChangeText={setPlaceInput}
                     onSubmitEditing={searchPlace}
                     placeholder="장소명 또는 주소 검색"
-                    placeholderTextColor={colors.subtle}
+                    placeholderTextColor={palette.subtle}
                     returnKeyType="search"
                     style={[styles.input, styles.placeSearchInput]}
                     value={placeInput}
@@ -556,30 +559,38 @@ function confirmAction(title: string, message: string, onConfirm: () => void) {
   ]);
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 12, paddingBottom: 40 },
-  loading: { padding: 20, color: colors.muted },
-  title: { color: colors.text, fontSize: 25, fontWeight: "900" },
+  loading: { padding: 20, color: palette.muted },
+  title: { color: palette.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
   placePickerCard: { gap: 10 },
   placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   placeSearchInput: { flex: 1 },
-  searchButton: { minHeight: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  searchButtonText: { color: colors.surface, fontWeight: "900" },
+  searchButton: { minHeight: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: palette.surface, fontWeight: "900" },
   placeCandidateList: { gap: 8 },
-  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
-  placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
-  placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  voteCountdown: { color: colors.red, fontWeight: "900", fontSize: 13 },
-  selectedCard: { borderColor: colors.primary },
-  cardTitle: { color: colors.text, fontWeight: "900" },
-  input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, color: colors.text },
+  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidateSelected: { borderColor: palette.primary, backgroundColor: palette.primarySoft },
+  placeCandidateTitle: { color: palette.text, fontWeight: "900", fontSize: 13 },
+  placeCandidateAddress: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  voteCountdown: { color: palette.red, fontWeight: "900", fontSize: 13 },
+  selectedCard: { borderColor: palette.primary },
+  cardTitle: { color: palette.text, fontWeight: "900" },
+  input: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, color: palette.text },
   compactActions: { gap: 6 },
-  selection: { color: colors.primary, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  selection: { color: palette.primary, fontWeight: "800" },
+  meta: { color: palette.muted, fontSize: 11, lineHeight: 17 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  message: { color: colors.primary, fontWeight: "800" },
-});
+  message: { color: palette.primary, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

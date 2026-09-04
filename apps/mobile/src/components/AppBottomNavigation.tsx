@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+import { useMemo } from "react";
+
 
 type Props = {
   currentRoute?: string;
@@ -18,6 +20,8 @@ type ItemProps = {
 };
 
 function NavigationItem({ active, icon, label, onPress }: ItemProps) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -44,6 +48,8 @@ export function AppBottomNavigation({
   onFriends,
   onUserPage,
 }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
       <View style={styles.navigation}>
@@ -81,12 +87,16 @@ export function AppBottomNavigation({
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.surface,
+    backgroundColor: palette.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    shadowColor: colors.charcoal,
+    borderTopColor: palette.border,
+    shadowColor: palette.charcoal,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -115,10 +125,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: colors.background,
+    backgroundColor: palette.background,
   },
-  iconActive: { backgroundColor: colors.primary, transform: [{ scale: 1.08 }] },
-  iconText: { color: colors.muted, fontSize: 18, fontWeight: "900", lineHeight: 20 },
-  iconTextActive: { color: colors.surface },
-  label: { color: colors.muted, fontSize: 10, fontWeight: "800", textAlign: "center" },
-});
+  iconActive: { backgroundColor: palette.primary, transform: [{ scale: 1.08 }] },
+  iconText: { color: palette.muted, fontSize: 18, fontWeight: "900", lineHeight: 20 },
+  iconTextActive: { color: palette.surface },
+  label: { color: palette.muted, fontSize: 10, fontWeight: "800", textAlign: "center" },
+
+      }),
+    [palette],
+  );
+}

@@ -7,14 +7,17 @@ import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { apiRequest } from "../services/api";
-import { requestCameraAccess } from "../services/camera-permission";
-import { colors } from "../theme/colors";
+import { useRequestCameraAccess } from "../services/camera-permission";
+import { useAppColors } from "../services/theme";
+
 import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateMeeting">;
 const categoryOptions = ["카페", "음식점", "술집", "문화시설"];
 
 export function CreateMeetingScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const defaultDate = useMemo(() => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16), []);
   const [title, setTitle] = useState("");
   const [scheduledAt, setScheduledAt] = useState(defaultDate);
@@ -32,6 +35,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
   const [selectedPlace, setSelectedPlace] = useState<AddressCandidate | null>(null);
   const [placeFocusTarget, setPlaceFocusTarget] = useState<AddressSelection | null>(null);
   const [error, setError] = useState("");
+  const requestCameraAccess = useRequestCameraAccess();
 
   useEffect(() => {
     void apiRequest<{ friends: FriendSummary[] }>("/friends").then((data) => setFriends(data.friends));
@@ -106,8 +110,8 @@ export function CreateMeetingScreen({ navigation }: Props) {
       <ScreenHeader title="새 모임" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>언제, 누구와 만날까요?</Text>
-        <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={title} />
-        <TextInput autoCapitalize="none" onChangeText={setScheduledAt} placeholder="2026-08-22T14:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledAt} />
+        <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={palette.subtle} style={styles.input} value={title} />
+        <TextInput autoCapitalize="none" onChangeText={setScheduledAt} placeholder="2026-08-22T14:00" placeholderTextColor={palette.subtle} style={styles.input} value={scheduledAt} />
 
         <SectionHeading title="모임 공개 범위" />
         <View style={styles.visibilityRow}>
@@ -142,7 +146,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
             onChangeText={setPlaceInput}
             onSubmitEditing={searchPlace}
             placeholder="장소명이나 주소 검색"
-            placeholderTextColor={colors.subtle}
+            placeholderTextColor={palette.subtle}
             returnKeyType="search"
             style={[styles.input, styles.placeSearchInput]}
             value={placeInput}
@@ -199,6 +203,8 @@ export function CreateMeetingScreen({ navigation }: Props) {
 }
 
 function ChoiceRow({ values, labels, selected, onSelect }: { values: string[]; labels: string[]; selected: string; onSelect(value: string): void }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index] ?? value} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
 }
 
@@ -213,6 +219,8 @@ function VisibilityCard({
   selected: boolean;
   onPress(): void;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="radio"
@@ -232,44 +240,54 @@ function VisibilityCard({
 }
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress(): void }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>;
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 13, paddingBottom: 40 },
-  title: { color: colors.text, fontSize: 25, fontWeight: "900" },
-  input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  title: { color: palette.text, fontSize: 25, fontWeight: "900" },
+  input: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, color: palette.text },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   placeSearchInput: { flex: 1 },
-  searchButton: { height: 50, borderRadius: 15, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
-  searchButtonText: { color: colors.surface, fontWeight: "900" },
+  searchButton: { height: 50, borderRadius: 15, paddingHorizontal: 16, backgroundColor: palette.charcoal, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: palette.surface, fontWeight: "900" },
   placeMap: { height: 280, borderRadius: 16, overflow: "hidden" },
   placeCandidateList: { gap: 8 },
-  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
-  placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
-  placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  selectedPlace: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  placeCandidate: { borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidateSelected: { borderColor: palette.primary, backgroundColor: palette.primarySoft },
+  placeCandidateTitle: { color: palette.text, fontWeight: "900", fontSize: 13 },
+  placeCandidateAddress: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  selectedPlace: { color: palette.primary, fontSize: 12, fontWeight: "800" },
   visibilityRow: { flexDirection: "row", gap: 10 },
   visibilityOption: { flex: 1 },
   visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
-  visibilityCardSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  radioSelected: { borderColor: colors.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
-  visibilityTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  visibilityTitleSelected: { color: colors.primary },
-  visibilityDescription: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  visibilityCardSelected: { borderColor: palette.primary, backgroundColor: palette.primarySoft },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
+  radioSelected: { borderColor: palette.primary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.primary },
+  visibilityTitle: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  visibilityTitleSelected: { color: palette.primary },
+  visibilityDescription: { color: palette.muted, fontSize: 11, lineHeight: 17 },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.muted, fontWeight: "800" },
-  chipTextSelected: { color: colors.surface },
+  chip: { borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
+  chipSelected: { backgroundColor: palette.primary, borderColor: palette.primary },
+  chipText: { color: palette.muted, fontWeight: "800" },
+  chipTextSelected: { color: palette.surface },
   friend: { flexDirection: "row", justifyContent: "space-between" },
-  selectedCard: { borderColor: colors.primary },
-  friendName: { color: colors.text, fontWeight: "800" },
-  notice: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  note: { color: colors.amber, fontSize: 11 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  selectedCard: { borderColor: palette.primary },
+  friendName: { color: palette.text, fontWeight: "800" },
+  notice: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  note: { color: palette.amber, fontSize: 11 },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

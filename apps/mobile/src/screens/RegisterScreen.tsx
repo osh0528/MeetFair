@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -7,12 +7,15 @@ import { Button, ScreenHeader } from "../components/ui";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 import type { AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Register">;
 
 export function RegisterScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const session = useSession();
   const [nickname, setNickname] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -115,17 +118,27 @@ export function RegisterScreen({ navigation, route }: Props) {
 }
 
 function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { label, ...inputProps } = props;
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...inputProps} placeholderTextColor={colors.subtle} style={styles.input} /></View>;
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...inputProps} placeholderTextColor={palette.subtle} style={styles.input} /></View>;
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 14 },
-  title: { color: colors.text, fontSize: 24, lineHeight: 32, fontWeight: "900", marginBottom: 8 },
+  title: { color: palette.text, fontSize: 24, lineHeight: 32, fontWeight: "900", marginBottom: 8 },
   field: { gap: 7 },
-  label: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  input: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, color: colors.text },
-  hint: { color: colors.muted, fontSize: 11 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  label: { color: palette.text, fontSize: 13, fontWeight: "800" },
+  input: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 15, color: palette.text },
+  hint: { color: palette.muted, fontSize: 11 },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

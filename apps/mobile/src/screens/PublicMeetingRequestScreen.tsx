@@ -1,17 +1,21 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { useState , useMemo} from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
-import { requestCameraAccess } from "../services/camera-permission";
-import { colors } from "../theme/colors";
+import { useRequestCameraAccess } from "../services/camera-permission";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "PublicMeetingRequest">;
 
 export function PublicMeetingRequestScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const [message, setMessage] = useState("");
+  const requestCameraAccess = useRequestCameraAccess();
   async function requestJoin() {
     if (!await requestCameraAccess()) {
       setMessage("카메라 권한을 허용해야 참가 신청할 수 있습니다.");
@@ -37,10 +41,18 @@ export function PublicMeetingRequestScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 14 },
-  title: { color: colors.text, fontSize: 23, fontWeight: "900" },
-  body: { color: colors.muted, lineHeight: 21 },
-  message: { color: colors.primary, fontWeight: "800" },
-});
+  title: { color: palette.text, fontSize: 23, fontWeight: "900" },
+  body: { color: palette.muted, lineHeight: 21 },
+  message: { color: palette.primary, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

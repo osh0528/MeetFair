@@ -1,6 +1,6 @@
 import type { NotificationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo} from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -8,11 +8,14 @@ import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { navigateForNotification } from "../services/notification-navigation";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
 
 export function NotificationsScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { user } = useSession();
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +45,7 @@ export function NotificationsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="알림" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {loading ? <ActivityIndicator color={palette.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
         {notifications.map((item) => (
           <Pressable key={item.id} onPress={() => navigateForNotification(item, navigation, user?.id)}>
@@ -59,13 +62,21 @@ export function NotificationsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 10 },
   card: { gap: 5 },
-  title: { color: colors.text, fontWeight: "900" },
-  body: { color: colors.muted, fontSize: 12 },
-  date: { color: colors.subtle, fontSize: 10 },
-  empty: { color: colors.muted },
-  error: { color: colors.red, fontSize: 12 },
-});
+  title: { color: palette.text, fontWeight: "900" },
+  body: { color: palette.muted, fontSize: 12 },
+  date: { color: palette.subtle, fontSize: 10 },
+  empty: { color: palette.muted },
+  error: { color: palette.red, fontSize: 12 },
+
+      }),
+    [palette],
+  );
+}

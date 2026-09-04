@@ -1,5 +1,5 @@
 import type { MeetingPostCommentSummary, MeetingPostSummary } from "@meetfair/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState , useMemo} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +17,8 @@ import type { RootStackParamList } from "../../App";
 import { Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "PostDetail">;
 
@@ -26,6 +27,8 @@ type PostResponse = { post: PostDetail };
 type CommentResponse = { comment: MeetingPostCommentSummary };
 
 export function PostDetailScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const { meetingId, postId, postTitle } = route.params;
   const { user } = useSession();
 
@@ -103,7 +106,7 @@ export function PostDetailScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader title={postTitle} onBack={() => navigation.goBack()} />
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={palette.primary} />
         </View>
       </SafeAreaView>
     );
@@ -177,7 +180,7 @@ export function PostDetailScreen({ navigation, route }: Props) {
             value={commentContent}
             onChangeText={setCommentContent}
             placeholder="댓글 입력"
-            placeholderTextColor={colors.subtle}
+            placeholderTextColor={palette.subtle}
             style={styles.input}
             maxLength={2000}
             multiline
@@ -196,64 +199,72 @@ export function PostDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  error: { color: colors.red, paddingHorizontal: 16, paddingTop: 8, fontSize: 12 },
-  meta: { color: colors.subtle, fontSize: 13, textAlign: "center" },
+  error: { color: palette.red, paddingHorizontal: 16, paddingTop: 8, fontSize: 12 },
+  meta: { color: palette.subtle, fontSize: 13, textAlign: "center" },
   listContent: { padding: 16, gap: 12, paddingBottom: 8 },
   postCard: { gap: 8, padding: 16 },
-  postTitle: { fontSize: 17, fontWeight: "900", color: colors.text },
-  postMeta: { fontSize: 12, color: colors.subtle },
-  postContent: { fontSize: 14, color: colors.text, lineHeight: 20, marginTop: 4 },
+  postTitle: { fontSize: 17, fontWeight: "900", color: palette.text },
+  postMeta: { fontSize: 12, color: palette.subtle },
+  postContent: { fontSize: 14, color: palette.text, lineHeight: 20, marginTop: 4 },
   postFooter: { marginTop: 8, flexDirection: "row", justifyContent: "space-between" },
   emptyBox: { paddingVertical: 24, alignItems: "center" },
   commentCard: { padding: 14, gap: 6 },
   commentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  commentAuthor: { fontSize: 13, fontWeight: "800", color: colors.text },
-  commentContent: { fontSize: 13, color: colors.text, lineHeight: 18 },
-  time: { fontSize: 11, color: colors.subtle },
+  commentAuthor: { fontSize: 13, fontWeight: "800", color: palette.text },
+  commentContent: { fontSize: 13, color: palette.text, lineHeight: 18 },
+  time: { fontSize: 11, color: palette.subtle },
   deleteButton: {
     alignSelf: "flex-start",
     marginTop: 4,
     paddingHorizontal: 10,
     height: 28,
     borderRadius: 10,
-    backgroundColor: colors.redSoft,
+    backgroundColor: palette.redSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  deleteButtonText: { color: colors.red, fontSize: 12, fontWeight: "800" },
+  deleteButtonText: { color: palette.red, fontSize: 12, fontWeight: "800" },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
+    borderTopColor: palette.border,
+    backgroundColor: palette.surface,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: palette.border,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: colors.text,
-    backgroundColor: colors.background,
+    color: palette.text,
+    backgroundColor: palette.background,
   },
   sendButton: {
     height: 44,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: palette.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   sendButtonDisabled: { opacity: 0.45 },
-  sendButtonText: { color: colors.surface, fontWeight: "800" },
-});
+  sendButtonText: { color: palette.surface, fontWeight: "800" },
+
+      }),
+    [palette],
+  );
+}

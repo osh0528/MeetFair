@@ -1,10 +1,11 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { useState , useMemo} from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Button, Card, Pill, ScreenHeader } from "../components/ui";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
+
 
 type Props = NativeStackScreenProps<RootStackParamList, "Recommendations">;
 
@@ -42,6 +43,8 @@ const places = [
 ];
 
 export function RecommendationsScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useStyles();
   const [selected, setSelected] = useState("seongsu");
 
   return (
@@ -67,10 +70,10 @@ export function RecommendationsScreen({ navigation }: Props) {
           <View style={[styles.mapBlock, styles.blockOne]} />
           <View style={[styles.mapBlock, styles.blockTwo]} />
           <View style={[styles.mapBlock, styles.blockThree]} />
-          <MapPerson label="나" color={colors.primary} positionStyle={styles.personOne} />
-          <MapPerson label="민" color={colors.green} positionStyle={styles.personTwo} />
-          <MapPerson label="도" color={colors.amber} positionStyle={styles.personThree} />
-          <MapPerson label="유" color={colors.blue} positionStyle={styles.personFour} />
+          <MapPerson label="나" color={palette.primary} positionStyle={styles.personOne} />
+          <MapPerson label="민" color={palette.green} positionStyle={styles.personTwo} />
+          <MapPerson label="도" color={palette.amber} positionStyle={styles.personThree} />
+          <MapPerson label="유" color={palette.blue} positionStyle={styles.personFour} />
           <View style={styles.mapPinOuter}>
             <View style={styles.mapPin}><Text style={styles.mapPinText}>M</Text></View>
           </View>
@@ -161,6 +164,8 @@ function MapPerson({ label, color, positionStyle }: {
   color: string;
   positionStyle: object;
 }) {
+  const palette = useAppColors();
+  const styles = useStyles();
   return (
     <View style={[styles.mapPerson, { backgroundColor: color }, positionStyle]}>
       <Text style={styles.mapPersonText}>{label}</Text>
@@ -168,65 +173,73 @@ function MapPerson({ label, color, positionStyle }: {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  progressTrack: { height: 3, backgroundColor: colors.border },
-  progressValue: { width: "100%", height: 3, backgroundColor: colors.primary },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
+  progressTrack: { height: 3, backgroundColor: palette.border },
+  progressValue: { width: "100%", height: 3, backgroundColor: palette.primary },
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24 },
   introRow: { flexDirection: "row", alignItems: "center", marginBottom: 22 },
   introCopy: { flex: 1, gap: 6 },
-  eyebrow: { color: colors.green, fontSize: 13, fontWeight: "900" },
-  title: { color: colors.text, fontSize: 26, lineHeight: 34, fontWeight: "900" },
-  fairScore: { width: 74, height: 74, borderRadius: 24, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" },
-  fairScoreValue: { color: colors.green, fontSize: 25, fontWeight: "900" },
-  fairScoreLabel: { color: colors.green, fontSize: 9, fontWeight: "800" },
+  eyebrow: { color: palette.green, fontSize: 13, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 26, lineHeight: 34, fontWeight: "900" },
+  fairScore: { width: 74, height: 74, borderRadius: 24, backgroundColor: palette.mint, alignItems: "center", justifyContent: "center" },
+  fairScoreValue: { color: palette.green, fontSize: 25, fontWeight: "900" },
+  fairScoreLabel: { color: palette.green, fontSize: 9, fontWeight: "800" },
   mapCard: { height: 190, padding: 0, overflow: "hidden", backgroundColor: "#EEF1F4" },
-  mapRoadHorizontal: { position: "absolute", top: 80, left: -20, right: -20, height: 36, backgroundColor: colors.surface, transform: [{ rotate: "-7deg" }] },
-  mapRoadVertical: { position: "absolute", top: -30, bottom: -30, left: "45%", width: 28, backgroundColor: colors.surface, transform: [{ rotate: "12deg" }] },
+  mapRoadHorizontal: { position: "absolute", top: 80, left: -20, right: -20, height: 36, backgroundColor: palette.surface, transform: [{ rotate: "-7deg" }] },
+  mapRoadVertical: { position: "absolute", top: -30, bottom: -30, left: "45%", width: 28, backgroundColor: palette.surface, transform: [{ rotate: "12deg" }] },
   mapBlock: { position: "absolute", backgroundColor: "#DCE3E7", borderRadius: 8 },
   blockOne: { width: 80, height: 40, left: 13, top: 15 },
   blockTwo: { width: 62, height: 48, right: 14, top: 25 },
   blockThree: { width: 92, height: 38, right: 22, bottom: 12 },
-  mapPerson: { position: "absolute", width: 28, height: 28, borderRadius: 14, borderWidth: 3, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  mapPersonText: { color: colors.surface, fontSize: 9, fontWeight: "900" },
+  mapPerson: { position: "absolute", width: 28, height: 28, borderRadius: 14, borderWidth: 3, borderColor: palette.surface, alignItems: "center", justifyContent: "center" },
+  mapPersonText: { color: palette.surface, fontSize: 9, fontWeight: "900" },
   personOne: { left: 22, bottom: 25 },
   personTwo: { left: 70, top: 33 },
   personThree: { right: 28, top: 25 },
   personFour: { right: 54, bottom: 22 },
   mapPinOuter: { position: "absolute", alignSelf: "center", top: 60, width: 58, height: 58, borderRadius: 29, backgroundColor: "rgba(48,48,48,0.16)", alignItems: "center", justifyContent: "center" },
-  mapPin: { width: 40, height: 40, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  mapPinText: { color: colors.surface, fontSize: 16, fontWeight: "900" },
-  mapLegend: { position: "absolute", alignSelf: "center", bottom: 10, backgroundColor: colors.surface, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },
-  mapLegendText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
+  mapPin: { width: 40, height: 40, borderRadius: 15, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center" },
+  mapPinText: { color: palette.surface, fontSize: 16, fontWeight: "900" },
+  mapLegend: { position: "absolute", alignSelf: "center", bottom: 10, backgroundColor: palette.surface, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },
+  mapLegendText: { color: palette.muted, fontSize: 10, fontWeight: "800" },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 28, marginBottom: 12 },
-  summaryText: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  summarySubtext: { color: colors.muted, fontSize: 11 },
+  summaryText: { color: palette.text, fontSize: 18, fontWeight: "900" },
+  summarySubtext: { color: palette.muted, fontSize: 11 },
   placeList: { gap: 12 },
   placeCard: { padding: 16 },
-  placeCardSelected: { borderColor: colors.primary, borderWidth: 2, padding: 15 },
+  placeCardSelected: { borderColor: palette.primary, borderWidth: 2, padding: 15 },
   placeTop: { flexDirection: "row", alignItems: "center" },
-  rank: { width: 34, height: 34, borderRadius: 12, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
-  rankFirst: { backgroundColor: colors.primarySoft },
-  rankText: { color: colors.muted, fontSize: 14, fontWeight: "900" },
-  rankTextFirst: { color: colors.primary },
+  rank: { width: 34, height: 34, borderRadius: 12, backgroundColor: palette.background, alignItems: "center", justifyContent: "center" },
+  rankFirst: { backgroundColor: palette.primarySoft },
+  rankText: { color: palette.muted, fontSize: 14, fontWeight: "900" },
+  rankTextFirst: { color: palette.primary },
   placeCopy: { flex: 1, marginLeft: 11 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  placeName: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  placeCategory: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  radio: { width: 21, height: 21, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  radioSelected: { borderColor: colors.primary },
-  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.primary },
-  metricRow: { flexDirection: "row", marginTop: 16, backgroundColor: colors.background, borderRadius: 14, paddingVertical: 11 },
+  placeName: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  placeCategory: { color: palette.muted, fontSize: 11, marginTop: 4 },
+  radio: { width: 21, height: 21, borderRadius: 11, borderWidth: 2, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
+  radioSelected: { borderColor: palette.primary },
+  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: palette.primary },
+  metricRow: { flexDirection: "row", marginTop: 16, backgroundColor: palette.background, borderRadius: 14, paddingVertical: 11 },
   metric: { flex: 1, alignItems: "center", gap: 4 },
-  metricLabel: { color: colors.subtle, fontSize: 9, fontWeight: "700" },
-  metricValue: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  fairMetric: { color: colors.green },
-  metricDivider: { width: 1, backgroundColor: colors.border },
+  metricLabel: { color: palette.subtle, fontSize: 9, fontWeight: "700" },
+  metricValue: { color: palette.text, fontSize: 11, fontWeight: "900" },
+  fairMetric: { color: palette.green },
+  metricDivider: { width: 1, backgroundColor: palette.border },
   commuteRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingHorizontal: 2 },
   commuteItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  commuteTime: { color: colors.muted, fontSize: 10, fontWeight: "800" },
+  commuteTime: { color: palette.muted, fontSize: 10, fontWeight: "800" },
   notice: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 18, paddingHorizontal: 5 },
-  noticeMark: { color: colors.subtle, borderWidth: 1, borderColor: colors.subtle, width: 16, height: 16, borderRadius: 8, textAlign: "center", fontSize: 10, lineHeight: 14, fontWeight: "900" },
-  noticeText: { flex: 1, color: colors.subtle, fontSize: 10, lineHeight: 15 },
-  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-});
+  noticeMark: { color: palette.subtle, borderWidth: 1, borderColor: palette.subtle, width: 16, height: 16, borderRadius: 8, textAlign: "center", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  noticeText: { flex: 1, color: palette.subtle, fontSize: 10, lineHeight: 15 },
+  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: palette.background, borderTopWidth: 1, borderTopColor: palette.border },
+
+      }),
+    [palette],
+  );
+}
