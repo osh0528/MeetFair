@@ -134,7 +134,9 @@ function EditableDecoration({
 }) {
   const gestureStart = useRef({ x: placement.x, y: placement.y, scale: placement.scale, rotation: placement.rotation, distance: 0, angle: 0 });
   const latest = useRef(placement);
+  const onChangeRef = useRef(onChange);
   latest.current = placement;
+  onChangeRef.current = onChange;
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => editable,
     onStartShouldSetPanResponderCapture: () => editable,
@@ -165,7 +167,7 @@ function EditableDecoration({
         const distance = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
         const start = gestureStart.current;
-        onChange({
+        onChangeRef.current({
           ...latest.current,
           scale: Math.max(0.5, Math.min(2.5, start.scale * (start.distance ? distance / start.distance : 1))),
           rotation: Math.max(-180, Math.min(180, start.rotation + angle - start.angle)),
@@ -173,16 +175,16 @@ function EditableDecoration({
         return;
       }
       const start = gestureStart.current;
-      onChange({
+      onChangeRef.current({
         ...latest.current,
         x: Math.max(0, Math.min(1, start.x + gesture.dx / Math.max(1, width - 48))),
         y: Math.max(0, Math.min(1, start.y + gesture.dy / Math.max(1, height - 48))),
       }, false);
     },
-    onPanResponderRelease: () => onChange(latest.current, true),
-    onPanResponderTerminate: () => onChange(latest.current, true),
+    onPanResponderRelease: () => onChangeRef.current(latest.current, true),
+    onPanResponderTerminate: () => onChangeRef.current(latest.current, true),
     onPanResponderTerminationRequest: () => false,
-  }), [editable, height, onChange, width]);
+  }), [editable, height, width]);
   return (
     <View
       {...responder.panHandlers}
