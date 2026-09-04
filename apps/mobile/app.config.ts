@@ -6,11 +6,16 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   slug: "meetfair",
   scheme: "meetfair",
   version: "0.1.0",
+  icon: "./assets/icon.png",
   orientation: "portrait",
   userInterfaceStyle: "light",
   android: {
     ...config.android,
     package: "com.meetfair.app",
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#303030",
+    },
   },
   ios: {
     ...config.ios,

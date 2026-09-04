@@ -85,52 +85,20 @@ function defaultRoomLayout(decorations: RoomDecoration[]): RoomDecorationPlaceme
   }));
 }
 
-type SavedRoomCustomization = {
-  wallpaper: RoomWallpaper;
-  decorations: RoomDecoration[];
-  layout: RoomDecorationPlacement[];
-};
-
-const roomWallpaperIds = new Set(ROOM_WALLPAPERS.map((item) => item.id));
-const roomDecorationIds = new Set(ROOM_DECORATIONS.map((item) => item.id));
-
-function roomCustomizationKey(userId: string) {
-  return "meetfair:room-customization:" + userId;
-}
-
-async function readSavedRoomCustomization(userId: string): Promise<SavedRoomCustomization | null> {
-  try {
-    const raw = await AsyncStorage.getItem(roomCustomizationKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { wallpaper?: unknown; decorations?: unknown; layout?: unknown };
-    if (!roomWallpaperIds.has(parsed.wallpaper as RoomWallpaper) || !Array.isArray(parsed.decorations)) return null;
-    const decorations = parsed.decorations.filter((item): item is RoomDecoration => roomDecorationIds.has(item as RoomDecoration));
-    return {
-      wallpaper: parsed.wallpaper as RoomWallpaper,
-      decorations,
-      layout: Array.isArray(parsed.layout) ? parsed.layout as RoomDecorationPlacement[] : defaultRoomLayout(decorations),
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function writeSavedRoomCustomization(userId: string, wallpaper: RoomWallpaper, decorations: RoomDecoration[], layout: RoomDecorationPlacement[]) {
-  await AsyncStorage.setItem(roomCustomizationKey(userId), JSON.stringify({ wallpaper, decorations, layout }));
-}
-
 function EditableDecoration({
   placement,
   width,
   height,
   editable,
   onChange,
+  onDragStateChange,
 }: {
   placement: RoomDecorationPlacement;
   width: number;
   height: number;
   editable: boolean;
   onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
+  onDragStateChange: (dragging: boolean) => void;
 }) {
   const gestureStart = useRef({ x: placement.x, y: placement.y, scale: placement.scale, rotation: placement.rotation, distance: 0, angle: 0 });
   const latest = useRef(placement);
@@ -143,6 +111,7 @@ function EditableDecoration({
     onMoveShouldSetPanResponder: () => editable,
     onMoveShouldSetPanResponderCapture: () => editable,
     onPanResponderGrant: (event) => {
+      onDragStateChange(true);
       const touches = event.nativeEvent.touches;
       const first = touches[0];
       const second = touches[1];
@@ -181,10 +150,16 @@ function EditableDecoration({
         y: Math.max(0, Math.min(1, start.y + gesture.dy / Math.max(1, height - 48))),
       }, false);
     },
-    onPanResponderRelease: () => onChangeRef.current(latest.current, true),
-    onPanResponderTerminate: () => onChangeRef.current(latest.current, true),
+    onPanResponderRelease: () => {
+      onChangeRef.current(latest.current, true);
+      onDragStateChange(false);
+    },
+    onPanResponderTerminate: () => {
+      onChangeRef.current(latest.current, true);
+      onDragStateChange(false);
+    },
     onPanResponderTerminationRequest: () => false,
-  }), [editable, height, width]);
+  }), [editable, height, onDragStateChange, width]);
   return (
     <View
       {...responder.panHandlers}
@@ -204,17 +179,18 @@ function EditableDecoration({
   );
 }
 
-function HomeDecorations({ layout, width, height, editable, onChange }: {
+function HomeDecorations({ layout, width, height, editable, onChange, onDragStateChange }: {
   layout: RoomDecorationPlacement[];
   width: number;
   height: number;
   editable: boolean;
   onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
+  onDragStateChange: (dragging: boolean) => void;
 }) {
   return (
     <View pointerEvents={editable ? "box-none" : "none"} style={styles.homeDecorLayer}>
       {layout.map((placement) => (
-        <EditableDecoration editable={editable} height={height} key={placement.id} onChange={onChange} placement={placement} width={width} />
+        <EditableDecoration editable={editable} height={height} key={placement.id} onChange={onChange} onDragStateChange={onDragStateChange} placement={placement} width={width} />
       ))}
     </View>
   );
@@ -238,6 +214,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [roomDecorations, setRoomDecorations] = useState<RoomDecoration[]>([]);
   const [roomLayout, setRoomLayout] = useState<RoomDecorationPlacement[]>([]);
   const [decorating, setDecorating] = useState(false);
+  const [draggingDecoration, setDraggingDecoration] = useState(false);
   const [houseSize, setHouseSize] = useState({ width: 1, height: 1 });
   const [musicTitle, setMusicTitle] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
@@ -276,13 +253,7 @@ export function UserPageScreen({ navigation, route }: Props) {
     setMessage("");
     try {
       const data = await apiRequest<{ page: UserPageSummary }>("/users/" + route.params.userId + "/page");
-      const savedRoom = data.page.isOwner ? await readSavedRoomCustomization(data.page.user.id) : null;
-      applyPage(savedRoom ? {
-        ...data.page,
-        roomWallpaper: savedRoom.wallpaper,
-        roomDecorations: savedRoom.decorations,
-        roomLayout: savedRoom.layout,
-      } : data.page);
+      applyPage(data.page);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "개인 페이지를 불러오지 못했습니다.");
     } finally {
@@ -334,7 +305,6 @@ export function UserPageScreen({ navigation, route }: Props) {
     setBusy(true);
     setMessage("");
     try {
-      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, roomWallpaper, roomDecorations, roomLayout);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
         body: JSON.stringify({
@@ -600,7 +570,6 @@ export function UserPageScreen({ navigation, route }: Props) {
     setRoomLayout(nextLayout);
     setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout } : current);
     try {
-      if (page?.user.id) await writeSavedRoomCustomization(page.user.id, nextWallpaper, nextDecorations, nextLayout);
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
         body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout }),
@@ -741,12 +710,12 @@ export function UserPageScreen({ navigation, route }: Props) {
         ) : undefined}
       />
       {loading && !page ? <ActivityIndicator color={palette.accent} style={styles.loader} /> : null}
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={!draggingDecoration}>
         {message ? <Text style={[styles.message, { color: palette.accent }]}>{message}</Text> : null}
         {page ? (
           <View onLayout={(event) => setHouseSize(event.nativeEvent.layout)} style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
             <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
-            <HomeDecorations editable={decorating} height={houseSize.height} layout={roomLayout} onChange={updateDecorationPlacement} width={houseSize.width} />
+            <HomeDecorations editable={decorating} height={houseSize.height} layout={roomLayout} onChange={updateDecorationPlacement} onDragStateChange={setDraggingDecoration} width={houseSize.width} />
             {page.isOwner && roomDecorations.length ? (
               <Pressable onPress={() => setDecorating((current) => !current)} style={[styles.layoutEditButton, { backgroundColor: palette.soft }]}>
                 <Text style={[styles.layoutEditText, { color: wallpaperTextColor }]}>{decorating ? "배치 완료" : "가구 위치 편집"}</Text>
