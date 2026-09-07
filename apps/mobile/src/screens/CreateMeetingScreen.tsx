@@ -270,22 +270,41 @@ export function CreateMeetingScreen({ navigation }: Props) {
           />
         </View>
 
-        <SectionHeading title="추천 이동 기준" />
-        <ChoiceRow values={["DISTANCE", "CAR", "TRANSIT"]} selected={travelMetric} labels={["직선거리", "자동차", "대중교통"]} onSelect={(value) => setTravelMetric(value as TravelMetric)} />
-        <Text style={styles.note}>
-          {travelMetric === "TRANSIT"
-            ? "참가자별 대중교통 예상시간의 차이가 적은 장소를 우선 추천합니다."
-            : travelMetric === "CAR"
-              ? "참가자별 자동차 예상시간의 차이가 적은 장소를 우선 추천합니다."
-              : "참가자 출발지의 직선거리 차이가 적은 장소를 우선 추천합니다."}
-        </Text>
+        <View style={[styles.settingsRow, isMobile && styles.settingsRowMobile]}>
+          <View style={styles.settingsColumn}>
+            <SectionHeading title="추천 이동 기준" />
+            <ChoiceRow values={["DISTANCE", "CAR", "TRANSIT"]} selected={travelMetric} labels={["직선거리", "자동차", "대중교통"]} onSelect={(value) => setTravelMetric(value as TravelMetric)} />
+            <Text style={styles.note}>
+              {travelMetric === "TRANSIT"
+                ? "참가자별 대중교통 예상시간의 차이가 적은 장소를 우선 추천합니다."
+                : travelMetric === "CAR"
+                  ? "참가자별 자동차 예상시간의 차이가 적은 장소를 우선 추천합니다."
+                  : "참가자 출발지의 직선거리 차이가 적은 장소를 우선 추천합니다."}
+            </Text>
 
-        <SectionHeading title="위치 공유" />
-        <ChoiceRow values={["BEFORE_START", "DAY_OF", "OFF"]} selected={shareMode} labels={["시작 전", "당일 0시", "공유 안 함"]} onSelect={(value) => setShareMode(value as LocationShareMode)} />
-        {shareMode === "BEFORE_START" ? <TextInput keyboardType="number-pad" onChangeText={setMinutesBefore} placeholder="몇 분 전" style={styles.input} value={minutesBefore} /> : null}
+            <SectionHeading title="위치 공유" />
+            <ChoiceRow values={["BEFORE_START", "DAY_OF", "OFF"]} selected={shareMode} labels={["시작 전", "당일 0시", "공유 안 함"]} onSelect={(value) => setShareMode(value as LocationShareMode)} />
+            {shareMode === "BEFORE_START" ? <TextInput keyboardType="number-pad" onChangeText={setMinutesBefore} placeholder="몇 분 전" style={styles.input} value={minutesBefore} /> : null}
 
-        <SectionHeading title="장소 종류" />
-        <View style={styles.wrap}>{categoryOptions.map((category) => <Chip key={category} label={category} selected={categories.includes(category)} onPress={() => setCategories(toggle(categories, category))} />)}</View>
+            <SectionHeading title="장소 종류" />
+            <View style={styles.wrap}>{categoryOptions.map((category) => <Chip key={category} label={category} selected={categories.includes(category)} onPress={() => setCategories(toggle(categories, category))} />)}</View>
+          </View>
+
+          <View style={styles.settingsColumn}>
+            <SectionHeading title="초대할 친구" action={`${invitees.length}명`} />
+            <View style={styles.inviteList}>
+              {friends.map((friend) => (
+                <Pressable key={friend.userId} onPress={() => setInvitees(toggle(invitees, friend.userId))}>
+                  <Card style={[styles.friend, invitees.includes(friend.userId) && styles.selectedCard]}>
+                    <Text style={styles.friendName}>{friend.nickname} · @{friend.accountId}</Text>
+                    <Text>{invitees.includes(friend.userId) ? "✓" : "+"}</Text>
+                  </Card>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라와 위치 공유 조건을 확인합니다.</Text>
+          </View>
+        </View>
 
         <SectionHeading title="모임 장소 추천" action={selectedPlace ? "선택됨" : "선택 사항"} />
         <View style={[styles.placeSearchRow, isMobile && styles.placeSearchRowMobile]}>
@@ -332,16 +351,6 @@ export function CreateMeetingScreen({ navigation }: Props) {
         ) : null}
         {selectedPlace ? <Text style={styles.selectedPlace}>선택한 장소: {selectedPlace.title || selectedPlace.address}</Text> : null}
 
-        <SectionHeading title="초대할 친구" action={`${invitees.length}명`} />
-        {friends.map((friend) => (
-          <Pressable key={friend.userId} onPress={() => setInvitees(toggle(invitees, friend.userId))}>
-            <Card style={[styles.friend, invitees.includes(friend.userId) && styles.selectedCard]}>
-              <Text style={styles.friendName}>{friend.nickname} · @{friend.accountId}</Text>
-              <Text>{invitees.includes(friend.userId) ? "✓" : "+"}</Text>
-            </Card>
-          </Pressable>
-        ))}
-        <Text style={styles.notice}>참여자는 초대를 수락하기 전에 카메라와 위치 공유 조건을 확인합니다.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button disabled={!title.trim() || categories.length === 0 || !scheduledAt || scheduledAt.getTime() <= Date.now()} label="모임 만들기" onPress={createMeeting} />
       </ScrollView>
@@ -423,6 +432,10 @@ const styles = StyleSheet.create({
   selectedPlace: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   visibilityRow: { flexDirection: "row", gap: 10 },
   visibilityRowMobile: { flexDirection: "column", gap: 10 },
+  settingsRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  settingsRowMobile: { flexDirection: "column", gap: 18 },
+  settingsColumn: { flex: 1, minWidth: 0, alignSelf: "stretch", gap: 13 },
+  inviteList: { gap: 8 },
   visibilityOption: { flex: 1 },
   visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
   visibilityCardSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
