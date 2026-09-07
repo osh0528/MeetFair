@@ -12,11 +12,14 @@
       "name": "MeetFair"
     },
     "plugins": [
-      ["expo-camera", {
-        "cameraPermission": "모임 영상 통화와 지각 확인을 위해 카메라 접근을 허용해 주세요.",
-        "microphonePermission": "모임 영상 통화의 음성 통화를 위해 마이크 접근을 허용해 주세요.",
-        "recordAudioAndroid": true
-      }],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "모임 영상 통화와 지각 확인을 위해 카메라 접근을 허용해 주세요.",
+          "microphonePermission": "모임 영상 통화의 음성 통화를 위해 마이크 접근을 허용해 주세요.",
+          "recordAudioAndroid": true
+        }
+      ],
       "expo-location",
       ["expo-image-picker", {
         "photosPermission": "프로필 사진을 선택하려면 사진 접근을 허용해 주세요."
@@ -27,7 +30,9 @@
     "ios": {
       "bundleIdentifier": "com.meetfair.app",
       "infoPlist": {
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -36,8 +41,22 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#303030"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
       "blockedPermissions": []
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "eff1d5a4-0a6b-43e5-b52e-f80306a5d737"
+      }
+    },
+    "owner": "odh53135"
   }
 }

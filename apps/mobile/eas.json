@@ -1,9 +1,13 @@
 {
   "cli": {
-    "version": ">= 5.9.3",
+    "version": ">= 23.2.0",
     "appVersionSource": "remote"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
