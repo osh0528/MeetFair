@@ -284,8 +284,19 @@ export function UserPageScreen({ navigation, route }: Props) {
 
   useFocusEffect(useCallback(() => {
     if (!musicSource) return;
-    musicPlayer.play();
-    return () => musicPlayer.pause();
+    try {
+      musicPlayer.play();
+    } catch {
+      // `useAudioPlayer` releases the previous native player when its source changes.
+      // A navigation transition can overlap that release, so playback is best-effort here.
+    }
+    return () => {
+      try {
+        musicPlayer.pause();
+      } catch {
+        // The player may already have been released by expo-audio during unmount.
+      }
+    };
   }, [musicPlayer, musicSource]));
 
   useEffect(() => {

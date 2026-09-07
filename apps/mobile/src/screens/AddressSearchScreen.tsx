@@ -60,7 +60,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
       void saveHomeAddress();
       return;
     }
-    navigation.navigate("Register", { selectedAddress: selection });
+    navigation.popTo("Register", { selectedAddress: selection });
   };
 
   const saveHomeAddress = async () => {

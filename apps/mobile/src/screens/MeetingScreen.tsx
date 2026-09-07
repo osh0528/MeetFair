@@ -137,9 +137,10 @@ function travelStats(
 export function MeetingScreen({ navigation, route }: Props) {
   const palette = useAppColors();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  // 화면 폭이 720px 이상이면 PC용 2열 레이아웃을 사용합니다.
+  // APK는 화면이 넓거나 가로로 회전해도 한 열을 유지해 장소 추천·지도·투표가
+  // 화면 전체 너비를 사용하게 합니다. 두 열 레이아웃은 넓은 웹 화면에서만 사용합니다.
   const { width: windowWidth } = useWindowDimensions();
-  const isWideLayout = windowWidth >= 720;
+  const isWideLayout = Platform.OS === "web" && windowWidth >= 960;
   // 현재 로그인한 사용자와 이전 화면에서 전달한 모임 ID를 가져옵니다.
   const { user } = useSession();
   const meetingId = route.params.meetingId;
@@ -634,7 +635,7 @@ export function MeetingScreen({ navigation, route }: Props) {
 
         {/* 넓은 화면은 장소 영역과 참여자 영역을 두 열로 배치합니다. */}
         <View style={[styles.detailLayout, !isWideLayout && styles.detailLayoutNarrow]}>
-          <View style={styles.mainColumn}>
+          <View style={[styles.mainColumn, !isWideLayout && styles.mainColumnNarrow]}>
         {/* 장소가 확정됐으면 확정 장소만 보여주고, 아니면 추천과 투표 기능을 보여줍니다. */}
         {meeting.confirmedPlace ? (
           <Card style={styles.card}>
@@ -900,8 +901,9 @@ function makeStyles(palette: Palette) {
   title: { color: palette.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
   detailLayout: { flexDirection: "row", alignItems: "flex-start", gap: 18 },
-  detailLayoutNarrow: { flexDirection: "column" },
+  detailLayoutNarrow: { flexDirection: "column", alignItems: "stretch", width: "100%" },
   mainColumn: { flex: 1, minWidth: 0, gap: 12 },
+  mainColumnNarrow: { width: "100%", flexGrow: 0, flexShrink: 0 },
   sideColumn: { width: 320, flexShrink: 0, gap: 12 },
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },

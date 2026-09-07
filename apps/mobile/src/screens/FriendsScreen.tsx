@@ -28,7 +28,7 @@ export function FriendsScreen({ navigation }: Props) {
   const [message, setMessage] = useState("");
   const [busyFriendId, setBusyFriendId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [requestingUserId, setRequestingUserId] = useState("");
   const [recommendationBusyId, setRecommendationBusyId] = useState("");
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
 
@@ -109,21 +109,21 @@ export function FriendsScreen({ navigation }: Props) {
 
   const onlineFriends = friends.filter((friend) => onlineUserIds.includes(friend.userId));
 
-  async function sendFriendRequest(recipientAccountId: string) {
-    if (submitting) return;
-    setSubmitting(true);
+  async function sendFriendRequest(recipient: PublicProfileSearchResult) {
+    if (requestingUserId) return;
+    setRequestingUserId(recipient.id);
     setMessage("");
     try {
       await apiRequest("/friends/friend-requests", {
         method: "POST",
-        body: JSON.stringify({ recipientAccountId }),
+        body: JSON.stringify({ recipientUserId: recipient.id }),
       });
-      setMessage("친구 요청을 보냈습니다.");
-      if (recipientAccountId === accountId) setAccountId("");
+      setAccountSuggestions((current) => current.filter((item) => item.id !== recipient.id));
+      setMessage(recipient.nickname + "님에게 친구 요청을 보냈습니다.");
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "친구 요청을 보내지 못했습니다.");
     } finally {
-      setSubmitting(false);
+      setRequestingUserId("");
     }
   }
 
@@ -207,8 +207,8 @@ export function FriendsScreen({ navigation }: Props) {
                     <Text style={styles.suggestionId}>@{suggestion.accountId}</Text>
                   </View>
                 </Pressable>
-                <Pressable disabled={submitting} onPress={() => void sendFriendRequest(suggestion.accountId)} style={[styles.suggestionRequestButton, submitting && styles.disabled]}>
-                  <Text style={styles.suggestionRequestText}>{submitting ? "전송 중" : "요청"}</Text>
+                <Pressable disabled={requestingUserId === suggestion.id} onPress={() => void sendFriendRequest(suggestion)} style={[styles.suggestionRequestButton, requestingUserId === suggestion.id && styles.disabled]}>
+                  <Text style={styles.suggestionRequestText}>{requestingUserId === suggestion.id ? "전송 중" : "요청"}</Text>
                 </Pressable>
               </View>
             ))}
