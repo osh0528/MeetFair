@@ -21,7 +21,10 @@ export const friendsRouter = Router();
 friendsRouter.use(requireAuth);
 
 const requestBodySchema = z.object({
-  recipientAccountId: accountIdSchema,
+  recipientUserId: z.string().uuid().optional(),
+  recipientAccountId: accountIdSchema.optional(),
+}).refine((input) => Boolean(input.recipientUserId) !== Boolean(input.recipientAccountId), {
+  message: "Provide exactly one friend request recipient.",
 });
 
 const actionBodySchema = z.object({
@@ -196,9 +199,9 @@ friendsRouter.get("/recommendations", async (request: AuthenticatedRequest, resp
 friendsRouter.post("/friend-requests", async (request: AuthenticatedRequest, response, next) => {
   try {
     const userId = currentUserId(request);
-    const { recipientAccountId } = requestBodySchema.parse(request.body);
+    const { recipientUserId, recipientAccountId } = requestBodySchema.parse(request.body);
     const recipient = await prisma.user.findUnique({
-      where: { accountId: recipientAccountId },
+      where: recipientUserId ? { id: recipientUserId } : { accountId: recipientAccountId! },
       select: { id: true, accountId: true, nickname: true },
     });
     if (!recipient) throw new AppError(404, "USER_NOT_FOUND", "Recipient account was not found.");
