@@ -565,58 +565,42 @@ export function UserPageScreen({ navigation, route }: Props) {
   const photoCardMutedColor = mode === "DARK" ? "#9CA2B1" : "#697080";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
-  async function saveTheme(nextTheme: ProfileTheme) {
-    if (appearanceBusy || nextTheme === theme) return;
-    const previousTheme = theme;
-    setAppearanceBusy(true);
+  function previewTheme(nextTheme: ProfileTheme) {
     setTheme(nextTheme);
     setPage((current) => current ? { ...current, theme: nextTheme } : current);
-    setMessage("");
-    try {
-      const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
-        method: "PATCH",
-        body: JSON.stringify({ theme: nextTheme }),
-      });
-      setPage((current) => current ? { ...current, theme: data.page.theme, updatedAt: data.page.updatedAt } : data.page);
-      setMessage("홈피 배경이 자동 저장되었습니다.");
-    } catch (caught) {
-      setTheme(previousTheme);
-      setPage((current) => current ? { ...current, theme: previousTheme } : current);
-      setMessage(caught instanceof Error ? caught.message : "홈피 배경을 저장하지 못했습니다.");
-    } finally {
-      setAppearanceBusy(false);
-    }
+    setMessage("미리보기 중입니다. 변경사항 저장을 눌러 적용해 주세요.");
   }
-  async function saveRoom(nextWallpaper: RoomWallpaper, nextDecorations: RoomDecoration[], nextLayout: RoomDecorationPlacement[] = roomLayout) {
+  function previewWallpaper(nextWallpaper: RoomWallpaper) {
+    setRoomWallpaper(nextWallpaper);
+    setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper } : current);
+    setMessage("미리보기 중입니다. 변경사항 저장을 눌러 적용해 주세요.");
+  }
+  async function saveRoom(nextDecorations: RoomDecoration[], nextLayout: RoomDecorationPlacement[] = roomLayout) {
     if (appearanceBusy) return;
-    const previousWallpaper = roomWallpaper;
     const previousDecorations = roomDecorations;
     const previousLayout = roomLayout;
     setAppearanceBusy(true);
-    setRoomWallpaper(nextWallpaper);
     setRoomDecorations(nextDecorations);
     setRoomLayout(nextLayout);
-    setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout } : current);
+    setPage((current) => current ? { ...current, roomDecorations: nextDecorations, roomLayout: nextLayout } : current);
     setMessage("");
     try {
       const data = await apiRequest<{ page: UserPageSummary }>("/users/me/page", {
         method: "PATCH",
-        body: JSON.stringify({ roomWallpaper: nextWallpaper, roomDecorations: nextDecorations, roomLayout: nextLayout }),
+        body: JSON.stringify({ roomDecorations: nextDecorations, roomLayout: nextLayout }),
       });
       setPage((current) => current ? {
         ...current,
-        roomWallpaper: data.page.roomWallpaper,
         roomDecorations: data.page.roomDecorations,
         roomLayout: data.page.roomLayout,
         updatedAt: data.page.updatedAt,
       } : data.page);
-      setMessage("방 꾸미기가 자동 저장되었습니다.");
+      setMessage("가구 배치가 자동 저장되었습니다.");
     } catch (caught) {
-      setRoomWallpaper(previousWallpaper);
       setRoomDecorations(previousDecorations);
       setRoomLayout(previousLayout);
-      setPage((current) => current ? { ...current, roomWallpaper: previousWallpaper, roomDecorations: previousDecorations, roomLayout: previousLayout } : current);
-      setMessage(caught instanceof Error ? caught.message : "방 꾸미기를 저장하지 못했습니다.");
+      setPage((current) => current ? { ...current, roomDecorations: previousDecorations, roomLayout: previousLayout } : current);
+      setMessage(caught instanceof Error ? caught.message : "가구 배치를 저장하지 못했습니다.");
     } finally {
       setAppearanceBusy(false);
     }
@@ -627,13 +611,13 @@ export function UserPageScreen({ navigation, route }: Props) {
     const nextLayout = selected
       ? roomLayout.filter((item) => item.id !== decoration)
       : [...roomLayout, { ...defaultRoomLayout([decoration])[0]!, y: Math.min(0.9, 0.12 + roomLayout.length * 0.06) }];
-    void saveRoom(roomWallpaper, nextDecorations, nextLayout);
+    void saveRoom(nextDecorations, nextLayout);
   };
   const updateDecorationPlacement = (next: RoomDecorationPlacement, finished: boolean) => {
     const nextLayout = roomLayout.map((item) => item.id === next.id ? next : item);
     setRoomLayout(nextLayout);
     setPage((current) => current ? { ...current, roomLayout: nextLayout } : current);
-    if (finished) void saveRoom(roomWallpaper, roomDecorations, nextLayout);
+    if (finished) void saveRoom(roomDecorations, nextLayout);
   };
   const wallpaperEditor = page?.isOwner ? (
     <View style={styles.wallpaperEditor}>
@@ -644,7 +628,7 @@ export function UserPageScreen({ navigation, route }: Props) {
           const selected = roomWallpaper === item.id;
           const preview = wallpapers[item.id];
           return (
-            <Pressable accessibilityLabel={item.label + " 벽지 선택"} disabled={appearanceBusy} key={item.id} onPress={() => void saveRoom(item.id, roomDecorations, roomLayout)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
+            <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => previewWallpaper(item.id)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
               <View style={[styles.wallpaperPreview, { backgroundColor: preview.background }]}>
                 <WallpaperPattern color={preview.patternColor} compact pattern={preview.pattern} />
                 {selected ? <Text style={styles.wallpaperCheck}>✓</Text> : null}
@@ -816,8 +800,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                   {(Object.keys(themes) as ProfileTheme[]).map((item) => (
                     <Pressable
                       key={item}
-                      disabled={appearanceBusy}
-                      onPress={() => void saveTheme(item)}
+                      onPress={() => previewTheme(item)}
                       style={[
                         styles.themeChoice,
                         {
@@ -1003,7 +986,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.label}>방 분위기</Text>
               <View style={styles.themeRow}>
                 {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                  <Pressable key={item} disabled={appearanceBusy} onPress={() => void saveTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
+                  <Pressable key={item} onPress={() => previewTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
                     <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
                     <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                   </Pressable>
