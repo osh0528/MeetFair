@@ -12,10 +12,21 @@ import { navigateForNotificationData, stringValue } from "../services/notificati
 import { apiRequest } from "../services/api";
 
 const POKE_CHANNEL_ID = "pokes-v3";
+const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v1";
 const POKE_VIBRATION_PATTERN = [0, 250, 120, 250, 120, 400];
 
 async function configurePokeChannel() {
   if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(DIRECT_MESSAGE_CHANNEL_ID, {
+    name: "DM 알림",
+    description: "새 다이렉트 메시지를 진동으로 알려줍니다.",
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: "default",
+    enableVibrate: true,
+    vibrationPattern: [0, 250, 120, 250],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+
   await Notifications.setNotificationChannelAsync(POKE_CHANNEL_ID, {
     name: "찌르기 알림",
     description: "친구와 모임 참여자가 보낸 찌르기를 진동으로 알려줍니다.",

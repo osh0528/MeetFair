@@ -7,7 +7,6 @@ import type { RootStackParamList } from "../../App";
 import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
 import { apiRequest } from "../services/api";
-import { requestCameraAccess } from "../services/camera-permission";
 import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection } from "../types/location";
 
@@ -157,10 +156,6 @@ export function CreateMeetingScreen({ navigation }: Props) {
     }
     if (scheduledAt.getTime() <= Date.now()) {
       setError("현재보다 이후 날짜와 시간을 선택해 주세요.");
-      return;
-    }
-    if (!await requestCameraAccess()) {
-      setError("모임 생성에는 카메라 권한이 필요합니다.");
       return;
     }
     try {
