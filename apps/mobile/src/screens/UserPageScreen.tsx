@@ -47,6 +47,18 @@ const wallpapers: Record<RoomWallpaper, { background: string; pattern: string; p
   BRICK: { background: "#E9C1A7", pattern: "bricks", patternColor: "rgba(145, 82, 61, 0.22)" },
 };
 
+// 화이트 모드에서는 카드와 자연스럽게 이어지도록 같은 무늬를 더 밝고 낮은 채도로 보여줍니다.
+const lightWallpapers: Record<RoomWallpaper, { background: string; pattern: string; patternColor: string }> = {
+  CREAM: { background: "#FFFCF5", pattern: "plain", patternColor: "transparent" },
+  STRIPES: { background: "#FFF9F6", pattern: "stripes", patternColor: "rgba(205, 151, 132, 0.11)" },
+  CHECK: { background: "#FAFBF7", pattern: "check", patternColor: "rgba(111, 143, 121, 0.10)" },
+  FLORAL: { background: "#FFF8FA", pattern: "floral", patternColor: "rgba(211, 126, 151, 0.62)" },
+  SKY: { background: "#F5FAFF", pattern: "clouds", patternColor: "rgba(255, 255, 255, 0.96)" },
+  FOREST: { background: "#F5FAF5", pattern: "leaves", patternColor: "rgba(91, 143, 99, 0.56)" },
+  NIGHT: { background: "#F5F7FC", pattern: "stars", patternColor: "rgba(111, 121, 158, 0.62)" },
+  BRICK: { background: "#FFF7F2", pattern: "bricks", patternColor: "rgba(157, 98, 76, 0.12)" },
+};
+
 function WallpaperPattern({ pattern, color, compact = false }: { pattern: string; color: string; compact?: boolean }) {
   const styles = useStyles();
   if (pattern === "plain") return null;
@@ -558,22 +570,18 @@ export function UserPageScreen({ navigation, route }: Props) {
   const activeTheme = page?.isOwner ? theme : page?.theme ?? theme;
   const palette = (mode === "DARK" ? darkThemes : themes)[activeTheme];
   const activeWallpaper = page?.isOwner ? roomWallpaper : page?.roomWallpaper ?? roomWallpaper;
-  const wallpaper = wallpapers[activeWallpaper];
-  const wallpaperTextColor = activeWallpaper === "NIGHT" ? "#FFF8E7" : "#2D2A26";
-  const wallpaperMutedColor = activeWallpaper === "NIGHT" ? "#E8DDBF" : "#665F56";
-  const wallpaperPanelColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.28)" : "rgba(255,255,255,0.42)";
-  const wallpaperInputColor = activeWallpaper === "NIGHT" ? "rgba(13,18,34,0.38)" : "rgba(255,255,255,0.58)";
-  const wallpaperInputBorder = activeWallpaper === "NIGHT" ? "rgba(255,255,255,0.18)" : "rgba(90,70,50,0.16)";
+  const wallpaper = mode === "LIGHT" ? lightWallpapers[activeWallpaper] : wallpapers[activeWallpaper];
+  const darkNightWallpaper = mode === "DARK" && activeWallpaper === "NIGHT";
+  const wallpaperTextColor = darkNightWallpaper ? "#FFF8E7" : "#2D2A26";
+  const wallpaperMutedColor = darkNightWallpaper ? "#E8DDBF" : "#665F56";
+  const wallpaperPanelColor = darkNightWallpaper ? "rgba(13,18,34,0.28)" : "rgba(255,255,255,0.62)";
+  const wallpaperInputColor = darkNightWallpaper ? "rgba(13,18,34,0.38)" : "rgba(255,255,255,0.78)";
+  const wallpaperInputBorder = darkNightWallpaper ? "rgba(255,255,255,0.18)" : "rgba(90,70,50,0.12)";
   const photoCardBackground = mode === "DARK" ? "#1A1C24" : "#FFFFFF";
   const photoCardTextColor = mode === "DARK" ? "#F4F5F8" : "#171923";
   const photoCardMutedColor = mode === "DARK" ? "#9CA2B1" : "#697080";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
-  function previewTheme(nextTheme: ProfileTheme) {
-    setTheme(nextTheme);
-    setPage((current) => current ? { ...current, theme: nextTheme } : current);
-    setMessage("미리보기 중입니다. 변경사항 저장을 눌러 적용해 주세요.");
-  }
   function previewWallpaper(nextWallpaper: RoomWallpaper) {
     setRoomWallpaper(nextWallpaper);
     setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper } : current);
@@ -630,7 +638,7 @@ export function UserPageScreen({ navigation, route }: Props) {
       <View style={styles.wallpaperChoices}>
         {ROOM_WALLPAPERS.map((item) => {
           const selected = roomWallpaper === item.id;
-          const preview = wallpapers[item.id];
+          const preview = mode === "LIGHT" ? lightWallpapers[item.id] : wallpapers[item.id];
           return (
             <Pressable accessibilityLabel={item.label + " 벽지 선택"} key={item.id} onPress={() => previewWallpaper(item.id)} style={[styles.wallpaperChoice, selected && { backgroundColor: palette.soft }]}>
               <View style={[styles.wallpaperPreview, { backgroundColor: preview.background }]}>
@@ -740,6 +748,12 @@ export function UserPageScreen({ navigation, route }: Props) {
         {page ? (
           <View onLayout={(event) => setHouseSize(event.nativeEvent.layout)} style={[styles.houseShell, { backgroundColor: wallpaper.background }]}>
             <WallpaperPattern color={wallpaper.patternColor} pattern={wallpaper.pattern} />
+            {mode === "LIGHT" ? (
+              <View pointerEvents="none" style={styles.lightWallpaperGlowLayer}>
+                <View style={styles.lightWallpaperGlowTop} />
+                <View style={[styles.lightWallpaperGlowBottom, { backgroundColor: palette.soft }]} />
+              </View>
+            ) : null}
             <HomeDecorations editable={decorating && !appearanceBusy} height={houseSize.height} layout={roomLayout} onChange={updateDecorationPlacement} onDragStateChange={setDraggingDecoration} width={houseSize.width} />
             {page.isOwner && roomDecorations.length ? (
               <Pressable onPress={() => setDecorating((current) => !current)} style={[styles.layoutEditButton, { backgroundColor: palette.soft }]}>
@@ -799,25 +813,6 @@ export function UserPageScreen({ navigation, route }: Props) {
                   variant="soft"
                 />
                 {page.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-                <Text style={styles.label}>방 분위기</Text>
-                <View style={styles.themeRow}>
-                  {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                    <Pressable
-                      key={item}
-                      onPress={() => previewTheme(item)}
-                      style={[
-                        styles.themeChoice,
-                        {
-                          backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background,
-                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : appColors.border,
-                        },
-                      ]}
-                    >
-                      <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? appColors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
                 {wallpaperEditor}
                 {roomDecorEditor}
                 <Button disabled={busy || appearanceBusy || !emoji.trim()} label={busy || appearanceBusy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
@@ -987,15 +982,6 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
               <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
               {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-              <Text style={styles.label}>방 분위기</Text>
-              <View style={styles.themeRow}>
-                {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                  <Pressable key={item} disabled={appearanceBusy} onPress={() => previewTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : appColors.border }]}>
-                    <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? appColors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
-                  </Pressable>
-                ))}
-              </View>
               {wallpaperEditor}
               {roomDecorEditor}
               <Button disabled={busy || appearanceBusy || !emoji.trim()} label={busy || appearanceBusy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
@@ -1068,6 +1054,9 @@ function useStyles() {
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
   message: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   houseShell: { borderRadius: 24, padding: 14, gap: 12, overflow: "hidden", position: "relative" },
+  lightWallpaperGlowLayer: { ...StyleSheet.absoluteFill, overflow: "hidden" },
+  lightWallpaperGlowTop: { position: "absolute", width: 280, height: 280, borderRadius: 140, right: -90, top: -145, backgroundColor: "rgba(255,255,255,0.82)" },
+  lightWallpaperGlowBottom: { position: "absolute", width: 240, height: 240, borderRadius: 120, left: -105, bottom: -150, opacity: 0.3 },
   homeDecorLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden", zIndex: 4 },
   homeDecorItem: { position: "absolute", width: 52, height: 52, alignItems: "center", justifyContent: "center", zIndex: 3 },
   homeDecorItemEditing: { backgroundColor: "rgba(255,255,255,0.7)", borderRadius: 26 },
@@ -1091,10 +1080,6 @@ function useStyles() {
   label: { color: appColors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   input: { minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: appColors.border, backgroundColor: appColors.surface, color: appColors.text, paddingHorizontal: 14, paddingVertical: 12 },
   multiline: { minHeight: 112 },
-  themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  themeChoice: { minWidth: 66, padding: 9, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6 },
-  themeDot: { width: 10, height: 10, borderRadius: 5 },
-  themeLabel: { color: appColors.text, fontSize: 11, fontWeight: "800" },
   decorEditor: { gap: 8, marginTop: 4 },
   decorProgressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   decorPoints: { fontSize: 11, fontWeight: "900" },
