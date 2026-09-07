@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:shared && npm run build:web",
+  "buildCommand": "npm run build -w @meetfair/shared && npm run build:web",
   "outputDirectory": "dist",
   "installCommand": "npm install"
 }
