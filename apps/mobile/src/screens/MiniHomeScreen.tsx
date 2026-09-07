@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -50,47 +50,72 @@ export function MiniHomeScreen({ navigation, route }: Props) {
   const [visits, setVisits] = useState<VisitEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [visitsLoading, setVisitsLoading] = useState(false);
+  const homeRequestRef = useRef(0);
+  const visitsRequestRef = useRef(0);
+  const visitsInFlightRef = useRef<number | null>(null);
+  const visitBusyRef = useRef(false);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
   const loadHome = useCallback(async () => {
+    const requestId = ++homeRequestRef.current;
     setLoading(true);
     setError("");
     try {
       const data = await apiRequest<MiniHomeResponse>(`/users/${userId}/mini-home`);
+      if (requestId !== homeRequestRef.current) return;
       setHome(data);
     } catch (caught) {
+      if (requestId !== homeRequestRef.current) return;
       setError(caught instanceof Error ? caught.message : "미니홈을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (requestId === homeRequestRef.current) setLoading(false);
     }
   }, [userId]);
 
   const loadVisits = useCallback(async (cursor: string | null) => {
+    if (cursor && visitsInFlightRef.current !== null) return;
+    const requestId = ++visitsRequestRef.current;
+    visitsInFlightRef.current = requestId;
     setVisitsLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("limit", "20");
       if (cursor) params.set("cursor", cursor);
       const data = await apiRequest<VisitsResponse>(`/users/${userId}/mini-home/visits?${params.toString()}`);
+      if (requestId !== visitsRequestRef.current) return;
       if (cursor) {
-        setVisits((prev) => [...prev, ...data.visits]);
+        setVisits((prev) => Array.from(new Map([...prev, ...data.visits].map((visit) => [visit.id, visit])).values()));
       } else {
         setVisits(data.visits);
       }
       setNextCursor(data.nextCursor);
     } catch (caught) {
+      if (requestId !== visitsRequestRef.current) return;
       setError(caught instanceof Error ? caught.message : "방문자 목록을 불러오지 못했습니다.");
     } finally {
-      setVisitsLoading(false);
+      if (visitsInFlightRef.current === requestId) visitsInFlightRef.current = null;
+      if (requestId === visitsRequestRef.current) setVisitsLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
+    setHome(null);
+    setVisits([]);
+    setNextCursor(null);
+    setVisitMessage("");
     void loadHome();
     void loadVisits(null);
+    return () => {
+      homeRequestRef.current += 1;
+      visitsRequestRef.current += 1;
+      visitsInFlightRef.current = null;
+    };
   }, [loadHome, loadVisits]);
 
   async function handleVisit() {
-    if (visitBusy || !home || home.isOwner || home.hasVisitorToday) return;
+    if (visitBusyRef.current || !home || home.isOwner || home.hasVisitorToday) return;
+    visitBusyRef.current = true;
     setVisitBusy(true);
     setVisitMessage("");
     setError("");
@@ -98,12 +123,15 @@ export function MiniHomeScreen({ navigation, route }: Props) {
       const data = await apiRequest<VisitResponse>(`/users/${userId}/mini-home/visit`, {
         method: "POST",
       });
+      if (userIdRef.current !== userId) return;
       setHome((prev) => prev ? { ...prev, hasVisitorToday: true, visitorCount: prev.visitorCount + (data.alreadyVisited ? 0 : 1) } : prev);
       setVisitMessage(data.alreadyVisited ? "오늘 이미 방문했습니다." : "방문했습니다.");
       void loadVisits(null);
     } catch (caught) {
+      if (userIdRef.current !== userId) return;
       setError(caught instanceof Error ? caught.message : "방문에 실패했습니다.");
     } finally {
+      visitBusyRef.current = false;
       setVisitBusy(false);
     }
   }

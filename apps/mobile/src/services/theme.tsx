@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 export type ThemeMode = "LIGHT" | "DARK";
@@ -39,14 +39,20 @@ const Context = createContext<Value | null>(null);
 
 function initialThemeMode(): ThemeMode {
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    const stored = window.localStorage.getItem(KEY);
-    if (stored === "LIGHT" || stored === "DARK") return stored;
+    try {
+      const stored = window.localStorage.getItem(KEY);
+      if (stored === "LIGHT" || stored === "DARK") return stored;
+    } catch {
+      // Storage can be unavailable in restricted browser contexts.
+    }
   }
   return "LIGHT";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(initialThemeMode);
+  const changedByUser = useRef(false);
+  const pendingSave = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
@@ -75,11 +81,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.head.appendChild(style);
   }, []);
   useEffect(() => {
+    let active = true;
     void AsyncStorage.getItem(KEY).then((storedMode) => {
-      if (storedMode === "LIGHT" || storedMode === "DARK") {
+      if (active && !changedByUser.current && (storedMode === "LIGHT" || storedMode === "DARK")) {
         setModeState(storedMode);
       }
+    }).catch(() => {
+      // Keep the current theme when persistence is unavailable.
     });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -95,8 +105,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Value>(() => ({
     mode,
     async setMode(nextMode) {
+      changedByUser.current = true;
       setModeState(nextMode);
-      await AsyncStorage.setItem(KEY, nextMode);
+      pendingSave.current = pendingSave.current.then(() => AsyncStorage.setItem(KEY, nextMode)).catch(() => {
+        // The selected theme remains usable even if it cannot be saved.
+      });
+      await pendingSave.current;
     },
   }), [mode]);
 

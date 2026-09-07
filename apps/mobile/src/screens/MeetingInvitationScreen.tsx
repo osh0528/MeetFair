@@ -1,6 +1,6 @@
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -14,25 +14,37 @@ type Props = NativeStackScreenProps<RootStackParamList, "MeetingInvitation">;
 export function MeetingInvitationScreen({ navigation, route }: Props) {
   const invitation = route.params.invitation as MeetingInvitationSummary;
   const [error, setError] = useState("");
+  const [responding, setResponding] = useState(false);
+  const respondingRef = useRef(false);
 
   async function respond(action: "accept" | "reject") {
+    if (respondingRef.current) return;
+    respondingRef.current = true;
+    setResponding(true);
     setError("");
-    let permissions = {};
-    if (action === "accept") {
-      if (!await requestCameraAccess()) {
-        setError("모임 참여에는 카메라 권한이 필요합니다.");
-        return;
+    try {
+      let permissions = {};
+      if (action === "accept") {
+        if (!await requestCameraAccess()) {
+          setError("모임 참여에는 카메라 권한이 필요합니다.");
+          return;
+        }
+        permissions = { cameraPermissionGranted: true };
       }
-      permissions = { cameraPermissionGranted: true };
-    }
-    await apiRequest(`/meeting-invitations/${invitation.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ action, ...permissions }),
-    });
-    if (action === "accept") {
-      navigation.replace("Meeting", { meetingId: invitation.meetingId });
-    } else {
-      navigation.replace("Home");
+      await apiRequest(`/meeting-invitations/${invitation.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action, ...permissions }),
+      });
+      if (action === "accept") {
+        navigation.replace("Meeting", { meetingId: invitation.meetingId });
+      } else {
+        navigation.replace("Home");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "초대에 응답하지 못했습니다.");
+    } finally {
+      respondingRef.current = false;
+      setResponding(false);
     }
   }
 
@@ -48,8 +60,8 @@ export function MeetingInvitationScreen({ navigation, route }: Props) {
         </Card>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
-          <Button compact label="카메라 확인 후 수락" onPress={() => respond("accept")} />
-          <Button compact label="거절" onPress={() => respond("reject")} variant="secondary" />
+          <Button compact disabled={responding} label="카메라 확인 후 수락" onPress={() => respond("accept")} />
+          <Button compact disabled={responding} label="거절" onPress={() => respond("reject")} variant="secondary" />
         </View>
       </View>
     </SafeAreaView>

@@ -31,17 +31,22 @@ export function FriendsScreen({ navigation }: Props) {
   const [pokeCooldowns, setPokeCooldowns] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    let active = true;
     const query = accountId.trim();
+    setAccountSuggestions([]);
     if (!query) {
       setAccountSuggestions([]);
       return;
     }
     const timer = setTimeout(() => {
       void apiRequest<{ users: PublicProfileSearchResult[] }>("/users/search?q=" + encodeURIComponent(query))
-        .then((data) => setAccountSuggestions(data.users))
-        .catch(() => setAccountSuggestions([]));
+        .then((data) => { if (active) setAccountSuggestions(data.users); })
+        .catch(() => { if (active) setAccountSuggestions([]); });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [accountId]);
 
   useEffect(() => {

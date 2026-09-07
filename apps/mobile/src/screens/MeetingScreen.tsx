@@ -3,7 +3,7 @@ import type { FriendSummary, MeetingCallSummary, MeetingMemberStatusEntry, Trave
 // Meeting 화면에서 사용할 navigation과 route의 타입을 가져옵니다.
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 // useState는 화면 상태를 저장하고 useEffect는 조회 및 타이머를 실행합니다.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 // 화면을 구성하는 React Native 기본 컴포넌트입니다.
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 // 노치와 상태 표시줄 영역을 피해 내용을 배치합니다.
@@ -152,6 +152,7 @@ export function MeetingScreen({ navigation, route }: Props) {
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   // 방장이 모임 이름과 시간을 수정할 때 사용하는 상태입니다.
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(false);
   const [editTitle, setEditTitle] = useState("");
   const [editScheduledAt, setEditScheduledAt] = useState("");
   // 현재 실행 중인 API 동작과 화면에 표시할 결과 메시지입니다.
@@ -182,8 +183,12 @@ export function MeetingScreen({ navigation, route }: Props) {
     const data = await apiRequest<MeetingDetail>(`/meetings/${meetingId}`);
     setMeeting(data);
     // 조회한 값을 정보 수정 입력창의 초깃값으로 복사합니다.
-    setEditTitle(data.title);
-    setEditScheduledAt(new Date(data.scheduledAt).toISOString().slice(0, 16));
+    if (!editingRef.current) {
+      const scheduled = new Date(data.scheduledAt);
+      const offsetMs = scheduled.getTimezoneOffset() * 60_000;
+      setEditTitle(data.title);
+      setEditScheduledAt(new Date(scheduled.getTime() - offsetMs).toISOString().slice(0, 16));
+    }
     // 참가 신청과 친구 목록은 방장에게만 필요하므로 방장일 때만 요청합니다.
     if (data.hostId === user?.id) {
       // 서로 의존하지 않는 두 요청을 동시에 실행해 대기 시간을 줄입니다.
@@ -506,6 +511,11 @@ export function MeetingScreen({ navigation, route }: Props) {
 
   // 방장이 수정한 모임 이름과 시간을 서버에 저장합니다.
   async function saveMeeting() {
+    const scheduledAt = new Date(editScheduledAt);
+    if (!editTitle.trim() || editTitle.trim().length > 80 || !Number.isFinite(scheduledAt.getTime())) {
+      setMessage("모임 이름과 날짜·시간을 확인해 주세요.");
+      return;
+    }
     setBusyAction("save");
     setMessage("");
     try {
@@ -513,9 +523,10 @@ export function MeetingScreen({ navigation, route }: Props) {
         method: "PATCH",
         body: JSON.stringify({
           title: editTitle.trim(),
-          scheduledAt: new Date(editScheduledAt).toISOString(),
+          scheduledAt: scheduledAt.toISOString(),
         }),
       });
+      editingRef.current = false;
       setEditing(false);
       setMessage("모임 정보를 수정했습니다.");
       await load();
@@ -585,7 +596,17 @@ export function MeetingScreen({ navigation, route }: Props) {
         title="모임 상세"
         onBack={() => navigation.goBack()}
         right={isHost && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED" ? (
-          <Button compact label={editing ? "수정 닫기" : "정보 수정"} onPress={() => setEditing((current) => !current)} variant="secondary" />
+          <Button compact label={editing ? "수정 닫기" : "정보 수정"} onPress={() => setEditing((current) => {
+            const next = !current;
+            editingRef.current = next;
+            if (next) {
+              const scheduled = new Date(meeting.scheduledAt);
+              const offsetMs = scheduled.getTimezoneOffset() * 60_000;
+              setEditTitle(meeting.title);
+              setEditScheduledAt(new Date(scheduled.getTime() - offsetMs).toISOString().slice(0, 16));
+            }
+            return next;
+          })} variant="secondary" />
         ) : undefined}
       />
       <ScrollView contentContainerStyle={[styles.content, !isWideLayout && styles.contentNarrow]}>

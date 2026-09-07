@@ -6,7 +6,8 @@ export interface OpenStreetMapPoint {
 
 export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
   const validPoints = points.filter((point) =>
-    Number.isFinite(point.latitude) && Number.isFinite(point.longitude));
+    Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90
+    && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180);
   const displayPoints = validPoints.length
     ? validPoints
     : [{ latitude: 37.5665, longitude: 126.978, label: "서울" }];
@@ -34,7 +35,9 @@ export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
     points.forEach((point) => {
       const position = [point.latitude, point.longitude];
       bounds.push(position);
-      L.marker(position).addTo(map).bindTooltip(point.label, {
+      const label = document.createElement("span");
+      label.textContent = point.label;
+      L.marker(position).addTo(map).bindTooltip(label, {
         permanent: true,
         direction: "top",
         offset: [0, -10]

@@ -1,5 +1,6 @@
 import type { MeetingPostSummary } from "@meetfair/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   FlatList,
@@ -36,9 +37,15 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
   const [content, setContent] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const loadInFlightRef = useRef<number | null>(null);
+  const mutationRef = useRef(false);
 
   const loadPosts = useCallback(
     async (cursor: string | null = null) => {
+      if (cursor && loadInFlightRef.current !== null) return;
+      const requestId = ++loadRequestRef.current;
+      loadInFlightRef.current = requestId;
       const isPaging = Boolean(cursor);
       if (isPaging) setLoadingMore(true);
       else setLoading(true);
@@ -50,27 +57,37 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
         const data = await apiRequest<PostsResponse>(
           `/meetings/${meetingId}/posts?${params.toString()}`,
         );
+        if (requestId !== loadRequestRef.current) return;
         if (isPaging) {
-          setPosts((prev) => [...prev, ...data.posts]);
+          setPosts((prev) => Array.from(new Map([...prev, ...data.posts].map((post) => [post.id, post])).values()));
         } else {
           setPosts(data.posts);
         }
         setNextCursor(data.nextCursor);
       } catch (caught) {
+        if (requestId !== loadRequestRef.current) return;
         setError(caught instanceof Error ? caught.message : "게시글을 불러오지 못했습니다.");
       } finally {
-        if (isPaging) setLoadingMore(false);
-        else setLoading(false);
+        if (loadInFlightRef.current === requestId) loadInFlightRef.current = null;
+        if (requestId === loadRequestRef.current) {
+          setLoadingMore(false);
+          setLoading(false);
+        }
       }
     },
     [meetingId],
   );
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void loadPosts(null);
-  }, [loadPosts]);
+    return () => {
+      loadRequestRef.current += 1;
+      loadInFlightRef.current = null;
+    };
+  }, [loadPosts]));
 
   async function handleCreate() {
+    if (mutationRef.current) return;
     const trimmedTitle = title.trim();
     const trimmedContent = content.trim();
     if (!trimmedTitle || !trimmedContent) {
@@ -85,6 +102,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
       setError("내용은 5000자 이내여야 합니다.");
       return;
     }
+    mutationRef.current = true;
     setCreating(true);
     setError("");
     try {
@@ -99,11 +117,14 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "게시글을 작성하지 못했습니다.");
     } finally {
+      mutationRef.current = false;
       setCreating(false);
     }
   }
 
   async function handleDelete(postId: string) {
+    if (mutationRef.current) return;
+    mutationRef.current = true;
     setDeletingId(postId);
     setError("");
     try {
@@ -114,6 +135,7 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "게시글을 삭제하지 못했습니다.");
     } finally {
+      mutationRef.current = false;
       setDeletingId(null);
     }
   }
@@ -227,8 +249,8 @@ export function MeetingBoardScreen({ navigation, route }: Props) {
                   {item.authorId === user?.id ? (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => void handleDelete(item.id)}
-                      disabled={deletingId === item.id}
+                      onPress={(event) => { event.stopPropagation(); void handleDelete(item.id); }}
+                      disabled={Boolean(deletingId) || creating}
                       style={styles.deleteButton}
                     >
                       <Text style={styles.deleteButtonText}>

@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -21,6 +21,8 @@ export function AddressSearchScreen({ navigation, route }: Props) {
   const [selection, setSelection] = useState<AddressCandidate | null>(null);
   const [focusTarget, setFocusTarget] = useState<AddressSelection | null>(null);
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const handleResults = useCallback((items: AddressCandidate[]) => {
     const first = items[0];
@@ -47,13 +49,15 @@ export function AddressSearchScreen({ navigation, route }: Props) {
 
   const handleSearch = () => {
     if (!input.trim()) return;
+    setMessage("");
+    setCandidates([]);
     setSelection(null);
     setQuery(input.trim());
     setRequestId((current) => current + 1);
   };
 
   const handleSelect = () => {
-    if (!selection) return;
+    if (!selection || savingRef.current) return;
     if (route.params?.returnTo === "Profile") {
       void saveHomeAddress();
       return;
@@ -62,13 +66,19 @@ export function AddressSearchScreen({ navigation, route }: Props) {
   };
 
   const saveHomeAddress = async () => {
-    if (!selection) return;
+    if (!selection || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setMessage("");
     try {
       await apiRequest("/users/me/home", { method: "PUT", body: JSON.stringify(selection) });
       await session.refreshUser();
       navigation.goBack();
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "집 주소를 저장하지 못했습니다.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -149,7 +159,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             </View>
-            <Button label="이 주소를 집으로 설정" onPress={handleSelect} />
+            <Button disabled={saving || !selection} label={saving ? "저장 중..." : "이 주소를 집으로 설정"} onPress={handleSelect} />
           </>
         ) : (
           <>
@@ -173,7 +183,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
             </ScrollView>
             {selection ? (
               <View style={styles.confirmWrap}>
-                <Button label={`"${selection.title ?? selection.address}"로 설정`} onPress={handleSelect} />
+                <Button disabled={saving} label={saving ? "저장 중..." : `"${selection.title ?? selection.address}"로 설정`} onPress={handleSelect} />
               </View>
             ) : null}
           </>

@@ -48,6 +48,11 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   const [error, setError] = useState("");
   const [initializing, setInitializing] = useState(Boolean(initialFriendUserId));
   const listRef = useRef<FlatList<DirectMessageSummary>>(null);
+  const selectedIdRef = useRef(selectedId);
+  const messageRequestRef = useRef(0);
+  const messagesInFlightRef = useRef<number | null>(null);
+  const sendingRef = useRef(false);
+  selectedIdRef.current = selectedId;
 
   const loadConversations = useCallback(async () => {
     try {
@@ -62,7 +67,11 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
 
   const loadMessages = useCallback(
     async (conversationId: string, cursor?: string | null) => {
-      if (!cursor) setMessagesLoading(true);
+      if (cursor && messagesInFlightRef.current !== null) return;
+      const requestId = ++messageRequestRef.current;
+      messagesInFlightRef.current = requestId;
+      const isCurrent = () => selectedIdRef.current === conversationId && messageRequestRef.current === requestId;
+      setMessagesLoading(true);
       try {
         const params = new URLSearchParams();
         params.set("limit", "20");
@@ -70,33 +79,36 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
         const data = await apiRequest<MessagesResponse>(
           `/direct-messages/${conversationId}/messages?${params.toString()}`,
         );
-        if (cursor) {
-          setMessages((prev) => [...prev, ...data.messages]);
-        } else {
-          setMessages(data.messages);
-        }
+        if (!isCurrent()) return;
+        setMessages((prev) => Array.from(new Map([...prev, ...data.messages].map((message) => [message.id, message])).values())
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
         setNextCursor(data.nextCursor);
         const unread = data.messages.filter((m) => m.senderId !== user?.id && !m.readAt);
+        const readIds = new Set<string>();
         for (const m of unread) {
+          if (!isCurrent()) return;
           try {
             await apiRequest(`/direct-messages/${conversationId}/read`, {
               method: "PATCH",
               body: JSON.stringify({ messageId: m.id }),
             });
+            readIds.add(m.id);
           } catch {}
         }
-        if (unread.length) {
+        if (readIds.size && isCurrent()) {
           const now = new Date().toISOString();
           setMessages((prev) =>
             prev.map((m) =>
-              unread.some((u) => u.id === m.id) ? { ...m, readAt: now } : m,
+              readIds.has(m.id) ? { ...m, readAt: now } : m,
             ),
           );
         }
       } catch (caught) {
+        if (!isCurrent()) return;
         setError(caught instanceof Error ? caught.message : "메시지를 불러오지 못했습니다.");
       } finally {
-        setMessagesLoading(false);
+        if (messagesInFlightRef.current === requestId) messagesInFlightRef.current = null;
+        if (isCurrent()) setMessagesLoading(false);
       }
     },
     [user?.id],
@@ -114,6 +126,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
       return;
     }
     let active = true;
+    setInitializing(true);
     async function ensure() {
       try {
         const data = await apiRequest<ConversationResponse>("/direct-messages/conversations", {
@@ -141,10 +154,15 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   }, [route.params?.conversationId]);
 
   useEffect(() => {
-    if (!selectedId) return;
     setMessages([]);
     setNextCursor(null);
-    void loadMessages(selectedId, null);
+    setContent("");
+    setError("");
+    if (selectedId) void loadMessages(selectedId, null);
+    return () => {
+      messageRequestRef.current += 1;
+      messagesInFlightRef.current = null;
+    };
   }, [selectedId, loadMessages]);
 
   useEffect(() => {
@@ -161,6 +179,11 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
           void apiRequest(`/direct-messages/${msg.conversationId}/read`, {
             method: "PATCH",
             body: JSON.stringify({ messageId: msg.id }),
+          }).then(() => {
+            if (selectedIdRef.current !== msg.conversationId) return;
+            setMessages((prev) => prev.map((message) => message.id === msg.id
+              ? { ...message, readAt: new Date().toISOString() }
+              : message));
           }).catch(() => undefined);
         }
       }
@@ -172,6 +195,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
         }
         const conv = prev[idx];
         if (!conv) return prev;
+        if (conv.lastMessage?.id === msg.id) return prev;
         const isCurrent = msg.conversationId === selectedId;
         const next: DirectConversationSummary = {
           ...conv,
@@ -201,11 +225,12 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
 
   async function handleSend() {
     const trimmed = content.trim();
-    if (!trimmed || !selectedId || sending) return;
+    if (!trimmed || !selectedId || sendingRef.current) return;
     if (trimmed.length > 2000) {
       setError("메시지는 2000자 이내여야 합니다.");
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     setError("");
     const clientMessageId = createClientRequestId();
@@ -214,8 +239,10 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
         method: "POST",
         body: JSON.stringify({ content: trimmed, clientMessageId }),
       });
-      setMessages((prev) => [data.message, ...prev]);
-      setContent("");
+      if (selectedIdRef.current === selectedId) {
+        setMessages((prev) => prev.some((message) => message.id === data.message.id) ? prev : [data.message, ...prev]);
+        setContent((current) => current === content ? "" : current);
+      }
       setConversations((prev) => {
         const idx = prev.findIndex((c) => c.id === selectedId);
         if (idx === -1) return prev;
@@ -230,8 +257,9 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
         return [next, ...rest];
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "메시지를 보내지 못했습니다.");
+      if (selectedIdRef.current === selectedId) setError(caught instanceof Error ? caught.message : "메시지를 보내지 못했습니다.");
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -244,6 +272,10 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   }
 
   function handleBack() {
+    if (selectedId && !initialConversationId && !initialFriendUserId) {
+      setSelectedId(null);
+      return;
+    }
     navigation.goBack();
   }
 

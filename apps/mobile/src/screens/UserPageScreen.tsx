@@ -180,7 +180,7 @@ function EditableDecoration({
         {
           left: placement.x * Math.max(1, width - 48),
           top: placement.y * Math.max(1, height - 48),
-          opacity: editable ? 0.9 : 0.38,
+          opacity: editable ? 0.9 : 1,
           transform: [{ scale: placement.scale }, { rotate: placement.rotation + "deg" }],
         },
         editable && styles.homeDecorItemEditing,
@@ -238,6 +238,7 @@ export function UserPageScreen({ navigation, route }: Props) {
   const [editing, setEditing] = useState(false);
   const [pokeBusy, setPokeBusy] = useState(false);
   const [pokeCooldown, setPokeCooldown] = useState(0);
+  const loadRequestRef = useRef(0);
   const musicSource = page?.hasMusic
     ? profileMusicUrl(page.user.id, page.musicUpdatedAt)
     : null;
@@ -262,20 +263,24 @@ export function UserPageScreen({ navigation, route }: Props) {
   }, []);
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setMessage("");
     try {
       const data = await apiRequest<{ page: UserPageSummary }>("/users/" + route.params.userId + "/page");
+      if (requestId !== loadRequestRef.current) return;
       applyPage(data.page);
     } catch (caught) {
+      if (requestId !== loadRequestRef.current) return;
       setMessage(caught instanceof Error ? caught.message : "개인 페이지를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [applyPage, route.params.userId]);
 
   useFocusEffect(useCallback(() => {
     void load();
+    return () => { loadRequestRef.current += 1; };
   }, [load]));
 
   useFocusEffect(useCallback(() => {
@@ -455,14 +460,18 @@ export function UserPageScreen({ navigation, route }: Props) {
 
   async function toggleMusic() {
     if (!page?.hasMusic) return;
-    if (musicStatus.playing) {
-      musicPlayer.pause();
-      return;
+    try {
+      if (musicStatus.playing) {
+        musicPlayer.pause();
+        return;
+      }
+      if (musicStatus.duration > 0 && musicStatus.currentTime >= musicStatus.duration - 0.2) {
+        await musicPlayer.seekTo(0);
+      }
+      musicPlayer.play();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "BGM을 재생하지 못했습니다.");
     }
-    if (musicStatus.duration > 0 && musicStatus.currentTime >= musicStatus.duration - 0.2) {
-      await musicPlayer.seekTo(0);
-    }
-    musicPlayer.play();
   }
 
   function formatTime(seconds: number) {
@@ -492,7 +501,10 @@ export function UserPageScreen({ navigation, route }: Props) {
       const groupId = createClientRequestId();
       let failedCount = 0;
       for (const image of result.assets.slice(0, Math.max(1, 30 - page.photos.length))) {
-        if (!image.uri || !image.width || !image.height) continue;
+        if (!image.uri || !image.width || !image.height) {
+          failedCount += 1;
+          continue;
+        }
         try {
           const resize = image.width >= image.height
             ? { width: Math.min(1200, image.width) }
@@ -526,8 +538,9 @@ export function UserPageScreen({ navigation, route }: Props) {
       setPage((current) => current
         ? { ...current, photos: [...uploadedPhotos, ...current.photos] }
         : current);
-      setPhotoCaption("");
-      setMessage("사진첩에 " + uploadedPhotos.length + "장의 사진을 추가했습니다.");
+      setPhotoCaption((current) => current === photoCaption ? "" : current);
+      setMessage("사진첩에 " + uploadedPhotos.length + "장의 사진을 추가했습니다."
+        + (failedCount ? " " + failedCount + "장은 업로드하지 못했습니다. 다시 선택해 주세요." : ""));
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "사진을 추가하지 못했습니다.");
     } finally {

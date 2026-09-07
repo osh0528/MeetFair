@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme/colors";
 
@@ -10,6 +11,7 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, status, imageUrl }: AvatarProps) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string>();
   const statusStyle = status === "online"
     ? styles.onlineDot
     : status === "moving"
@@ -20,7 +22,7 @@ export function Avatar({ name, size = 42, backgroundColor = colors.primarySoft, 
   return (
     <View style={{ width: size, height: size }}>
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor }]}>
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={{ width: size, height: size }} /> : (
+        {imageUrl && imageUrl !== failedImageUrl ? <Image key={imageUrl} source={{ uri: imageUrl }} onError={() => setFailedImageUrl(imageUrl)} style={{ width: size, height: size }} /> : (
           <Text style={[styles.avatarText, { fontSize: Math.max(12, size * 0.34) }]}>{name.slice(0, 1)}</Text>
         )}
       </View>
