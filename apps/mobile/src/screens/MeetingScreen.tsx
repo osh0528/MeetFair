@@ -633,7 +633,7 @@ export function MeetingScreen({ navigation, route }: Props) {
 
         {/* 넓은 화면은 장소 영역과 참여자 영역을 두 열로 배치합니다. */}
         <View style={[styles.detailLayout, !isWideLayout && styles.detailLayoutNarrow]}>
-          <View style={styles.mainColumn}>
+          <View style={[styles.mainColumn, !isWideLayout && styles.mainColumnNarrow]}>
         {/* 장소가 확정됐으면 확정 장소만 보여주고, 아니면 추천과 투표 기능을 보여줍니다. */}
         {meeting.confirmedPlace ? (
           <Card style={styles.card}>
@@ -898,8 +898,9 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 25, fontWeight: "900" },
   card: { gap: 8 },
   detailLayout: { flexDirection: "row", alignItems: "flex-start", gap: 18 },
-  detailLayoutNarrow: { flexDirection: "column" },
+  detailLayoutNarrow: { flexDirection: "column", alignItems: "stretch", width: "100%" },
   mainColumn: { flex: 1, minWidth: 0, gap: 12 },
+  mainColumnNarrow: { width: "100%", flexGrow: 0, flexShrink: 0 },
   sideColumn: { width: 320, flexShrink: 0, gap: 12 },
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },
