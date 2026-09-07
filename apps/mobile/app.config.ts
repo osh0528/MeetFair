@@ -61,6 +61,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     ],
     "expo-web-browser",
     "expo-secure-store",
+    "@react-native-google-signin/google-signin",
     "@livekit/react-native-expo-plugin",
     "./plugins/with-video-only-webrtc",
   ],

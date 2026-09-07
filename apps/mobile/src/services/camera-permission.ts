@@ -1,4 +1,4 @@
-import { useCameraPermissions } from "expo-camera";
+import { Camera, useCameraPermissions } from "expo-camera";
 import { Platform } from "react-native";
 
 async function requestWebCameraAccess() {
@@ -7,6 +7,16 @@ async function requestWebCameraAccess() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     stream.getTracks().forEach((track) => track.stop());
     return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function requestCameraAccess(): Promise<boolean> {
+  if (Platform.OS === "web") return requestWebCameraAccess();
+  try {
+    const permission = await Camera.requestCameraPermissionsAsync();
+    return permission.granted;
   } catch {
     return false;
   }

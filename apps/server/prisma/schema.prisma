@@ -96,6 +96,9 @@ model User {
   profileBio      String?
   profileEmoji    String               @default("🌟")
   profileTheme    String               @default("PURPLE")
+  profileRoomWallpaper String          @default("CREAM")
+  profileRoomDecor String[]            @default([])
+  profileRoomLayout Json               @default("[]")
   profileMusicTitle String?
   profileMusicData Bytes?
   profileMusicMimeType String?
@@ -461,6 +464,7 @@ model MeetingCall {
   roomName              String            @unique
   status                MeetingCallStatus @default(RINGING)
   createdAt             DateTime          @default(now())
+  forcedAt              DateTime?
   endedAt               DateTime?
   recordingStatus       String            @default("PENDING")
   recordingEgressId     String?
@@ -476,6 +480,7 @@ model MeetingCall {
   recordingMessage MeetingChatMessage?
 
   @@index([meetingId, createdAt])
+  @@index([forcedAt])
   @@index([recordingStatus, recordingExpiresAt])
 }
 
@@ -484,6 +489,8 @@ model MeetingCallParticipant {
   callId    String
   userId    String
   status    MeetingCallParticipantStatus @default(RINGING)
+  ringingAt DateTime                     @default(now())
+  forcedAt  DateTime?
   respondedAt DateTime?
   joinedAt  DateTime?
   leftAt    DateTime?
@@ -492,6 +499,7 @@ model MeetingCallParticipant {
 
   @@unique([callId, userId])
   @@index([userId, status])
+  @@index([status, ringingAt])
 }
 
 model RecordingAccessLog {

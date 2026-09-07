@@ -108,3 +108,11 @@ export function useAppTheme() {
   if (!value) throw new Error("useAppTheme must be used inside ThemeProvider");
   return value;
 }
+
+export type Palette = (typeof palettes)[ThemeMode] & { primarySoft: string };
+
+export function useAppColors(): Palette {
+  const { mode } = useAppTheme();
+  const palette = palettes[mode];
+  return { ...palette, primarySoft: palette["primary-soft"] };
+}

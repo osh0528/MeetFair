@@ -77,7 +77,7 @@ function ExpoGoGoogleButton({ label, disabled, onIdToken, onError }: Props) {
   const { onIdTokenRef, onErrorRef } = useHandlerRefs(onIdToken, onError);
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: appConfig.googleWebClientId,
-    redirectUri: AuthSession.makeRedirectUri({ useProxy: true }),
+    redirectUri: AuthSession.makeRedirectUri(),
     selectAccount: true,
   });
 
