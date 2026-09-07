@@ -23,26 +23,51 @@ export async function apiRequest<T>(
   init: RequestInit = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
-  let response: Response;
   const controller = new AbortController();
   let timedOut = false;
-  const abortFromCaller = () => controller.abort();
-  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const abortFromCaller = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) abortFromCaller();
+  else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
   try {
-    response = await fetch(`${appConfig.apiUrl}${path}`, {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    const headers = new Headers(init.headers);
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
+    if (accessToken && !headers.has("authorization")) headers.set("authorization", `Bearer ${accessToken}`);
+    const response = await fetch(`${appConfig.apiUrl}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: {
-        "content-type": "application/json",
-        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-        ...init.headers,
-      },
+      headers,
     });
-  } catch {
+    if (response.status === 204) return undefined as T;
+    let payload: ApiResponse<T>;
+    try {
+      payload = await response.json() as ApiResponse<T>;
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      throw new ApiError("INVALID_SERVER_RESPONSE", "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", response.status);
+    }
+    if (!payload || typeof payload !== "object" || typeof payload.success !== "boolean") {
+      throw new ApiError("INVALID_SERVER_RESPONSE", "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", response.status);
+    }
+    if (!payload.success) {
+      if (!payload.error || typeof payload.error.code !== "string" || typeof payload.error.message !== "string") {
+        throw new ApiError("INVALID_SERVER_RESPONSE", "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", response.status);
+      }
+      const details = "details" in payload.error && payload.error.details && typeof payload.error.details === "object"
+        ? payload.error.details as Record<string, unknown>
+        : undefined;
+      throw new ApiError(payload.error.code, payload.error.message, response.status, details);
+    }
+    if (!response.ok || !("data" in payload)) {
+      throw new ApiError("INVALID_SERVER_RESPONSE", "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", response.status);
+    }
+    return payload.data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     if (timedOut) {
       throw new ApiError(
         "SERVER_TIMEOUT",
@@ -50,6 +75,7 @@ export async function apiRequest<T>(
         0,
       );
     }
+    if (init.signal?.aborted) throw init.signal.reason ?? error;
     throw new ApiError(
       "SERVER_UNREACHABLE",
       "서버에 연결할 수 없습니다. 서버 주소와 실행 상태를 확인해 주세요.",
@@ -59,23 +85,6 @@ export async function apiRequest<T>(
     clearTimeout(timeout);
     init.signal?.removeEventListener("abort", abortFromCaller);
   }
-  if (response.status === 204) return undefined as T;
-  let payload: ApiResponse<T> & {
-    error?: { code: string; message: string; details?: Record<string, unknown> };
-  };
-  try {
-    payload = await response.json() as ApiResponse<T>;
-  } catch {
-    throw new ApiError(
-      "INVALID_SERVER_RESPONSE",
-      "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      response.status,
-    );
-  }
-  if (!payload.success) {
-    throw new ApiError(payload.error.code, payload.error.message, response.status, payload.error.details);
-  }
-  return payload.data;
 }
 
 export async function checkServerHealth() {

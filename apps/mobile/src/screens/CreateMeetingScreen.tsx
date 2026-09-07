@@ -1,6 +1,6 @@
 import type { FriendSummary, LocationShareMode, MeetingSummary, MeetingVisibility, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -108,6 +108,10 @@ export function CreateMeetingScreen({ navigation }: Props) {
   const [selectedPlace, setSelectedPlace] = useState<AddressCandidate | null>(null);
   const [placeFocusTarget, setPlaceFocusTarget] = useState<AddressSelection | null>(null);
   const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
+  const creatingRef = useRef(false);
+  const createdMeetingIdRef = useRef<string | null>(null);
   const scheduledAt = useMemo(() => parseSchedule(scheduledDate, scheduledTime), [scheduledDate, scheduledTime]);
   const visibleCalendarDates = useMemo(() => calendarDates(calendarMonth), [calendarMonth]);
 
@@ -122,7 +126,13 @@ export function CreateMeetingScreen({ navigation }: Props) {
   }
 
   useEffect(() => {
-    void apiRequest<{ friends: FriendSummary[] }>("/friends").then((data) => setFriends(data.friends));
+    let active = true;
+    void apiRequest<{ friends: FriendSummary[] }>("/friends")
+      .then((data) => { if (active) setFriends(data.friends); })
+      .catch((caught) => {
+        if (active) setError(caught instanceof Error ? caught.message : "친구 목록을 불러오지 못했습니다.");
+      });
+    return () => { active = false; };
   }, []);
 
   function toggle<T>(items: T[], item: T) {
@@ -145,23 +155,37 @@ export function CreateMeetingScreen({ navigation }: Props) {
   function searchPlace() {
     const query = placeInput.trim();
     if (!query) return;
+    setPlaceCandidates([]);
     setSelectedPlace(null);
     setPlaceQuery(query);
     setPlaceRequestId((current) => current + 1);
   }
 
   async function createMeeting() {
+    if (creatingRef.current) return;
     setError("");
+    if (!title.trim() || title.trim().length > 80 || !categories.length) {
+      setError("모임 이름은 1~80자로 입력하고 장소 종류를 선택해 주세요.");
+      return;
+    }
+    if (shareMode === "BEFORE_START" && (!/^\d+$/.test(minutesBefore.trim()) || Number(minutesBefore) < 1 || Number(minutesBefore) > 1440)) {
+      setError("위치 공유 시작 시간은 1~1440분 사이의 정수로 입력해 주세요.");
+      return;
+    }
     if (!scheduledAt) {
       setError("날짜는 YYYY-MM-DD, 시간은 HH:MM 형식으로 입력해 주세요.");
       return;
     }
-    if (scheduledAt.getTime() <= Date.now()) {
+    if (!createdMeetingIdRef.current && scheduledAt.getTime() <= Date.now()) {
       setError("현재보다 이후 날짜와 시간을 선택해 주세요.");
       return;
     }
+    creatingRef.current = true;
+    setCreating(true);
     try {
-      const meeting = await apiRequest<MeetingSummary>("/meetings", {
+      const meeting = createdMeetingIdRef.current
+        ? { id: createdMeetingIdRef.current }
+        : await apiRequest<MeetingSummary>("/meetings", {
         method: "POST",
         body: JSON.stringify({
           title: title.trim(),
@@ -174,6 +198,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
           shareMinutesBefore: shareMode === "BEFORE_START" ? Number(minutesBefore) : null,
         }),
       });
+      createdMeetingIdRef.current = meeting.id;
       if (selectedPlace) {
         await apiRequest(`/meetings/${meeting.id}/candidates`, {
           method: "POST",
@@ -189,8 +214,26 @@ export function CreateMeetingScreen({ navigation }: Props) {
       }
       navigation.replace("Meeting", { meetingId: meeting.id });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "모임을 만들지 못했습니다.");
+      setCreatedMeetingId(createdMeetingIdRef.current);
+      const reason = caught instanceof Error ? caught.message : "요청을 처리하지 못했습니다.";
+      setError(createdMeetingIdRef.current ? `모임은 생성되었지만 장소 후보를 추가하지 못했습니다. ${reason}` : reason);
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
     }
+  }
+
+  if (createdMeetingId) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScreenHeader title="모임 생성 완료" onBack={() => navigation.replace("Meeting", { meetingId: createdMeetingId })} />
+        <View style={styles.content}>
+          <Text style={styles.error}>{error}</Text>
+          <Button disabled={creating} label={creating ? "장소 추가 중..." : "장소 추가 다시 시도"} onPress={createMeeting} />
+          <Button disabled={creating} label="생성된 모임 열기" onPress={() => navigation.replace("Meeting", { meetingId: createdMeetingId })} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -349,7 +392,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         {selectedPlace ? <Text style={styles.selectedPlace}>선택한 장소: {selectedPlace.title || selectedPlace.address}</Text> : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button disabled={!title.trim() || categories.length === 0 || !scheduledAt || scheduledAt.getTime() <= Date.now()} label="모임 만들기" onPress={createMeeting} />
+        <Button disabled={creating || !title.trim() || categories.length === 0 || !scheduledAt || scheduledAt.getTime() <= Date.now()} label={creating ? "모임 만드는 중..." : "모임 만들기"} onPress={createMeeting} />
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,6 +1,6 @@
 import type { FriendRequestSummary } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -22,23 +22,29 @@ export function FriendRequestsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
+  const loadRequestRef = useRef(0);
+  const responseBusyRef = useRef(false);
 
   async function load() {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setMessage("");
     try {
       const data = await apiRequest<{ received: FriendRequestSummary[]; sent: FriendRequestSummary[] }>("/friends/friend-requests");
+      if (requestId !== loadRequestRef.current) return;
       setReceived(data.received.filter((item) => item.status === "PENDING"));
       setSent(data.sent.filter((item) => item.status === "PENDING"));
     } catch (caught) {
+      if (requestId !== loadRequestRef.current) return;
       setMessage(caught instanceof Error ? caught.message : "친구 요청을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
+    return () => { loadRequestRef.current += 1; };
   }, []);
 
   useEffect(() => {
@@ -57,6 +63,8 @@ export function FriendRequestsScreen({ navigation }: Props) {
   }, [accessToken]);
 
   async function respond(id: string, action: "accept" | "reject") {
+    if (responseBusyRef.current) return;
+    responseBusyRef.current = true;
     setBusyId(id);
     setMessage("");
     try {
@@ -68,6 +76,7 @@ export function FriendRequestsScreen({ navigation }: Props) {
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "친구 요청에 응답하지 못했습니다.");
     } finally {
+      responseBusyRef.current = false;
       setBusyId("");
     }
   }
@@ -86,8 +95,8 @@ export function FriendRequestsScreen({ navigation }: Props) {
               <View><Text style={styles.name}>{request.requester.nickname}</Text><Text style={styles.meta}>@{request.requester.accountId}</Text></View>
             </View>
             <View style={styles.actions}>
-              <Button compact disabled={busyId === request.id} label={busyId === request.id ? "처리 중..." : "수락"} onPress={() => respond(request.id, "accept")} />
-              <Button compact disabled={busyId === request.id} label="거절" onPress={() => respond(request.id, "reject")} variant="secondary" />
+              <Button compact disabled={Boolean(busyId)} label={busyId === request.id ? "처리 중..." : "수락"} onPress={() => respond(request.id, "accept")} />
+              <Button compact disabled={Boolean(busyId)} label="거절" onPress={() => respond(request.id, "reject")} variant="secondary" />
             </View>
           </Card>
         ))}

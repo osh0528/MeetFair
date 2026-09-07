@@ -1,5 +1,5 @@
 import type { MeetingPostCommentSummary, MeetingPostSummary } from "@meetfair/shared";
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
-import { Card, ScreenHeader } from "../components/ui";
+import { Button, Card, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { useAppColors, type Palette } from "../services/theme";
@@ -37,22 +37,33 @@ export function PostDetailScreen({ navigation, route }: Props) {
   const [commentContent, setCommentContent] = useState("");
   const [sending, setSending] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const sendingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const postIdRef = useRef(postId);
+  postIdRef.current = postId;
 
   const loadPost = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError("");
     try {
       const data = await apiRequest<PostResponse>(`/meetings/${meetingId}/posts/${postId}`);
+      if (requestId !== loadRequestRef.current) return;
       setPost(data.post);
     } catch (caught) {
+      if (requestId !== loadRequestRef.current) return;
       setError(caught instanceof Error ? caught.message : "게시글을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [meetingId, postId]);
 
   useEffect(() => {
+    setPost(null);
+    setCommentContent("");
     void loadPost();
+    return () => { loadRequestRef.current += 1; };
   }, [loadPost]);
 
   async function handleAddComment() {
@@ -62,7 +73,8 @@ export function PostDetailScreen({ navigation, route }: Props) {
       setError("댓글은 2000자 이내여야 합니다.");
       return;
     }
-    if (sending) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setError("");
     try {
@@ -73,16 +85,20 @@ export function PostDetailScreen({ navigation, route }: Props) {
           body: JSON.stringify({ content: trimmed }),
         },
       );
+      if (postIdRef.current !== postId) return;
       setPost((prev) => (prev ? { ...prev, comments: [...prev.comments, data.comment] } : prev));
-      setCommentContent("");
+      setCommentContent((current) => current === commentContent ? "" : current);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "댓글을 작성하지 못했습니다.");
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
 
   async function handleDeleteComment(commentId: string) {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
     setDeletingCommentId(commentId);
     setError("");
     try {
@@ -90,12 +106,14 @@ export function PostDetailScreen({ navigation, route }: Props) {
         `/meetings/${meetingId}/posts/${postId}/comments/${commentId}`,
         { method: "DELETE" },
       );
+      if (postIdRef.current !== postId) return;
       setPost((prev) =>
         prev ? { ...prev, comments: prev.comments.filter((c) => c.id !== commentId) } : prev,
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "댓글을 삭제하지 못했습니다.");
     } finally {
+      deletingRef.current = false;
       setDeletingCommentId(null);
     }
   }
@@ -117,6 +135,7 @@ export function PostDetailScreen({ navigation, route }: Props) {
         <ScreenHeader title={postTitle} onBack={() => navigation.goBack()} />
         <View style={styles.center}>
           <Text style={styles.meta}>{error || "게시글을 찾을 수 없습니다."}</Text>
+          <Button label="다시 시도" onPress={() => void loadPost()} variant="secondary" />
         </View>
       </SafeAreaView>
     );
@@ -163,7 +182,7 @@ export function PostDetailScreen({ navigation, route }: Props) {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => void handleDeleteComment(item.id)}
-                  disabled={deletingCommentId === item.id}
+                  disabled={Boolean(deletingCommentId)}
                   style={styles.deleteButton}
                 >
                   <Text style={styles.deleteButtonText}>

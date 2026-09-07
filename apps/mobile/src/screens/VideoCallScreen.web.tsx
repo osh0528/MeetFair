@@ -265,6 +265,9 @@ export function VideoCallScreen({ navigation, route }: Props) {
             {tracks.filter((entry) => entry.track.kind === Track.Kind.Video).map((entry) => <BrowserTrack key={entry.id} entry={entry} />)}
             {!tracks.some((entry) => entry.track.kind === Track.Kind.Video) ? <Text style={styles.waiting}>카메라 화면을 준비하는 중입니다.</Text> : null}
           </View>
+          {tracks.filter((entry) => entry.track.kind === Track.Kind.Audio && !entry.id.startsWith("local:")).map((entry) => (
+            <BrowserTrack key={entry.id} entry={entry} />
+          ))}
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <View style={styles.controls}>
             <ControlButton label={microphoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={() => void toggleMicrophone()} />

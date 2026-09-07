@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -42,9 +42,16 @@ export function ProfileScreen({ navigation }: Props) {
   const [cropOffsetX, setCropOffsetX] = useState(0);
   const [cropOffsetY, setCropOffsetY] = useState(0);
 
-  useFocusEffect(() => {
-    void session.refreshUser();
-  });
+  const refreshUserRef = useRef(session.refreshUser);
+  refreshUserRef.current = session.refreshUser;
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void refreshUserRef.current().catch((caught) => {
+      if (active) setError(caught instanceof Error ? caught.message : "개인정보를 불러오지 못했습니다.");
+    });
+    return () => { active = false; };
+  }, []));
 
   useEffect(() => {
     setHomeAddress(session.user?.homeAddress ?? "");

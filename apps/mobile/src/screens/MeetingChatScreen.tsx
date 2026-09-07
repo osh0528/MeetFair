@@ -46,10 +46,27 @@ export function MeetingChatScreen({ navigation, route }: Props) {
   const [error, setError] = useState("");
   const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList<MeetingChatMessageSummary>>(null);
+  const meetingIdRef = useRef(meetingId);
+  const messageRequestRef = useRef(0);
+  const messagesInFlightRef = useRef<number | null>(null);
+  const sendingRef = useRef(false);
+  meetingIdRef.current = meetingId;
+
+  useEffect(() => {
+    setMessages([]);
+    setNextCursor(null);
+    setContent("");
+    setParticipantNames({});
+    setError("");
+  }, [meetingId]);
 
   const loadMessages = useCallback(
     async (targetMeetingId: string, cursor?: string | null) => {
-      if (!cursor) setMessagesLoading(true);
+      if (cursor && messagesInFlightRef.current !== null) return;
+      const requestId = ++messageRequestRef.current;
+      messagesInFlightRef.current = requestId;
+      const isCurrent = () => meetingIdRef.current === targetMeetingId && messageRequestRef.current === requestId;
+      setMessagesLoading(true);
       try {
         const params = new URLSearchParams();
         params.set("limit", "20");
@@ -57,16 +74,16 @@ export function MeetingChatScreen({ navigation, route }: Props) {
         const data = await apiRequest<MessagesResponse>(
           `/meetings/${targetMeetingId}/chat/messages?${params.toString()}`,
         );
-        if (cursor) {
-          setMessages((prev) => [...prev, ...data.messages]);
-        } else {
-          setMessages(data.messages);
-        }
+        if (!isCurrent()) return;
+        setMessages((prev) => Array.from(new Map([...prev, ...data.messages].map((message) => [message.id, message])).values())
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
         setNextCursor(data.nextCursor);
       } catch (caught) {
+        if (!isCurrent()) return;
         setError(caught instanceof Error ? caught.message : "메시지를 불러오지 못했습니다.");
       } finally {
-        setMessagesLoading(false);
+        if (messagesInFlightRef.current === requestId) messagesInFlightRef.current = null;
+        if (isCurrent()) setMessagesLoading(false);
       }
     },
     [],
@@ -74,14 +91,21 @@ export function MeetingChatScreen({ navigation, route }: Props) {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
       void loadMessages(meetingId, null);
       void apiRequest<MeetingParticipantsResponse>(`/meetings/${meetingId}`)
         .then((meeting) => {
+          if (!active) return;
           setParticipantNames(Object.fromEntries(
             meeting.participants.map((participant) => [participant.userId, participant.user.nickname]),
           ));
         })
         .catch(() => {});
+      return () => {
+        active = false;
+        messageRequestRef.current += 1;
+        messagesInFlightRef.current = null;
+      };
     }, [meetingId, loadMessages]),
   );
 
@@ -107,11 +131,12 @@ export function MeetingChatScreen({ navigation, route }: Props) {
 
   async function handleSend() {
     const trimmed = content.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed || sendingRef.current) return;
     if (trimmed.length > 2000) {
       setError("메시지는 2000자 이내여야 합니다.");
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     setError("");
     const clientMessageId = createClientRequestId();
@@ -120,14 +145,16 @@ export function MeetingChatScreen({ navigation, route }: Props) {
         method: "POST",
         body: JSON.stringify({ content: trimmed, clientMessageId }),
       });
+      if (meetingIdRef.current !== meetingId) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === data.message.id)) return prev;
         return [data.message, ...prev];
       });
-      setContent("");
+      setContent((current) => current === content ? "" : current);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "메시지를 보내지 못했습니다.");
+      if (meetingIdRef.current === meetingId) setError(caught instanceof Error ? caught.message : "메시지를 보내지 못했습니다.");
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -140,6 +167,8 @@ export function MeetingChatScreen({ navigation, route }: Props) {
       const data = await apiRequest<RecordingResponse>(
         `/meetings/${meetingId}/chat/messages/${messageId}/video`,
       );
+      if (meetingIdRef.current !== meetingId) return;
+      if (!/^https?:\/\//i.test(data.url)) throw new Error("녹화 영상 주소가 올바르지 않습니다.");
       await Linking.openURL(data.url);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "녹화 영상을 열지 못했습니다.");

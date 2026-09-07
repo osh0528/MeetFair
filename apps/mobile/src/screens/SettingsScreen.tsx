@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -23,31 +23,49 @@ export function SettingsScreen({ navigation }: Props) {
   const [quietEnd, setQuietEnd] = useState(minutesToTime(session.user?.pokeQuietEndMinutes ?? 8 * 60));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [soundBusy, setSoundBusy] = useState(true);
+  const savingRef = useRef(false);
+  const soundBusyRef = useRef(true);
 
   useEffect(() => {
-    void isPokeSoundEnabled().then(setSound);
+    let active = true;
+    void isPokeSoundEnabled()
+      .then((enabled) => { if (active) setSound(enabled); })
+      .catch(() => { if (active) setMessage("효과음 설정을 불러오지 못했습니다."); })
+      .finally(() => {
+        soundBusyRef.current = false;
+        if (active) setSoundBusy(false);
+      });
+    return () => { active = false; };
   }, []);
 
   async function update(input: { shareExactLocationWithFriends?: boolean; casualPokesEnabled?: boolean }) {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setMessage("");
     try {
       await apiRequest("/users/me/settings", { method: "PATCH", body: JSON.stringify(input) });
+      if (input.shareExactLocationWithFriends !== undefined) setLocation(input.shareExactLocationWithFriends);
+      if (input.casualPokesEnabled !== undefined) setPokes(input.casualPokesEnabled);
       await session.refreshUser();
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "설정을 저장하지 못했습니다.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   async function saveQuietTime() {
+    if (savingRef.current) return;
     const start = timeToMinutes(quietStart);
     const end = timeToMinutes(quietEnd);
     if (start === null || end === null) {
       setMessage("시간을 HH:MM 형식으로 입력해 주세요.");
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setMessage("");
     try {
@@ -60,7 +78,24 @@ export function SettingsScreen({ navigation }: Props) {
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "방해 금지 시간을 저장하지 못했습니다.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  async function updateSound(value: boolean) {
+    if (soundBusyRef.current) return;
+    soundBusyRef.current = true;
+    setSoundBusy(true);
+    setMessage("");
+    try {
+      await setPokeSoundEnabled(value);
+      setSound(value);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "효과음 설정을 저장하지 못했습니다.");
+    } finally {
+      soundBusyRef.current = false;
+      setSoundBusy(false);
     }
   }
 
@@ -80,7 +115,7 @@ export function SettingsScreen({ navigation }: Props) {
                 key={item}
                 accessibilityRole="button"
                 accessibilityState={{ selected: mode === item }}
-                onPress={() => void setMode(item)}
+                onPress={() => void setMode(item).catch(() => setMessage("화면 테마를 저장하지 못했습니다."))}
                 style={[styles.themeOption, mode === item && styles.themeOptionSelected]}
               >
                 <Text style={[styles.themeOptionText, mode === item && styles.themeOptionTextSelected]}>
@@ -92,15 +127,15 @@ export function SettingsScreen({ navigation }: Props) {
         </Card>
         <Card style={styles.card}>
           <Text style={styles.title}>정확한 위치를 친구에게 상시 공유</Text>
-           <Switch value={location} onValueChange={(value) => { setLocation(value); void update({ shareExactLocationWithFriends: value }); }} />
+          <Switch disabled={saving} value={location} onValueChange={(value) => void update({ shareExactLocationWithFriends: value })} />
         </Card>
         <Card style={styles.card}>
           <Text style={styles.title}>평상시 친구 찌르기 허용</Text>
-          <Switch value={pokes} onValueChange={(value) => { setPokes(value); void update({ casualPokesEnabled: value }); }} />
+          <Switch disabled={saving} value={pokes} onValueChange={(value) => void update({ casualPokesEnabled: value })} />
         </Card>
         <Card style={styles.card}>
           <Text style={styles.title}>찌르기 효과음</Text>
-          <Switch value={sound} onValueChange={(value) => { setSound(value); void setPokeSoundEnabled(value); }} />
+          <Switch disabled={soundBusy} value={sound} onValueChange={(value) => void updateSound(value)} />
         </Card>
         <Card style={styles.formCard}>
           <Text style={styles.title}>찌르기 방해 금지 시간</Text>

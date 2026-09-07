@@ -18,23 +18,31 @@ export function MiniHomeSearchScreen({ navigation }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let active = true;
     const normalized = query.trim();
+    setLoading(Boolean(normalized));
+    setResults([]);
+    setError("");
     if (!normalized) {
-      setResults([]);
-      setError("");
       return;
     }
     const timer = setTimeout(() => {
       setLoading(true);
       void apiRequest<{ users: PublicProfileSearchResult[] }>("/users/search?q=" + encodeURIComponent(normalized))
         .then((data) => {
+          if (!active) return;
           setResults(data.users);
           setError("");
         })
-        .catch((caught) => setError(caught instanceof Error ? caught.message : "사용자 검색에 실패했습니다."))
-        .finally(() => setLoading(false));
+        .catch((caught) => {
+          if (active) setError(caught instanceof Error ? caught.message : "사용자 검색에 실패했습니다.");
+        })
+        .finally(() => { if (active) setLoading(false); });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   return (

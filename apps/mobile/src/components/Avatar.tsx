@@ -1,6 +1,6 @@
+import { useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useAppColors } from "../services/theme";
-import { useMemo } from "react";
 
 
 interface AvatarProps {
@@ -15,6 +15,7 @@ export function Avatar({ name, size = 42, backgroundColor, status, imageUrl }: A
   const palette = useAppColors();
   const resolvedBackgroundColor = backgroundColor ?? palette.primarySoft;
   const styles = useStyles();
+  const [failedImageUrl, setFailedImageUrl] = useState<string>();
   const statusStyle = status === "online"
     ? styles.onlineDot
     : status === "moving"
@@ -25,7 +26,7 @@ export function Avatar({ name, size = 42, backgroundColor, status, imageUrl }: A
   return (
     <View style={{ width: size, height: size }}>
         <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: resolvedBackgroundColor }]}>
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={{ width: size, height: size }} /> : (
+        {imageUrl && imageUrl !== failedImageUrl ? <Image key={imageUrl} source={{ uri: imageUrl }} onError={() => setFailedImageUrl(imageUrl)} style={{ width: size, height: size }} /> : (
           <Text style={[styles.avatarText, { fontSize: Math.max(12, size * 0.34) }]}>{name.slice(0, 1)}</Text>
         )}
       </View>
