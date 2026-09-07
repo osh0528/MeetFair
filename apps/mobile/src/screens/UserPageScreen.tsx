@@ -578,11 +578,6 @@ export function UserPageScreen({ navigation, route }: Props) {
   const photoCardMutedColor = mode === "DARK" ? "#9CA2B1" : "#697080";
   const themedPanel = { backgroundColor: palette.background, borderColor: palette.accent };
   const housePanel = { backgroundColor: "transparent", borderColor: "transparent" };
-  function previewTheme(nextTheme: ProfileTheme) {
-    setTheme(nextTheme);
-    setPage((current) => current ? { ...current, theme: nextTheme } : current);
-    setMessage("미리보기 중입니다. 변경사항 저장을 눌러 적용해 주세요.");
-  }
   function previewWallpaper(nextWallpaper: RoomWallpaper) {
     setRoomWallpaper(nextWallpaper);
     setPage((current) => current ? { ...current, roomWallpaper: nextWallpaper } : current);
@@ -814,25 +809,6 @@ export function UserPageScreen({ navigation, route }: Props) {
                   variant="soft"
                 />
                 {page.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-                <Text style={styles.label}>방 분위기</Text>
-                <View style={styles.themeRow}>
-                  {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                    <Pressable
-                      key={item}
-                      onPress={() => previewTheme(item)}
-                      style={[
-                        styles.themeChoice,
-                        {
-                          backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background,
-                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border,
-                        },
-                      ]}
-                    >
-                      <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
                 {wallpaperEditor}
                 {roomDecorEditor}
                 <Button disabled={busy || appearanceBusy || !emoji.trim()} label={busy || appearanceBusy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
@@ -1002,15 +978,6 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
               <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
               {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
-              <Text style={styles.label}>방 분위기</Text>
-              <View style={styles.themeRow}>
-                {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                  <Pressable key={item} onPress={() => previewTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
-                    <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
-                  </Pressable>
-                ))}
-              </View>
               {wallpaperEditor}
               {roomDecorEditor}
               <Button disabled={busy || appearanceBusy || !emoji.trim()} label={busy || appearanceBusy ? "저장 중" : "변경사항 저장"} onPress={() => void savePage()} />
@@ -1105,10 +1072,6 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   input: { minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12 },
   multiline: { minHeight: 112 },
-  themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  themeChoice: { minWidth: 66, padding: 9, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6 },
-  themeDot: { width: 10, height: 10, borderRadius: 5 },
-  themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
   decorEditor: { gap: 8, marginTop: 4 },
   decorProgressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   decorPoints: { fontSize: 11, fontWeight: "900" },
