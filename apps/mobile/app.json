@@ -19,8 +19,7 @@
       }],
       "expo-location",
       ["expo-image-picker", {
-        "photosPermission": "프로필 사진을 선택하려면 사진 접근을 허용해 주세요.",
-        "cameraPermission": false
+        "photosPermission": "프로필 사진을 선택하려면 사진 접근을 허용해 주세요."
       }],
       "@livekit/react-native-expo-plugin",
       "./plugins/with-video-only-webrtc"
