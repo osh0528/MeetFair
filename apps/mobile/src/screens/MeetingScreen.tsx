@@ -135,9 +135,10 @@ function travelStats(
 
 // 모임 상세 조회와 모임 내 모든 사용자 동작을 담당하는 메인 화면입니다.
 export function MeetingScreen({ navigation, route }: Props) {
-  // 화면 폭이 720px 이상이면 PC용 2열 레이아웃을 사용합니다.
+  // APK는 화면이 넓거나 가로로 회전해도 한 열을 유지해 장소 추천·지도·투표가
+  // 화면 전체 너비를 사용하게 합니다. 두 열 레이아웃은 넓은 웹 화면에서만 사용합니다.
   const { width: windowWidth } = useWindowDimensions();
-  const isWideLayout = windowWidth >= 720;
+  const isWideLayout = Platform.OS === "web" && windowWidth >= 960;
   // 현재 로그인한 사용자와 이전 화면에서 전달한 모임 ID를 가져옵니다.
   const { user } = useSession();
   const meetingId = route.params.meetingId;
