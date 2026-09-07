@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 
 type Layout = "bottom" | "sidebar";
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
 type ItemProps = { active: boolean; icon: string; label: string; layout: Layout; onPress(): void };
 
 function NavigationItem({ active, icon, label, layout, onPress }: ItemProps) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -36,6 +38,7 @@ function NavigationItem({ active, icon, label, layout, onPress }: ItemProps) {
 }
 
 export function AppBottomNavigation({ currentRoute, layout = "bottom", onSettings, onMeetings, onFriends, onUserPage }: Props) {
+  const styles = useStyles();
   const items = [
     { label: "홈피", icon: "⌂", active: currentRoute === "UserPage", onPress: onUserPage },
     {
@@ -57,36 +60,43 @@ export function AppBottomNavigation({ currentRoute, layout = "bottom", onSetting
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: colors.header,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 12,
-  },
-  navigation: { minHeight: 70, paddingHorizontal: 8, paddingTop: 7, paddingBottom: 5, flexDirection: "row", gap: 4 },
-  sidebarSafeArea: {
-    width: 104,
-    borderTopWidth: 0,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    shadowOffset: { width: 4, height: 0 },
-    zIndex: 2,
-  },
-  sidebarNavigation: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 18, flexDirection: "column", gap: 10 },
-  item: { flex: 1, minWidth: 0, minHeight: 44, paddingVertical: 4, gap: 4, alignItems: "center", justifyContent: "center", borderRadius: 12 },
-  sidebarItem: { flex: 0, width: "100%", minHeight: 68, paddingHorizontal: 6, paddingVertical: 8 },
-  itemActive: { backgroundColor: colors.navActive },
-  itemPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  icon: { width: 38, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "transparent" },
-  iconActive: { backgroundColor: colors.primarySoft, transform: [{ scale: 1.04 }] },
-  iconText: { color: colors.icon, fontSize: 20, fontWeight: "900", lineHeight: 22 },
-  iconTextActive: { color: colors.primary },
-  label: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
-  sidebarLabel: { fontSize: 12 },
-  labelActive: { color: colors.primary },
-});
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        safeArea: {
+          backgroundColor: palette.header,
+          borderTopWidth: 1,
+          borderTopColor: palette.border,
+          shadowColor: palette.charcoal,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 14,
+          elevation: 12,
+        },
+        navigation: { minHeight: 70, paddingHorizontal: 8, paddingTop: 7, paddingBottom: 5, flexDirection: "row", gap: 4 },
+        sidebarSafeArea: {
+          width: 104,
+          borderTopWidth: 0,
+          borderRightWidth: 1,
+          borderRightColor: palette.border,
+          shadowOffset: { width: 4, height: 0 },
+          zIndex: 2,
+        },
+        sidebarNavigation: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 18, flexDirection: "column", gap: 10 },
+        item: { flex: 1, minWidth: 0, minHeight: 44, paddingVertical: 4, gap: 4, alignItems: "center", justifyContent: "center", borderRadius: 12 },
+        sidebarItem: { flex: 0, width: "100%", minHeight: 68, paddingHorizontal: 6, paddingVertical: 8 },
+        itemActive: { backgroundColor: palette["nav-active"] },
+        itemPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+        icon: { width: 38, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "transparent" },
+        iconActive: { backgroundColor: palette.primarySoft, transform: [{ scale: 1.04 }] },
+        iconText: { color: palette.icon, fontSize: 20, fontWeight: "900", lineHeight: 22 },
+        iconTextActive: { color: palette.primary },
+        label: { color: palette.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
+        sidebarLabel: { fontSize: 12 },
+        labelActive: { color: palette.primary },
+      }),
+    [palette],
+  );
+}
