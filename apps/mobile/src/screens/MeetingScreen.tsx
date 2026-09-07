@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
   detailLayout: { flexDirection: "row", alignItems: "flex-start", gap: 18 },
   detailLayoutNarrow: { flexDirection: "column", alignItems: "stretch", width: "100%" },
   mainColumn: { flex: 1, minWidth: 0, gap: 12 },
-  mainColumnNarrow: { width: "100%", flexGrow: 0, flexShrink: 0 },
+  mainColumnNarrow: { width: "100%", flexGrow: 0, flexShrink: 0, flexBasis: "auto" },
   sideColumn: { width: 320, flexShrink: 0, gap: 12 },
   sideColumnNarrow: { width: "100%" },
   sideList: { gap: 10 },
