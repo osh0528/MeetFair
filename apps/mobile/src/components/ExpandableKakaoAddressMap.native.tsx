@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 import type { AddressSelection } from "../types/location";
 import { KakaoAddressMap, type KakaoAddressMapProps } from "./KakaoAddressMap";
 
 export function ExpandableKakaoAddressMap(props: KakaoAddressMapProps) {
   const [expanded, setExpanded] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<AddressSelection | null>(null);
+  const styles = useStyles();
   const handleResolved = (selection: AddressSelection) => {
     setPendingSelection(selection);
     props.onResolved?.(selection);
@@ -48,14 +49,21 @@ export function ExpandableKakaoAddressMap(props: KakaoAddressMapProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  preview: { flex: 1, minHeight: 0, position: "relative" },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        preview: { flex: 1, minHeight: 0, position: "relative" },
   expandButton: { position: "absolute", right: 12, bottom: 12, width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(17,19,26,0.86)", alignItems: "center", justifyContent: "center", zIndex: 10 },
   expandButtonText: { color: "#FFFFFF", fontSize: 23, fontWeight: "900" },
-  confirmButton: { position: "absolute", left: 12, right: 66, bottom: 12, minHeight: 44, borderRadius: 12, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", zIndex: 11 },
-  fullscreen: { flex: 1, backgroundColor: colors.background },
+  confirmButton: { position: "absolute", left: 12, right: 66, bottom: 12, minHeight: 44, borderRadius: 12, paddingHorizontal: 16, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center", zIndex: 11 },
+  fullscreen: { flex: 1, backgroundColor: palette.background },
   closeButton: { position: "absolute", top: 14, right: 14, minWidth: 64, minHeight: 44, zIndex: 10, borderRadius: 12, backgroundColor: "rgba(17,19,26,0.86)", paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   closeButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  fullscreenConfirmButton: { position: "absolute", left: 18, right: 18, bottom: 20, minHeight: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", zIndex: 10 },
-  confirmButtonText: { color: colors.primaryContrast, fontSize: 14, fontWeight: "900" },
-});
+  fullscreenConfirmButton: { position: "absolute", left: 18, right: 18, bottom: 20, minHeight: 48, borderRadius: 14, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center", zIndex: 10 },
+  confirmButtonText: { color: palette["primary-contrast"], fontSize: 14, fontWeight: "900" },
+      }),
+    [palette],
+  );
+}

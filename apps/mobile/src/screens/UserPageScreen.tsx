@@ -16,8 +16,7 @@ import { avatarUrl } from "../services/avatar";
 import { profileMusicUrl } from "../services/profileMusic";
 import { profilePhotoUrl } from "../services/profilePhoto";
 import { useSession } from "../services/session";
-import { useAppTheme } from "../services/theme";
-import { colors } from "../theme/colors";
+import { useAppColors, useAppTheme } from "../services/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "UserPage">;
 
@@ -49,6 +48,7 @@ const wallpapers: Record<RoomWallpaper, { background: string; pattern: string; p
 };
 
 function WallpaperPattern({ pattern, color, compact = false }: { pattern: string; color: string; compact?: boolean }) {
+  const styles = useStyles();
   if (pattern === "plain") return null;
   if (pattern === "stripes") return (
     <View pointerEvents="none" style={styles.wallpaperPatternLayer}>
@@ -100,6 +100,7 @@ function EditableDecoration({
   onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
   onDragStateChange: (dragging: boolean) => void;
 }) {
+  const styles = useStyles();
   const gestureStart = useRef({ x: placement.x, y: placement.y, scale: placement.scale, rotation: placement.rotation, distance: 0, angle: 0 });
   const latest = useRef(placement);
   const onChangeRef = useRef(onChange);
@@ -187,6 +188,7 @@ function HomeDecorations({ layout, width, height, editable, onChange, onDragStat
   onChange: (next: RoomDecorationPlacement, finished: boolean) => void;
   onDragStateChange: (dragging: boolean) => void;
 }) {
+  const styles = useStyles();
   return (
     <View pointerEvents={editable ? "box-none" : "none"} style={styles.homeDecorLayer}>
       {layout.map((placement) => (
@@ -201,6 +203,8 @@ export function UserPageScreen({ navigation, route }: Props) {
   const isNarrowLayout = windowWidth < 480;
   const { user } = useSession();
   const { mode } = useAppTheme();
+  const appColors = useAppColors();
+  const styles = useStyles();
   const [page, setPage] = useState<UserPageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -698,7 +702,7 @@ export function UserPageScreen({ navigation, route }: Props) {
       <Pressable
         disabled={!page.hasMusic}
         onPress={() => void toggleMusic()}
-        style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : colors.subtle }]}
+        style={[styles.musicControl, { backgroundColor: page.hasMusic ? palette.accent : appColors.subtle }]}
       >
         <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
       </Pressable>
@@ -798,11 +802,11 @@ export function UserPageScreen({ navigation, route }: Props) {
                 <Text style={styles.label}>대표 이모지</Text>
                 <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
                 <Text style={styles.label}>상태 메시지</Text>
-                <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={colors.subtle} style={styles.input} value={statusMessage} />
+                <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={appColors.subtle} style={styles.input} value={statusMessage} />
                 <Text style={styles.label}>소개글</Text>
-                <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
+                <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={appColors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
                 <Text style={styles.label}>BGM 제목</Text>
-                <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+                <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={appColors.subtle} style={styles.input} value={musicTitle} />
                 <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
                 <Button
                   disabled={musicBusy || !musicTitle.trim()}
@@ -822,12 +826,12 @@ export function UserPageScreen({ navigation, route }: Props) {
                         styles.themeChoice,
                         {
                           backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background,
-                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border,
+                          borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : appColors.border,
                         },
                       ]}
                     >
                       <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
+                      <Text style={[styles.themeLabel, { color: mode === "DARK" ? appColors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -840,7 +844,7 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Pressable
                 disabled={!page!.hasMusic}
                 onPress={() => void toggleMusic()}
-                style={[styles.musicControl, { backgroundColor: page!.hasMusic ? palette.accent : colors.subtle }]}
+                style={[styles.musicControl, { backgroundColor: page!.hasMusic ? palette.accent : appColors.subtle }]}
               >
                 <Text style={styles.musicControlText}>{musicStatus.playing ? "Ⅱ" : "▶"}</Text>
               </Pressable>
@@ -952,7 +956,7 @@ export function UserPageScreen({ navigation, route }: Props) {
                     multiline
                     onChangeText={setGuestbookContent}
                     placeholder="따뜻한 한마디를 남겨 주세요."
-                    placeholderTextColor={colors.subtle}
+                    placeholderTextColor={appColors.subtle}
                     style={[styles.input, styles.guestbookInput]}
                     textAlignVertical="top"
                     value={guestbookContent}
@@ -992,20 +996,20 @@ export function UserPageScreen({ navigation, route }: Props) {
               <Text style={styles.label}>대표 이모지</Text>
               <TextInput maxLength={16} onChangeText={setEmoji} style={styles.input} value={emoji} />
               <Text style={styles.label}>상태 메시지</Text>
-              <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={colors.subtle} style={styles.input} value={statusMessage} />
+              <TextInput maxLength={60} onChangeText={setStatusMessage} placeholder="오늘의 기분 한 줄" placeholderTextColor={appColors.subtle} style={styles.input} value={statusMessage} />
               <Text style={styles.label}>소개글</Text>
-              <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={colors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
+              <TextInput maxLength={500} multiline onChangeText={setBio} placeholder="나를 소개해 주세요." placeholderTextColor={appColors.subtle} style={[styles.input, styles.multiline]} textAlignVertical="top" value={bio} />
               <Text style={styles.label}>BGM 제목</Text>
-              <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={colors.subtle} style={styles.input} value={musicTitle} />
+              <TextInput maxLength={100} onChangeText={setMusicTitle} placeholder="내 페이지에 어울리는 노래" placeholderTextColor={appColors.subtle} style={styles.input} value={musicTitle} />
               <Text style={styles.musicHelp}>MP3·M4A·WAV·OGG, 최대 6MB</Text>
               <Button disabled={musicBusy || !musicTitle.trim()} label={musicBusy ? "BGM 처리 중..." : page?.hasMusic ? "BGM 음원 교체" : "BGM 음원 선택"} onPress={() => void chooseMusic()} variant="soft" />
               {page?.hasMusic ? <Button disabled={musicBusy} label="BGM 삭제" onPress={() => void removeMusic()} variant="secondary" /> : null}
               <Text style={styles.label}>방 분위기</Text>
               <View style={styles.themeRow}>
                 {(Object.keys(themes) as ProfileTheme[]).map((item) => (
-                  <Pressable key={item} disabled={appearanceBusy} onPress={() => void saveTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : colors.border }]}>
+                  <Pressable key={item} disabled={appearanceBusy} onPress={() => void saveTheme(item)} style={[styles.themeChoice, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].background, borderColor: theme === item ? (mode === "DARK" ? darkThemes : themes)[item].accent : appColors.border }]}>
                     <View style={[styles.themeDot, { backgroundColor: (mode === "DARK" ? darkThemes : themes)[item].accent }]} />
-                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? colors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
+                    <Text style={[styles.themeLabel, { color: mode === "DARK" ? appColors.text : "#1C1C1C" }]}>{themes[item].label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -1056,8 +1060,12 @@ export function UserPageScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
+function useStyles() {
+  const appColors = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        safeArea: { flex: 1 },
   loader: { marginTop: 40 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
   headerEditButton: {
@@ -1066,12 +1074,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: appColors.border,
+    backgroundColor: appColors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerEditButtonText: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  headerEditButtonText: { color: appColors.text, fontSize: 12, fontWeight: "900" },
   editModalSafeArea: { flex: 1 },
   editModalHeader: { paddingHorizontal: 4 },
   editModalContent: { padding: 20, paddingBottom: 48, gap: 14 },
@@ -1090,31 +1098,31 @@ const styles = StyleSheet.create({
   profileIdentityMobile: { flex: 1 },
   profileText: { flex: 1, minWidth: 0 },
   emoji: { position: "absolute", right: 16, top: 12, fontSize: 34 },
-  nickname: { color: colors.text, fontSize: 23, fontWeight: "900" },
+  nickname: { color: appColors.text, fontSize: 23, fontWeight: "900" },
   accountId: { fontSize: 13, fontWeight: "800" },
   statusBox: { marginTop: 10, alignSelf: "stretch", padding: 12, borderRadius: 6 },
-  statusText: { color: colors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
+  statusText: { color: appColors.text, textAlign: "center", fontSize: 13, fontWeight: "700" },
   profileActions: { flexDirection: "row", gap: 12 },
   profileAction: { flex: 1, minWidth: 0 },
   editorCard: { gap: 10 },
-  label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
-  input: { minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: 12 },
+  label: { color: appColors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
+  input: { minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: appColors.border, backgroundColor: appColors.surface, color: appColors.text, paddingHorizontal: 14, paddingVertical: 12 },
   multiline: { minHeight: 112 },
   themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   themeChoice: { minWidth: 66, padding: 9, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6 },
   themeDot: { width: 10, height: 10, borderRadius: 5 },
-  themeLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  themeLabel: { color: appColors.text, fontSize: 11, fontWeight: "800" },
   decorEditor: { gap: 8, marginTop: 4 },
   decorProgressHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   decorPoints: { fontSize: 11, fontWeight: "900" },
-  decorHelp: { color: colors.muted, fontSize: 10 },
+  decorHelp: { color: appColors.muted, fontSize: 10 },
   decorChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  decorChoice: { width: 96, minHeight: 92, borderRadius: 12, backgroundColor: colors.surface, padding: 8, alignItems: "center", justifyContent: "center", gap: 3 },
+  decorChoice: { width: 96, minHeight: 92, borderRadius: 12, backgroundColor: appColors.surface, padding: 8, alignItems: "center", justifyContent: "center", gap: 3 },
   wallpaperEditor: { gap: 8, marginTop: 4 },
   wallpaperChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   wallpaperChoice: { width: 112, borderRadius: 12, padding: 6, gap: 5 },
   wallpaperPreview: { height: 58, borderRadius: 10, overflow: "hidden", position: "relative" },
-  wallpaperLabel: { color: colors.text, fontSize: 10, fontWeight: "800", textAlign: "center" },
+  wallpaperLabel: { color: appColors.text, fontSize: 10, fontWeight: "800", textAlign: "center" },
   wallpaperCheck: { position: "absolute", right: 6, top: 5, width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(30,30,30,0.72)", color: "#FFFFFF", textAlign: "center", lineHeight: 20, fontSize: 12, fontWeight: "900" },
   wallpaperPatternLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
   wallpaperStripe: { position: "absolute", top: -20, width: 12, height: 220, transform: [{ rotate: "18deg" }] },
@@ -1122,63 +1130,66 @@ const styles = StyleSheet.create({
   wallpaperVertical: { position: "absolute", top: 0, bottom: 0, width: 2 },
   wallpaperMotif: { position: "absolute", fontSize: 13 },
   decorIcon: { fontSize: 25 },
-  decorLabel: { color: colors.text, fontSize: 10, fontWeight: "900" },
-  decorState: { color: colors.muted, fontSize: 9, fontWeight: "700" },
+  decorLabel: { color: appColors.text, fontSize: 10, fontWeight: "900" },
+  decorState: { color: appColors.muted, fontSize: 9, fontWeight: "700" },
   heroMusic: { flex: 1.1, minWidth: 0, borderLeftWidth: 1, paddingLeft: 24 },
   heroMusicMobile: { flex: 1, paddingLeft: 0, borderLeftWidth: 0 },
   musicCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   musicControl: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  musicControlText: { color: colors.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
+  musicControlText: { color: appColors.surface, fontSize: 16, fontWeight: "900", marginLeft: 2 },
   musicCopy: { flex: 1, gap: 3 },
   musicLabel: { fontSize: 10, fontWeight: "900" },
-  musicTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  musicHelp: { color: colors.muted, fontSize: 11 },
+  musicTitle: { color: appColors.text, fontSize: 14, fontWeight: "800" },
+  musicHelp: { color: appColors.muted, fontSize: 11 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.75)", overflow: "hidden", marginTop: 5 },
   progressFill: { height: 4, borderRadius: 2 },
-  musicTime: { color: colors.muted, fontSize: 10 },
-  musicError: { color: colors.red, fontSize: 10 },
+  musicTime: { color: appColors.muted, fontSize: 10 },
+  musicError: { color: appColors.red, fontSize: 10 },
   pageColumns: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   pageColumnsMobile: { flexDirection: "column", alignItems: "stretch", width: "100%", gap: 20 },
   aboutPhotoPanel: { flex: 7, minWidth: 0, gap: 18 },
   guestbookPanel: { flex: 3, minWidth: 0, gap: 14 },
   mobilePanel: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", alignSelf: "stretch", overflow: "hidden" },
   photoSection: { gap: 14 },
-  panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 18 },
-  bio: { color: colors.text, fontSize: 14, lineHeight: 22 },
+  panelSection: { gap: 14, borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 18 },
+  bio: { color: appColors.text, fontSize: 14, lineHeight: 22 },
   photoComposer: { gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
   photoComposerInput: { minHeight: 52, borderRadius: 12 },
-  photoHelp: { color: colors.muted, fontSize: 11, textAlign: "center" },
+  photoHelp: { color: appColors.muted, fontSize: 11, textAlign: "center" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  photoTile: { width: "31%", maxWidth: 180, borderRadius: 6, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  photoTile: { width: "31%", maxWidth: 180, borderRadius: 6, overflow: "hidden", backgroundColor: appColors.surface, borderWidth: 1, borderColor: appColors.border },
   photoImageWrap: { position: "relative" },
-  photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: colors.background },
+  photoThumbnail: { width: "100%", aspectRatio: 1, backgroundColor: appColors.background },
   photoGroupOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.64)", alignItems: "center", justifyContent: "center" },
   photoGroupCount: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  photoCaption: { color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "700", paddingHorizontal: 7, paddingTop: 6, minHeight: 28 },
+  photoCaption: { color: appColors.text, fontSize: 10, lineHeight: 14, fontWeight: "700", paddingHorizontal: 7, paddingTop: 6, minHeight: 28 },
   photoLikeButton: { paddingHorizontal: 7, paddingBottom: 7, paddingTop: 3 },
-  photoLikeText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
-  photoLikeTextActive: { color: colors.red },
+  photoLikeText: { color: appColors.muted, fontSize: 12, fontWeight: "900" },
+  photoLikeTextActive: { color: appColors.red },
   photoModalBackdrop: { flex: 1, backgroundColor: "rgba(18,19,24,0.94)", justifyContent: "center" },
   photoModalContent: { flex: 1, padding: 18, justifyContent: "center", gap: 14 },
   photoModalHeader: { position: "absolute", top: 16, left: 18, right: 18, zIndex: 2, flexDirection: "row", justifyContent: "space-between" },
   photoModalButton: { minWidth: 60, height: 42, borderRadius: 6, paddingHorizontal: 14, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
-  photoModalButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
+  photoModalButtonText: { color: appColors.surface, fontSize: 13, fontWeight: "900" },
   photoDeleteButton: { backgroundColor: "rgba(232,93,106,0.22)" },
   photoDeleteText: { color: "#FF9AA4", fontSize: 13, fontWeight: "900" },
   photoDetailScroller: { flex: 1, width: "100%" },
   photoDetail: { width: "100%", maxWidth: "100%", backgroundColor: "#0B0B0C" },
   photoGroupDetail: { flexGrow: 1, alignItems: "center" },
   photoDetailPage: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
-  photoDetailCaption: { color: colors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
-  photoDetailDate: { color: colors.subtle, fontSize: 11, textAlign: "center" },
+  photoDetailCaption: { color: appColors.surface, fontSize: 15, lineHeight: 22, textAlign: "center", fontWeight: "700" },
+  photoDetailDate: { color: appColors.subtle, fontSize: 11, textAlign: "center" },
   guestbookComposer: { gap: 10, paddingBottom: 14 },
   guestbookInput: { minHeight: 80 },
-  guestbookCard: { gap: 11, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
+  guestbookCard: { gap: 11, borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 14 },
   guestbookHeader: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 },
   guestbookAuthor: { flex: 1, gap: 2 },
-  authorName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  date: { color: colors.muted, fontSize: 10 },
-  deleteText: { color: colors.red, fontSize: 11, fontWeight: "800" },
-  guestbookText: { color: colors.text, fontSize: 13, lineHeight: 20 },
-  empty: { color: colors.muted, fontSize: 12, textAlign: "center", padding: 12 },
-});
+  authorName: { color: appColors.text, fontSize: 13, fontWeight: "900" },
+  date: { color: appColors.muted, fontSize: 10 },
+  deleteText: { color: appColors.red, fontSize: 11, fontWeight: "800" },
+  guestbookText: { color: appColors.text, fontSize: 13, lineHeight: 20 },
+  empty: { color: appColors.muted, fontSize: 12, textAlign: "center", padding: 12 },
+      }),
+    [appColors],
+  );
+}

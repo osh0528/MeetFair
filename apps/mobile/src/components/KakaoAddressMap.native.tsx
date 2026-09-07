@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
 import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
@@ -220,6 +220,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   const pendingQueryRef = useRef("");
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
+  const styles = useStyles();
   const webViewSource = useMemo(() => ({
     html: buildMapHtml(appConfig.kakaoMapJsKey, interactive),
     baseUrl: "https://localhost",
@@ -328,9 +329,16 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB", overflow: "hidden" },
-  fallback: { alignItems: "center", justifyContent: "center", padding: 16 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 6, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
-});
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB", overflow: "hidden" },
+        fallback: { alignItems: "center", justifyContent: "center", padding: 16 },
+        overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 6, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+        message: { color: palette.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
+      }),
+    [palette],
+  );
+}

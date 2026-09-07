@@ -13,7 +13,7 @@ import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 import type { AddressSelection, MapDisplayMarker } from "../types/location";
 
 const TASK_NAME = "meetfair-meeting-location";
@@ -67,6 +67,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
 export function TrackingScreen({ navigation, route }: Props) {
   const meetingId = route.params.meetingId;
   const { accessToken, user } = useSession();
+  const styles = useStyles();
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [sharing, setSharing] = useState(false);
@@ -408,21 +409,28 @@ export function TrackingScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  map: { flex: 1, minHeight: 300 },
-  mapExpanded: { minHeight: 0 },
-  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        safeArea: { flex: 1, backgroundColor: palette.background },
+        map: { flex: 1, minHeight: 300 },
+        mapExpanded: { minHeight: 0 },
+        mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: palette.primarySoft },
   hidden: { display: "none" },
   collapseMapButton: { position: "absolute", top: 14, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
   expandMapButton: { position: "absolute", top: 82, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
   collapseMapButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
-  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
+  panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 18, fontWeight: "900" },
   person: { padding: 10 },
-  personName: { color: colors.text, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  personName: { color: palette.text, fontWeight: "800" },
+  meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
   actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
-});
+      }),
+    [palette],
+  );
+}

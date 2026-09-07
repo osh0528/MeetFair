@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -10,7 +10,7 @@ import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 import { appConfig } from "../config/env";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
@@ -66,6 +66,7 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
   const markersRef = useRef<any[]>([]);
   const hasFitInitialBoundsRef = useRef(false);
   const [error, setError] = useState("");
+  const styles = useStyles();
   const mappedLocations = locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null);
   const homeLocations = locations.filter((item) => item.homeLatitude != null && item.homeLongitude != null);
 
@@ -168,6 +169,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const sharingRef = useRef(false);
+  const styles = useStyles();
 
   const updateSharingState = useCallback((value: boolean) => {
     sharingRef.current = value;
@@ -362,23 +364,30 @@ export function TrackingScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  locationMap: { flex: 1, minHeight: 300, backgroundColor: colors.primarySoft },
-  map: { flex: 1, minHeight: 300 },
-  mapError: { color: colors.red, textAlign: "center", padding: 14 },
-  mapHint: { color: colors.muted, textAlign: "center", padding: 14 },
-  legacyMapPlaceholder: { display: "none" },
-  mapIcon: { color: colors.primary, fontSize: 52, fontWeight: "900" },
-  mapTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
-  mapBody: { color: colors.muted, textAlign: "center", marginTop: 8 },
-  place: { color: colors.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
-  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  person: { padding: 10 },
-  personName: { color: colors.text, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
-  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
-});
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        safeArea: { flex: 1, backgroundColor: palette.background },
+        locationMap: { flex: 1, minHeight: 300, backgroundColor: palette.primarySoft },
+        map: { flex: 1, minHeight: 300 },
+        mapError: { color: palette.red, textAlign: "center", padding: 14 },
+        mapHint: { color: palette.muted, textAlign: "center", padding: 14 },
+        legacyMapPlaceholder: { display: "none" },
+        mapIcon: { color: palette.primary, fontSize: 52, fontWeight: "900" },
+        mapTitle: { color: palette.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
+        mapBody: { color: palette.muted, textAlign: "center", marginTop: 8 },
+        place: { color: palette.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
+        panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
+        row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+        title: { color: palette.text, fontSize: 18, fontWeight: "900" },
+        person: { padding: 10 },
+        personName: { color: palette.text, fontWeight: "800" },
+        meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
+        message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+        actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
+      }),
+    [palette],
+  );
+}

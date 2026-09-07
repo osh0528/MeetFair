@@ -12,13 +12,13 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
 import { requestRecordingPermissionsAsync } from "expo-audio";
 import { ConnectionState, Track } from "livekit-client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { apiRequest, ApiError } from "../services/api";
-import { colors } from "../theme/colors";
+import { useAppColors } from "../services/theme";
 
 registerGlobals();
 
@@ -30,6 +30,7 @@ interface SwitchableMediaStreamTrack {
 
 function ParticipantGrid() {
   const tracks = useTracks([Track.Source.Camera]);
+  const styles = useStyles();
   return (
     <FlatList
       data={tracks.filter(isTrackReference)}
@@ -74,6 +75,7 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const styles = useStyles();
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
@@ -123,6 +125,7 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   label: string;
   onPress(): void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -147,6 +150,7 @@ function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
 }) {
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const styles = useStyles();
   return (
     <>
       <View style={styles.statusBar}>
@@ -168,6 +172,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
   const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
+  const styles = useStyles();
 
   async function connect() {
     setConnecting(true);
@@ -282,27 +287,34 @@ export function VideoCallScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.charcoal },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  grid: { flexGrow: 1, padding: 6 },
-  videoTile: { width: "47%", flexGrow: 0, aspectRatio: 16 / 9, margin: 4, borderRadius: 6, overflow: "hidden", backgroundColor: colors.text },
-  video: { flex: 1 },
-  participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  waiting: { color: colors.surface, textAlign: "center", padding: 24 },
-  error: { color: colors.red, textAlign: "center", padding: 8 },
-  recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
-  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
-  statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
-  controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
-  controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 6, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  dangerButton: { backgroundColor: colors.red },
-  controlPressed: { opacity: 0.75 },
-  controlDisabled: { opacity: 0.4 },
-  controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  dangerText: { color: colors.surface },
-});
+function useStyles() {
+  const palette = useAppColors();
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        safeArea: { flex: 1, backgroundColor: palette.charcoal },
+        center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+        grid: { flexGrow: 1, padding: 6 },
+        videoTile: { width: "47%", flexGrow: 0, aspectRatio: 16 / 9, margin: 4, borderRadius: 6, overflow: "hidden", backgroundColor: palette.text },
+        video: { flex: 1 },
+        participantName: { position: "absolute", left: 10, bottom: 9, color: palette.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+        waiting: { color: palette.surface, textAlign: "center", padding: 24 },
+        error: { color: palette.red, textAlign: "center", padding: 8 },
+        recordingNotice: { color: palette.surface, backgroundColor: palette.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+        recordingPendingNotice: { color: palette.surface, backgroundColor: palette.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+        recordingDisabledNotice: { color: palette.surface, backgroundColor: palette.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+        leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
+        statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: palette.text },
+        statusText: { color: palette.surface, fontSize: 12, fontWeight: "800" },
+        controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: palette.text },
+        controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 6, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.surface },
+        dangerButton: { backgroundColor: palette.red },
+        controlPressed: { opacity: 0.75 },
+        controlDisabled: { opacity: 0.4 },
+        controlText: { color: palette.text, fontSize: 12, fontWeight: "900" },
+        dangerText: { color: palette.surface },
+      }),
+    [palette],
+  );
+}
 
