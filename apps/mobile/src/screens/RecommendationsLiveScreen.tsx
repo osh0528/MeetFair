@@ -8,7 +8,7 @@ import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { Avatar, Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { ApiError, apiRequest } from "../services/api";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors, type Palette } from "../services/theme";
 import type { MapDisplayMarker } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Recommendations">;
@@ -88,6 +88,8 @@ function recommendationError(error: unknown, meeting?: MeetingSummary | null) {
 }
 
 export function RecommendationsLiveScreen({ navigation, route }: Props) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { meetingId } = route.params;
   const { user } = useSession();
   const [meeting, setMeeting] = useState<MeetingSummary | null>(null);
@@ -308,59 +310,65 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
 }
 
 function State({ title, body, retry, retryLabel = "다시 시도" }: { title: string; body: string; retry?: () => void; retryLabel?: string }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return <Card style={styles.state}><Text style={styles.stateTitle}>{title}</Text><Text style={styles.stateBody}>{body}</Text>{retry ? <Button compact label={retryLabel} onPress={retry} /> : null}</Card>;
 }
 
 function Metric({ label, value, fair = false }: { label: string; value: string; fair?: boolean }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={[styles.metricValue, fair && styles.fair]}>{value}</Text></View>;
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function makeStyles(palette: Palette) {
+  return StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, paddingBottom: 28 },
   state: { alignItems: "center", gap: 12, paddingVertical: 32 },
-  stateTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
-  stateBody: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
+  stateTitle: { color: palette.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
+  stateBody: { color: palette.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
   intro: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
   introCopy: { flex: 1, gap: 6 },
-  eyebrow: { color: colors.green, fontSize: 13, fontWeight: "900" },
-  title: { color: colors.text, fontSize: 25, lineHeight: 33, fontWeight: "900" },
-  caption: { color: colors.muted, fontSize: 11 },
-  score: { width: 74, height: 74, borderRadius: 8, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" },
-  scoreValue: { color: colors.green, fontSize: 25, fontWeight: "900" },
-  scoreLabel: { color: colors.green, fontSize: 9, fontWeight: "800" },
-  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 12 },
+  eyebrow: { color: palette.green, fontSize: 13, fontWeight: "900" },
+  title: { color: palette.text, fontSize: 25, lineHeight: 33, fontWeight: "900" },
+  caption: { color: palette.muted, fontSize: 11 },
+  score: { width: 74, height: 74, borderRadius: 8, backgroundColor: palette.mint, alignItems: "center", justifyContent: "center" },
+  scoreValue: { color: palette.green, fontSize: 25, fontWeight: "900" },
+  scoreLabel: { color: palette.green, fontSize: 9, fontWeight: "800" },
+  sectionTitle: { color: palette.text, fontSize: 18, fontWeight: "900", marginBottom: 12 },
   mapCard: { height: 250, padding: 0, overflow: "hidden", marginBottom: 20 },
   mapSection: { marginTop: 24 },
-  mapTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 5 },
-  mapSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
+  mapTitle: { color: palette.text, fontSize: 18, fontWeight: "900", marginBottom: 5 },
+  mapSubtitle: { color: palette.muted, fontSize: 11, lineHeight: 16, marginBottom: 10 },
   regenerateRow: { alignItems: "flex-end", marginBottom: 10 },
-  lockNotice: { color: colors.amber, fontSize: 11, fontWeight: "800", marginBottom: 12 },
+  lockNotice: { color: palette.amber, fontSize: 11, fontWeight: "800", marginBottom: 12 },
   list: { gap: 12 },
-  card: { padding: 16, backgroundColor: colors.surface },
-  activeCard: { borderColor: colors.primary, borderWidth: 2, padding: 15 },
+  card: { padding: 16, backgroundColor: palette.surface },
+  activeCard: { borderColor: palette.primary, borderWidth: 2, padding: 15 },
   cardTop: { flexDirection: "row", alignItems: "center" },
-  rank: { width: 34, height: 34, borderRadius: 6, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
-  bestRank: { backgroundColor: colors.primarySoft },
-  rankText: { color: colors.primary, fontSize: 14, fontWeight: "900" },
+  rank: { width: 34, height: 34, borderRadius: 6, backgroundColor: palette.background, alignItems: "center", justifyContent: "center" },
+  bestRank: { backgroundColor: palette.primarySoft },
+  rankText: { color: palette.primary, fontSize: 14, fontWeight: "900" },
   placeCopy: { flex: 1, marginLeft: 11 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
-  placeName: { color: colors.charcoal, fontSize: 17, lineHeight: 22, fontWeight: "900" },
-  address: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  radio: { width: 21, height: 21, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  activeRadio: { borderColor: colors.primary },
-  dot: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.primary },
-  metrics: { flexDirection: "row", marginTop: 16, backgroundColor: colors.background, borderRadius: 6, paddingVertical: 11 },
-  metric: { flex: 1, alignItems: "center", gap: 4, borderLeftWidth: 1, borderLeftColor: colors.border },
-  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: "800" },
-  metricValue: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  fair: { color: colors.green },
-  travels: { gap: 9, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  placeName: { color: palette.charcoal, fontSize: 17, lineHeight: 22, fontWeight: "900" },
+  address: { color: palette.text, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  radio: { width: 21, height: 21, borderRadius: 11, borderWidth: 2, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
+  activeRadio: { borderColor: palette.primary },
+  dot: { width: 11, height: 11, borderRadius: 6, backgroundColor: palette.primary },
+  metrics: { flexDirection: "row", marginTop: 16, backgroundColor: palette.background, borderRadius: 6, paddingVertical: 11 },
+  metric: { flex: 1, alignItems: "center", gap: 4, borderLeftWidth: 1, borderLeftColor: palette.border },
+  metricLabel: { color: palette.muted, fontSize: 10, fontWeight: "800" },
+  metricValue: { color: palette.text, fontSize: 11, fontWeight: "900" },
+  fair: { color: palette.green },
+  travels: { gap: 9, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: palette.border },
   travel: { flexDirection: "row", alignItems: "center", gap: 8 },
-  travelName: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "800" },
-  travelValue: { color: colors.muted, fontSize: 12, fontWeight: "900" },
-  explanation: { color: colors.subtle, fontSize: 10, lineHeight: 15, marginTop: 4 },
-  voteCount: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 10, textAlign: "right" },
-  message: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 18 },
-  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-});
+  travelName: { flex: 1, color: palette.text, fontSize: 12, fontWeight: "800" },
+  travelValue: { color: palette.muted, fontSize: 12, fontWeight: "900" },
+  explanation: { color: palette.subtle, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  voteCount: { color: palette.primary, fontSize: 11, fontWeight: "800", marginTop: 10, textAlign: "right" },
+  message: { color: palette.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 18 },
+  footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: palette.background, borderTopWidth: 1, borderTopColor: palette.border },
+  });
+}

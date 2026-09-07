@@ -1,7 +1,7 @@
 import type { FriendActivitySummary, MeetingCallSummary, MeetingInvitationSummary, MeetingSummary, NotificationSummary } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -9,7 +9,7 @@ import { Button, Card, LogoMark, Pill, SectionHeading } from "../components/ui";
 import { apiRequest } from "../services/api";
 import { createMeetingSocket } from "../services/socket";
 import { useSession } from "../services/session";
-import { colors } from "../theme/colors";
+import { useAppColors, type Palette } from "../services/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 const MEETING_HIGHLIGHT_WINDOW_MS = 60 * 60_000;
@@ -37,6 +37,8 @@ function ScheduledMeetingCard({
   onPress: () => void;
   twoColumn?: boolean;
 }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const [now, setNow] = useState(Date.now());
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -104,6 +106,8 @@ function ScheduledMeetingCard({
 }
 
 export function HomeScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { accessToken, user } = useSession();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -240,7 +244,7 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={[styles.content, isMobile && styles.contentMobile, isCompactTablet && styles.contentCompactTablet]}>
         <Text style={styles.hello}>안녕하세요, {user?.nickname}님</Text>
         <Text style={styles.accountId}>친구 ID @{user?.accountId}</Text>
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {loading ? <ActivityIndicator color={palette.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button label="다시 시도" onPress={load} variant="soft" /></> : null}
 
         <View style={[styles.meetingDashboard, (isMobile || isCompactTablet) && styles.meetingDashboardStacked]}>
@@ -316,26 +320,27 @@ export function HomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  header: { minHeight: 64, backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.border },
+function makeStyles(palette: Palette) {
+  return StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
+  header: { minHeight: 64, backgroundColor: palette.header, borderBottomWidth: 1, borderBottomColor: palette.border },
   headerInner: { width: "100%", maxWidth: 1320, minHeight: 64, paddingHorizontal: 40, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   headerInnerMobile: { minHeight: 60, paddingHorizontal: 16 },
   brand: { flexDirection: "row", gap: 9, alignItems: "center" },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  brandText: { color: colors.text, fontSize: 19, fontWeight: "900" },
+  brandText: { color: palette.text, fontSize: 19, fontWeight: "900" },
   notificationButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", position: "relative" },
   bell: { fontSize: 25 },
-  notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
-  notificationBadgeText: { color: colors.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
+  notificationBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 999, backgroundColor: palette.red, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: palette.background },
+  notificationBadgeText: { color: palette.surface, fontSize: 9, fontWeight: "900", lineHeight: 12 },
   content: { width: "100%", maxWidth: 1320, alignSelf: "center", paddingHorizontal: 40, paddingTop: 28, gap: 16, paddingBottom: 40 },
   contentMobile: { paddingHorizontal: 16, paddingTop: 18, gap: 14, paddingBottom: 104 },
   contentCompactTablet: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 104 },
-  hello: { color: colors.text, fontSize: 26, fontWeight: "900" },
-  accountId: { color: colors.muted, fontWeight: "700", marginTop: -8 },
+  hello: { color: palette.text, fontSize: 26, fontWeight: "900" },
+  accountId: { color: palette.muted, fontWeight: "700", marginTop: -8 },
   card: { gap: 9 },
-  cardHover: { backgroundColor: colors.surfaceHover, borderColor: colors.borderStrong, shadowOpacity: 0.08, transform: [{ translateY: -1 }] },
-  cardFocus: { borderColor: colors.primary, shadowColor: colors.primary, shadowOpacity: 0.2, shadowRadius: 6 },
+  cardHover: { backgroundColor: palette["surface-hover"], borderColor: palette["border-strong"], shadowOpacity: 0.08, transform: [{ translateY: -1 }] },
+  cardFocus: { borderColor: palette.primary, shadowColor: palette.primary, shadowOpacity: 0.2, shadowRadius: 6 },
   meetingDashboard: { flexDirection: "row", alignItems: "flex-start", gap: 32 },
   meetingDashboardStacked: { flexDirection: "column", gap: 28 },
   meetingColumn: { flex: 1, minWidth: 0, gap: 12 },
@@ -354,14 +359,14 @@ const styles = StyleSheet.create({
     bottom: -4,
     left: -4,
     borderRadius: 10,
-    backgroundColor: colors.warning,
+    backgroundColor: palette.warning,
   },
   startingSoonCard: {
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: colors.warningBorder,
-    backgroundColor: colors.surface,
-    shadowColor: colors.warning,
+    borderColor: palette["warning-border"],
+    backgroundColor: palette.surface,
+    shadowColor: palette.warning,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 18,
@@ -377,21 +382,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: colors.warning,
+    backgroundColor: palette.warning,
   },
-  soonBannerText: { color: colors.primaryContrast, fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
-  soonSparkle: { color: colors.warningSoft, fontSize: 17, fontWeight: "900" },
-  soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: colors.warningSoft },
-  soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: colors.warning },
-  startingSoonTitle: { color: colors.text, fontSize: 17 },
-  startingSoonMeta: { color: colors.red, fontWeight: "800" },
-  callCard: { gap: 9, borderColor: colors.red },
+  soonBannerText: { color: palette["primary-contrast"], fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
+  soonSparkle: { color: palette["warning-soft"], fontSize: 17, fontWeight: "900" },
+  soonProgressTrack: { height: 5, borderRadius: 999, overflow: "hidden", backgroundColor: palette["warning-soft"] },
+  soonProgressFill: { height: "100%", borderRadius: 999, backgroundColor: palette.warning },
+  startingSoonTitle: { color: palette.text, fontSize: 17 },
+  startingSoonMeta: { color: palette.red, fontWeight: "800" },
+  callCard: { gap: 9, borderColor: palette.red },
   cardActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   callCopy: { flex: 1, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, minWidth: 0 },
-  cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  cardTitle: { color: palette.text, fontSize: 15, fontWeight: "900" },
   meetingCardTitle: { flex: 1, minWidth: 0, lineHeight: 21 },
-  meta: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  empty: { color: colors.muted, fontSize: 12, lineHeight: 18, backgroundColor: colors.surfaceSubtle, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 16, textAlign: "center" },
-  error: { color: colors.red, fontSize: 12 },
-});
+  meta: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  empty: { color: palette.muted, fontSize: 12, lineHeight: 18, backgroundColor: palette["surface-subtle"], borderRadius: 12, borderWidth: 1, borderColor: palette.border, padding: 16, textAlign: "center" },
+  error: { color: palette.red, fontSize: 12 },
+  });
+}

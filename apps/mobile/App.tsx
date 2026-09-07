@@ -1,7 +1,7 @@
 import { DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddressSearchScreen } from "./src/screens/AddressSearchScreen";
@@ -26,9 +26,8 @@ import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge"
 import { WebNotificationToast } from "./src/components/WebNotificationToast";
 import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
-import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
-import { ThemeProvider, useAppTheme } from "./src/services/theme";
+import { ThemeProvider, useAppColors, useAppTheme } from "./src/services/theme";
 import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
 import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
 import { MeetingChatScreen } from "./src/screens/MeetingChatScreen";
@@ -64,18 +63,6 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const navigationTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: colors.background,
-    card: colors.surface,
-    text: colors.text,
-    border: colors.border,
-    primary: colors.primary,
-  },
-};
-
 export default function App() {
   return (
     <ThemeProvider>
@@ -91,6 +78,21 @@ export default function App() {
 function AppNavigator() {
   const { user } = useSession();
   const { mode } = useAppTheme();
+  const palette = useAppColors();
+  const navigationTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        background: palette.background,
+        card: palette.surface,
+        text: palette.text,
+        border: palette.border,
+        primary: palette.primary,
+      },
+    }),
+    [palette],
+  );
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
@@ -147,7 +149,7 @@ function AppNavigator() {
           screenOptions={{
             headerShown: false,
             animation: "slide_from_right",
-            contentStyle: { backgroundColor: colors.background },
+            contentStyle: { backgroundColor: palette.background },
           }}
         >
           <Stack.Screen name="Login" component={LoginScreen} />

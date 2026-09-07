@@ -1,7 +1,7 @@
 import type { FriendRecommendation, FriendSummary, PublicProfileSearchResult } from "@meetfair/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
@@ -10,11 +10,13 @@ import { apiRequest, createClientRequestId } from "../services/api";
 import { avatarUrl } from "../services/avatar";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
-import { colors } from "../theme/colors";
+import { useAppColors, type Palette } from "../services/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Friends">;
 
 export function FriendsScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { accessToken } = useSession();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -192,7 +194,7 @@ export function FriendsScreen({ navigation }: Props) {
       <ScreenHeader title="친구" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.addRow, isMobile && styles.addRowMobile]}>
-          <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 또는 닉네임 검색" placeholderTextColor={colors.subtle} style={styles.input} value={accountId} />
+          <TextInput autoCapitalize="none" onChangeText={setAccountId} placeholder="친구 ID 또는 닉네임 검색" placeholderTextColor={palette.subtle} style={styles.input} value={accountId} />
         </View>
         {accountSuggestions.length ? (
           <View style={styles.suggestionList}>
@@ -216,7 +218,7 @@ export function FriendsScreen({ navigation }: Props) {
           <Button label="개인 디엠" onPress={() => navigation.navigate("DirectMessages")} variant="soft" style={[styles.quickAction, styles.directMessageAction]} />
           <Button label="친구요청" onPress={() => navigation.navigate("FriendRequests")} variant="secondary" style={[styles.quickAction, styles.friendRequestAction]} />
         </View>
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
+        {loading ? <ActivityIndicator color={palette.primary} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
         <SectionHeading title="온라인 친구" action={onlineFriends.length + "명"} />
@@ -280,42 +282,44 @@ export function FriendsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function makeStyles(palette: Palette) {
+  return StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 12, paddingBottom: 40 },
   addRow: { flexDirection: "row", gap: 8 },
   addRowMobile: { flexDirection: "column", alignItems: "stretch" },
-  input: { flex: 1, height: 48, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  input: { flex: 1, height: 48, borderRadius: 6, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, color: palette.text },
   quickActions: { flexDirection: "row", gap: 8 },
   quickActionsMobile: { flexDirection: "row", gap: 8 },
   quickAction: { minHeight: 48, paddingHorizontal: 6, minWidth: 0 },
   directMessageAction: { flex: 4 },
   friendRequestAction: { flex: 1 },
-  suggestionList: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
-  suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionList: { borderRadius: 6, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, overflow: "hidden" },
+  suggestionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: palette.border },
   suggestionProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   suggestionCopy: { flex: 1, gap: 2 },
-  suggestionName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  suggestionId: { color: colors.muted, fontSize: 11 },
-  suggestionRequestButton: { minHeight: 34, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  suggestionRequestText: { color: colors.surface, fontSize: 11, fontWeight: "900" },
-  message: { color: colors.primary, fontSize: 12 },
+  suggestionName: { color: palette.text, fontSize: 13, fontWeight: "900" },
+  suggestionId: { color: palette.muted, fontSize: 11 },
+  suggestionRequestButton: { minHeight: 34, paddingHorizontal: 12, borderRadius: 6, backgroundColor: palette.primary, alignItems: "center", justifyContent: "center" },
+  suggestionRequestText: { color: palette.surface, fontSize: 11, fontWeight: "900" },
+  message: { color: palette.primary, fontSize: 12 },
   onlineRow: { gap: 16, paddingVertical: 4, paddingRight: 20 },
   recommendationRow: { gap: 10, paddingRight: 20 },
   recommendationCard: { width: 156, gap: 6 },
-  recommendationName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  recommendationMeta: { color: colors.muted, fontSize: 10 },
-  recommendationMutual: { color: colors.muted, fontSize: 10 },
+  recommendationName: { color: palette.text, fontSize: 13, fontWeight: "900" },
+  recommendationMeta: { color: palette.muted, fontSize: 10 },
+  recommendationMutual: { color: palette.muted, fontSize: 10 },
   onlineFriend: { width: 68, alignItems: "center", gap: 7 },
-  onlineName: { width: 68, textAlign: "center", color: colors.text, fontSize: 12, fontWeight: "800" },
-  empty: { color: colors.muted, fontSize: 12 },
+  onlineName: { width: 68, textAlign: "center", color: palette.text, fontSize: 12, fontWeight: "800" },
+  empty: { color: palette.muted, fontSize: 12 },
   card: { gap: 8 },
-  name: { color: colors.text, fontWeight: "900" },
-  meta: { color: colors.muted, fontSize: 11 },
-  onlineMeta: { color: colors.online, fontSize: 11, fontWeight: "800" },
+  name: { color: palette.text, fontWeight: "900" },
+  meta: { color: palette.muted, fontSize: 11 },
+  onlineMeta: { color: palette.online, fontSize: 11, fontWeight: "800" },
   permissionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   friendHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   friendCopy: { flex: 1, gap: 3 },
   actionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
   disabled: { opacity: 0.5 },
-});
+  });
+}

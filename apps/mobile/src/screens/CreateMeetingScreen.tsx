@@ -8,7 +8,7 @@ import { Button, Card, ScreenHeader, SectionHeading } from "../components/ui";
 import { ExpandableKakaoAddressMap } from "../components/ExpandableKakaoAddressMap";
 import { apiRequest } from "../services/api";
 import { requestCameraAccess } from "../services/camera-permission";
-import { colors } from "../theme/colors";
+import { useAppColors, type Palette } from "../services/theme";
 import type { AddressCandidate, AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateMeeting">;
@@ -83,6 +83,8 @@ function parseSchedule(dateValue: string, timeValue: string): Date | null {
 }
 
 export function CreateMeetingScreen({ navigation }: Props) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const defaultDate = useMemo(() => dateFromOffset(1), []);
@@ -201,7 +203,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
       <ScreenHeader title="새 모임" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>언제, 누구와 만날까요?</Text>
-        <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={colors.subtle} style={styles.input} value={title} />
+        <TextInput onChangeText={setTitle} placeholder="모임 이름" placeholderTextColor={palette.subtle} style={styles.input} value={title} />
 
         <SectionHeading title="날짜와 시간" action={scheduledAt ? scheduledAt.toLocaleString("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "확인 필요"} />
         <View style={styles.wrap}>
@@ -249,7 +251,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
         </Card>
         <View style={styles.timeInputGroup}>
           <Text style={styles.fieldLabel}>시간</Text>
-          <TextInput autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={5} onChangeText={setScheduledTime} placeholder="18:00" placeholderTextColor={colors.subtle} style={styles.input} value={scheduledTime} />
+          <TextInput autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={5} onChangeText={setScheduledTime} placeholder="18:00" placeholderTextColor={palette.subtle} style={styles.input} value={scheduledTime} />
         </View>
         <View style={styles.wrap}>{timeOptions.map((time) => <Chip key={time} label={time} selected={scheduledTime === time} onPress={() => setScheduledTime(time)} />)}</View>
         {!scheduledAt ? <Text style={styles.error}>날짜 또는 시간 형식을 확인해 주세요.</Text> : scheduledAt.getTime() <= Date.now() ? <Text style={styles.error}>현재보다 이후 시간을 선택해 주세요.</Text> : null}
@@ -293,7 +295,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
             onChangeText={setPlaceInput}
             onSubmitEditing={searchPlace}
             placeholder="장소명이나 주소 검색"
-            placeholderTextColor={colors.subtle}
+            placeholderTextColor={palette.subtle}
             returnKeyType="search"
             style={[styles.input, styles.placeSearchInput]}
             value={placeInput}
@@ -350,6 +352,8 @@ export function CreateMeetingScreen({ navigation }: Props) {
 }
 
 function ChoiceRow({ values, labels, selected, onSelect }: { values: string[]; labels: string[]; selected: string; onSelect(value: string): void }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return <View style={styles.wrap}>{values.map((value, index) => <Chip key={value} label={labels[index] ?? value} selected={selected === value} onPress={() => onSelect(value)} />)}</View>;
 }
 
@@ -364,6 +368,8 @@ function VisibilityCard({
   selected: boolean;
   onPress(): void;
 }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return (
     <Pressable
       accessibilityRole="radio"
@@ -383,64 +389,68 @@ function VisibilityCard({
 }
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress(): void }) {
+  const palette = useAppColors();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>;
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+function makeStyles(palette: Palette) {
+  return StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 13, paddingBottom: 40 },
-  title: { color: colors.text, fontSize: 25, fontWeight: "900" },
-  input: { minHeight: 50, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, color: colors.text },
+  title: { color: palette.text, fontSize: 25, fontWeight: "900" },
+  input: { minHeight: 50, borderRadius: 6, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, color: palette.text },
   calendarCard: { padding: 12, gap: 10 },
   calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  monthButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  monthButtonText: { color: colors.text, fontSize: 27, lineHeight: 30, fontWeight: "800" },
-  monthTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  monthButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: palette.primarySoft, alignItems: "center", justifyContent: "center" },
+  monthButtonText: { color: palette.text, fontSize: 27, lineHeight: 30, fontWeight: "800" },
+  monthTitle: { color: palette.text, fontSize: 16, fontWeight: "900" },
   calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
   calendarCell: { width: "14.2857%", minHeight: 42, alignItems: "center", justifyContent: "center" },
-  weekdayText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
-  sundayText: { color: colors.red },
+  weekdayText: { color: palette.muted, fontSize: 11, fontWeight: "900" },
+  sundayText: { color: palette.red },
   saturdayText: { color: "#2563EB" },
   dayButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  todayButton: { borderWidth: 1, borderColor: colors.primary },
-  selectedDayButton: { backgroundColor: colors.primary },
-  dayText: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  disabledDayText: { color: colors.subtle, opacity: 0.45 },
-  selectedDayText: { color: colors.surface },
+  todayButton: { borderWidth: 1, borderColor: palette.primary },
+  selectedDayButton: { backgroundColor: palette.primary },
+  dayText: { color: palette.text, fontSize: 13, fontWeight: "800" },
+  disabledDayText: { color: palette.subtle, opacity: 0.45 },
+  selectedDayText: { color: palette.surface },
   timeInputGroup: { gap: 6 },
-  fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginLeft: 3 },
+  fieldLabel: { color: palette.muted, fontSize: 11, fontWeight: "800", marginLeft: 3 },
   placeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   placeSearchRowMobile: { flexDirection: "column", alignItems: "stretch" },
   placeSearchInput: { flex: 1 },
-  searchButton: { minHeight: 50, borderRadius: 6, paddingHorizontal: 16, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
-  searchButtonText: { color: colors.surface, fontWeight: "900" },
+  searchButton: { minHeight: 50, borderRadius: 6, paddingHorizontal: 16, backgroundColor: palette.charcoal, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: palette.surface, fontWeight: "900" },
   placeMap: { height: 280, borderRadius: 6, overflow: "hidden" },
   placeCandidateList: { gap: 8 },
-  placeCandidate: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10 },
-  placeCandidateSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  placeCandidateTitle: { color: colors.text, fontWeight: "900", fontSize: 13 },
-  placeCandidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  selectedPlace: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  placeCandidate: { borderRadius: 6, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 10 },
+  placeCandidateSelected: { borderColor: palette.primary, backgroundColor: palette.primarySoft },
+  placeCandidateTitle: { color: palette.text, fontWeight: "900", fontSize: 13 },
+  placeCandidateAddress: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  selectedPlace: { color: palette.primary, fontSize: 12, fontWeight: "800" },
   visibilityRow: { flexDirection: "row", gap: 10 },
   visibilityRowMobile: { flexDirection: "column", gap: 10 },
   visibilityOption: { flex: 1 },
   visibilityCard: { minHeight: 142, gap: 8, padding: 14 },
-  visibilityCardSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  radioSelected: { borderColor: colors.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
-  visibilityTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  visibilityTitleSelected: { color: colors.primary },
-  visibilityDescription: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  visibilityCardSelected: { borderColor: palette.primary, backgroundColor: palette.primarySoft },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
+  radioSelected: { borderColor: palette.primary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.primary },
+  visibilityTitle: { color: palette.text, fontSize: 15, fontWeight: "900" },
+  visibilityTitleSelected: { color: palette.primary },
+  visibilityDescription: { color: palette.muted, fontSize: 11, lineHeight: 17 },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 10 },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.muted, fontWeight: "800" },
-  chipTextSelected: { color: colors.surface },
+  chip: { borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 10 },
+  chipSelected: { backgroundColor: palette.primary, borderColor: palette.primary },
+  chipText: { color: palette.muted, fontWeight: "800" },
+  chipTextSelected: { color: palette.surface },
   friend: { flexDirection: "row", justifyContent: "space-between" },
-  selectedCard: { borderColor: colors.primary },
-  friendName: { color: colors.text, fontWeight: "800" },
-  notice: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  note: { color: colors.amber, fontSize: 11 },
-  error: { color: colors.red, fontSize: 12 },
-});
+  selectedCard: { borderColor: palette.primary },
+  friendName: { color: palette.text, fontWeight: "800" },
+  notice: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  note: { color: palette.amber, fontSize: 11 },
+  error: { color: palette.red, fontSize: 12 },
+  });
+}
