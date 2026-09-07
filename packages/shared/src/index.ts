@@ -87,6 +87,52 @@ export interface PublicProfileSearchResult extends UserSummary {
 }
 
 export type ProfileTheme = "PURPLE" | "PINK" | "BLUE" | "MINT" | "SUNSET";
+export type RoomWallpaper = "CREAM" | "STRIPES" | "CHECK" | "FLORAL" | "SKY" | "FOREST" | "NIGHT" | "BRICK";
+export type RoomDecoration = "RUG" | "PLANT" | "LAMP" | "SOFA" | "WINDOW" | "BED" | "DESK" | "BOOKSHELF" | "TV" | "TABLE" | "CLOCK" | "POSTER" | "CAT" | "CACTUS" | "TEDDY";
+
+export interface RoomDecorationPlacement {
+  id: RoomDecoration;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
+export const ROOM_WALLPAPERS: ReadonlyArray<{
+  id: RoomWallpaper;
+  label: string;
+}> = [
+  { id: "CREAM", label: "포근한 크림" },
+  { id: "STRIPES", label: "잔잔한 줄무늬" },
+  { id: "CHECK", label: "작은 체크" },
+  { id: "FLORAL", label: "꽃무늬 정원" },
+  { id: "SKY", label: "맑은 하늘" },
+  { id: "FOREST", label: "숲속 오두막" },
+  { id: "NIGHT", label: "별빛 밤" },
+  { id: "BRICK", label: "따뜻한 벽돌" },
+];
+
+export const ROOM_DECORATIONS: ReadonlyArray<{
+  id: RoomDecoration;
+  label: string;
+  icon: string;
+}> = [
+  { id: "RUG", label: "포근한 러그", icon: "🟤" },
+  { id: "PLANT", label: "초록 화분", icon: "🌿" },
+  { id: "LAMP", label: "무드 조명", icon: "💡" },
+  { id: "SOFA", label: "편안한 소파", icon: "🛋️" },
+  { id: "WINDOW", label: "하늘 창문", icon: "🪟" },
+  { id: "BED", label: "포근한 침대", icon: "🛏️" },
+  { id: "DESK", label: "작업 책상", icon: "🖥️" },
+  { id: "BOOKSHELF", label: "책장", icon: "📚" },
+  { id: "TV", label: "텔레비전", icon: "📺" },
+  { id: "TABLE", label: "티 테이블", icon: "☕" },
+  { id: "CLOCK", label: "벽시계", icon: "🕰️" },
+  { id: "POSTER", label: "감성 포스터", icon: "🖼️" },
+  { id: "CAT", label: "고양이", icon: "🐈" },
+  { id: "CACTUS", label: "선인장", icon: "🌵" },
+  { id: "TEDDY", label: "곰인형", icon: "🧸" },
+];
 
 export interface ProfileGuestbookEntrySummary {
   id: string;
@@ -114,6 +160,9 @@ export interface UserPageSummary {
   bio: string | null;
   emoji: string;
   theme: ProfileTheme;
+  roomWallpaper: RoomWallpaper;
+  roomDecorations: RoomDecoration[];
+  roomLayout: RoomDecorationPlacement[];
   musicTitle: string | null;
   hasMusic: boolean;
   musicUpdatedAt: string | null;
@@ -200,6 +249,7 @@ export interface MeetingCallSummary {
   roomName: string;
   status: MeetingCallStatus;
   participantStatus: MeetingCallParticipantStatus;
+  forced: boolean;
   createdAt: string;
 }
 

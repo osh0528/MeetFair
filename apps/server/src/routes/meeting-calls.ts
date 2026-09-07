@@ -5,7 +5,7 @@ import { env } from "../config/env.js";
 import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
-import { endMeetingCallIfInactive } from "../services/meeting-calls.js";
+import { endMeetingCallIfInactive, summaryFor } from "../services/meeting-calls.js";
 import { callRecordingConfigured, ensureCallRecording } from "../services/call-recordings.js";
 import { callLeaveLockedUntil, callLeaveLockRemainingMs } from "../services/call-lock.js";
 
@@ -39,10 +39,54 @@ meetingCallsRouter.get("/pending", async (request: AuthenticatedRequest, respons
           roomName: participant.call.roomName,
           status: participant.call.status,
           participantStatus: participant.status,
+          forced: participant.forcedAt !== null,
           createdAt: participant.call.createdAt.toISOString(),
         })),
       },
     });
+  } catch (error) { next(error); }
+});
+
+meetingCallsRouter.post("/meetings/:meetingId/join", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const currentUserId = userId(request);
+    const meetingParticipant = await prisma.meetingParticipant.findUnique({
+      where: { meetingId_userId: { meetingId, userId: currentUserId } },
+      include: { meeting: { select: { id: true, title: true, status: true } } },
+    });
+    if (!meetingParticipant) {
+      throw new AppError(403, "NOT_A_PARTICIPANT", "You are not a participant of this meeting.");
+    }
+    if (meetingParticipant.meeting.status === "COMPLETED" || meetingParticipant.meeting.status === "CANCELLED") {
+      throw new AppError(409, "MEETING_CLOSED", "This meeting is no longer available.");
+    }
+
+    const call = await prisma.meetingCall.upsert({
+      where: { meetingId },
+      create: {
+        meetingId,
+        roomName: `meeting-${meetingId}-${Date.now()}`,
+      },
+      update: {},
+      include: { meeting: { select: { title: true } } },
+    });
+    if (call.status === "ENDED") {
+      throw new AppError(409, "MEETING_CALL_ENDED", "This meeting call has already ended.");
+    }
+
+    const existingParticipant = await prisma.meetingCallParticipant.findUnique({
+      where: { callId_userId: { callId: call.id, userId: currentUserId } },
+    });
+    const participant = existingParticipant?.status === "JOINED"
+      ? existingParticipant
+      : await prisma.meetingCallParticipant.upsert({
+          where: { callId_userId: { callId: call.id, userId: currentUserId } },
+          create: { callId: call.id, userId: currentUserId, status: "RINGING", ringingAt: new Date() },
+          update: { status: "RINGING", ringingAt: new Date(), respondedAt: null, leftAt: null },
+        });
+
+    response.json({ success: true, data: summaryFor(call, participant) });
   } catch (error) { next(error); }
 });
 
@@ -113,7 +157,7 @@ meetingCallsRouter.post("/:callId/token", async (request: AuthenticatedRequest, 
         token: await accessToken.toJwt(),
         roomName: participant.call.roomName,
         recordingEnabled,
-        leaveLockedUntil: callLeaveLockedUntil(joinedAt).toISOString(),
+        leaveLockedUntil: participant.forcedAt ? callLeaveLockedUntil(participant.forcedAt).toISOString() : null,
       },
     });
   } catch (error) { next(error); }
@@ -131,8 +175,8 @@ meetingCallsRouter.patch("/:callId", async (request: AuthenticatedRequest, respo
     if (!participant || participant.call.status === "ENDED") {
       throw new AppError(404, "MEETING_CALL_NOT_FOUND", "Meeting call was not found.");
     }
-    if (action !== "accept" && participant.joinedAt) {
-      const remainingMs = callLeaveLockRemainingMs(participant.joinedAt);
+    if (action !== "accept" && participant.forcedAt && participant.joinedAt) {
+      const remainingMs = callLeaveLockRemainingMs(participant.forcedAt);
       if (remainingMs > 0) {
         throw new AppError(
           409,

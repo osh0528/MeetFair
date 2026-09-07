@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState , useMemo} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
 // props 타입이 never로 붕괴되는 업스트림 타입 버그가 있다.
@@ -29,11 +29,14 @@ export interface KakaoAddressMapProps {
   focusTarget?: AddressSelection | null;
   onResults?: (candidates: AddressCandidate[]) => void;
   onResolved?: (selection: AddressSelection) => void;
+  onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  fitMarkers?: boolean;
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
+const EMPTY_MAP_MARKERS: MapDisplayMarker[] = [];
 
 function buildMapHtml(appKey: string, interactive: boolean): string {
   const head =
@@ -160,31 +163,41 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   };
 
   var displayOverlays = [];
-  window.meetfairSetMarkers = function (items) {
+  var hasFitMarkers = false;
+  window.meetfairSetMarkers = function (items, fitMarkers) {
     displayOverlays.forEach(function (overlay) { overlay.setMap(null); });
     displayOverlays = (items || []).map(function (item) {
-      var kind = item.kind || "HOME";
       var content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       var icon = document.createElement("div");
+      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : item.kind === "LIVE" ? "●" : "🏠";
+      icon.style.cssText = item.kind === "RECOMMENDED"
+        ? "width:32px;height:32px;border-radius:16px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 0 0 4px rgba(59,130,246,.18),0 5px 12px rgba(37,99,235,.4);"
+        : item.kind === "LIVE"
+        ? "color:#1677FF;font-size:28px;line-height:28px;text-shadow:0 2px 5px rgba(0,0,0,.35);"
+        : "font-size:25px;";
       var label = document.createElement("div");
       label.textContent = item.label;
-      if (kind === "LIVE") {
-        icon.style.cssText = "width:20px;height:20px;border-radius:50%;background:#1677ff;border:4px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35);box-sizing:border-box;";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      } else if (kind === "PLACE") {
-        icon.textContent = "📍";
-        icon.style.cssText = "font-size:25px;";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      } else {
-        icon.textContent = "🏠";
-        icon.style.cssText = "font-size:25px;";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      }
+      label.style.cssText = item.kind === "RECOMMENDED"
+        ? "padding:5px 10px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#172554);color:white;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(37,99,235,.35);"
+        : item.kind === "LIVE"
+        ? "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;"
+        : "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
       content.appendChild(icon);
       content.appendChild(label);
       return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
     });
+    if (fitMarkers && !hasFitMarkers && map && items && items.length > 1) {
+      var bounds = new kakao.maps.LatLngBounds();
+      items.forEach(function (item) {
+        bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
+      });
+      map.setBounds(bounds, 48, 48, 48, 48);
+      hasFitMarkers = true;
+    } else if (fitMarkers && !hasFitMarkers && map && items && items.length === 1) {
+      map.setCenter(new kakao.maps.LatLng(items[0].latitude, items[0].longitude));
+      hasFitMarkers = true;
+    }
   };
 
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
@@ -201,14 +214,16 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
-  const palette = useAppColors();
-  const styles = useStyles();
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = EMPTY_MAP_MARKERS, fitMarkers = true }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
+  const webViewSource = useMemo(() => ({
+    html: buildMapHtml(appConfig.kakaoMapJsKey, interactive),
+    baseUrl: "https://localhost",
+  }), [interactive]);
 
   const runSearch = useCallback((searchQuery: string) => {
     webViewRef.current?.injectJavaScript(`window.meetfairSearch(${JSON.stringify(searchQuery)}); true;`);
@@ -229,12 +244,12 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     webViewRef.current?.injectJavaScript(
       `window.meetfairFocus(${focusTarget.latitude}, ${focusTarget.longitude}); true;`,
     );
-  }, [focusTarget]);
+  }, [focusTarget, ready]);
 
   useEffect(() => {
     if (!readyRef.current) return;
-    webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}); true;`);
-  }, [mapMarkers, ready]);
+    webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}, ${fitMarkers}); true;`);
+  }, [fitMarkers, mapMarkers, ready]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -289,13 +304,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 
   if (!appConfig.kakaoMapJsKey) {
-    return (
-      <View style={[styles.wrapper, styles.fallback]}>
-        <Text style={styles.message}>
-          카카오 지도 키가 없어요. EAS/Vercel 환경변수에 EXPO_PUBLIC_KAKAO_MAP_JS_KEY를 설정하고 다시 빌드/배포하세요.
-        </Text>
-      </View>
-    );
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
   }
 
   return (
@@ -303,7 +312,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
-        source={{ html: buildMapHtml(appConfig.kakaoMapJsKey, interactive), baseUrl: "https://localhost" }}
+        source={webViewSource}
         javaScriptEnabled
         domStorageEnabled
         onMessage={handleMessage}
@@ -319,17 +328,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
+const styles = StyleSheet.create({
   wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB", overflow: "hidden" },
   fallback: { alignItems: "center", justifyContent: "center", padding: 16 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  message: { color: palette.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
-
-      }),
-    [palette],
-  );
-}
+  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 6, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center", flexShrink: 1 },
+});

@@ -34,19 +34,29 @@ async function processRecordingAndMeetingLifecycle() {
   });
 }
 
+let schedulerRunning = false;
+
+async function runScheduledTasks() {
+  if (schedulerRunning) return;
+  schedulerRunning = true;
+  try {
+    await processDueMeetingCalls().catch((error) => {
+      console.error("Meeting call scheduler failed", error);
+    });
+    await processRecordingAndMeetingLifecycle();
+    await processQuietSummaries().catch((error) => {
+      console.error("Quiet summary scheduler failed", error);
+    });
+  } finally {
+    schedulerRunning = false;
+  }
+}
+
 const lifecycleTimer = setInterval(() => {
-  void processDueMeetingCalls().catch((error) => {
-    console.error("Meeting call scheduler failed", error);
-  });
-  void processRecordingAndMeetingLifecycle();
-  void processQuietSummaries().catch((error) => {
-    console.error("Quiet summary scheduler failed", error);
-  });
+  void runScheduledTasks();
 }, 15_000);
 lifecycleTimer.unref();
-void processDueMeetingCalls();
-void processQuietSummaries();
-void processRecordingAndMeetingLifecycle();
+void runScheduledTasks();
 
 httpServer.listen(env.PORT, "0.0.0.0", () => {
   console.log(`MeetFair server listening on http://0.0.0.0:${env.PORT} (LAN: http://172.30.1.173:${env.PORT})`);

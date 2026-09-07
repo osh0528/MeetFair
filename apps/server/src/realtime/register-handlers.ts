@@ -44,15 +44,29 @@ export function registerRealtimeHandlers(
     const currentUserId = socket.data.userId as string;
     void socket.join(`user:${currentUserId}`);
     if (connectUser(currentUserId)) {
-      void notifyFriendsOfPresence(io, currentUserId, true);
+      void notifyFriendsOfPresence(io, currentUserId, true).catch((error) => {
+        console.error("Failed to publish online presence", error);
+      });
     }
     socket.on("disconnect", () => {
       if (disconnectUser(currentUserId)) {
-        void notifyFriendsOfPresence(io, currentUserId, false);
+        void notifyFriendsOfPresence(io, currentUserId, false).catch((error) => {
+          console.error("Failed to publish offline presence", error);
+        });
       }
     });
 
-    socket.on("meeting:join", async ({ meetingId }) => {
+    function runRealtimeTask(task: Promise<void>) {
+      void task.catch((error) => {
+        console.error("Realtime handler failed", error);
+        socket.emit("meeting:error", {
+          code: "REALTIME_INTERNAL_ERROR",
+          message: "실시간 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        });
+      });
+    }
+
+    socket.on("meeting:join", ({ meetingId }) => runRealtimeTask((async () => {
       const participant = await prisma.meetingParticipant.findUnique({
         where: { meetingId_userId: { meetingId, userId: currentUserId } },
       });
@@ -61,9 +75,9 @@ export function registerRealtimeHandlers(
         return;
       }
       await socket.join(meetingRoom(meetingId));
-    });
+    })()));
 
-    socket.on("location:update", async (payload) => {
+    socket.on("location:update", (payload) => runRealtimeTask((async () => {
       if (!Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude) || !Number.isFinite(payload.accuracy) || payload.latitude < -90 || payload.latitude > 90 || payload.longitude < -180 || payload.longitude > 180) {
         socket.emit("meeting:error", { code: "INVALID_LOCATION", message: "Location data is invalid." });
         return;
@@ -135,9 +149,9 @@ export function registerRealtimeHandlers(
           reason: "ARRIVAL",
         });
       }
-    });
+    })()));
 
-    socket.on("sharing:status", async (payload) => {
+    socket.on("sharing:status", (payload) => runRealtimeTask((async () => {
       if (!(["NOT_STARTED", "SHARING", "PAUSED", "ARRIVED"] as const).includes(payload.status)) {
         socket.emit("meeting:error", { code: "INVALID_SHARING_STATUS", message: "Sharing status is invalid." });
         return;
@@ -149,6 +163,6 @@ export function registerRealtimeHandlers(
       }
       await prisma.meetingParticipant.update({ where: { id: participant.id }, data: { sharingStatus: payload.status } });
       socket.to(meetingRoom(payload.meetingId)).emit("participant:status", { ...payload, userId: currentUserId });
-    });
+    })()));
   });
 }

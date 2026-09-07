@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState , useMemo} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 export interface KakaoAddressMapProps {
   query: string;
@@ -11,8 +11,10 @@ export interface KakaoAddressMapProps {
   focusTarget?: AddressSelection | null;
   onResults?: (candidates: AddressCandidate[]) => void;
   onResolved?: (selection: AddressSelection) => void;
+  onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  fitMarkers?: boolean;
 }
 
 declare global {
@@ -73,13 +75,12 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [] }: KakaoAddressMapProps) {
-  const palette = useAppColors();
-  const styles = useStyles();
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const displayMarkersRef = useRef<any[]>([]);
+  const hasFitMarkersRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -223,24 +224,22 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     if (!ready || !window.kakao?.maps || !mapRef.current) return;
     for (const overlay of displayMarkersRef.current) overlay.setMap(null);
     displayMarkersRef.current = mapMarkers.map((item) => {
-      const kind = item.kind || "HOME";
       const content = document.createElement("div");
       content.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-8px);font-family:system-ui,sans-serif;";
       const icon = document.createElement("div");
+      icon.textContent = item.kind === "RECOMMENDED" ? "✨" : item.kind === "LIVE" ? "●" : "🏠";
+      icon.style.cssText = item.kind === "RECOMMENDED"
+        ? "width:32px;height:32px;border-radius:16px;background:radial-gradient(circle,#60A5FA 0%,#2563EB 62%,#172554 100%);border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 0 0 4px rgba(59,130,246,.18),0 5px 12px rgba(37,99,235,.4);"
+        : item.kind === "LIVE"
+        ? "color:#1677FF;font-size:28px;line-height:28px;text-shadow:0 2px 5px rgba(0,0,0,.35);"
+        : "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
       const label = document.createElement("div");
       label.textContent = item.label;
-      if (kind === "LIVE") {
-        icon.style.cssText = "width:20px;height:20px;border-radius:50%;background:#1677ff;border:4px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35);box-sizing:border-box;";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      } else if (kind === "PLACE") {
-        icon.textContent = "📍";
-        icon.style.cssText = "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      } else {
-        icon.textContent = "🏠";
-        icon.style.cssText = "font-size:25px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));";
-        label.style.cssText = "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
-      }
+      label.style.cssText = item.kind === "RECOMMENDED"
+        ? "padding:5px 10px;border-radius:12px;background:linear-gradient(135deg,#2563EB,#172554);color:white;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(37,99,235,.35);"
+        : item.kind === "LIVE"
+        ? "padding:3px 7px;border-radius:10px;background:rgba(22,119,255,.92);color:white;font-size:11px;font-weight:800;white-space:nowrap;"
+        : "padding:3px 7px;border-radius:10px;background:rgba(30,30,30,.88);color:white;font-size:11px;font-weight:800;white-space:nowrap;";
       content.append(icon, label);
       return new window.kakao.maps.CustomOverlay({
         map: mapRef.current,
@@ -249,7 +248,22 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         yAnchor: 1,
       });
     });
-  }, [mapMarkers, ready]);
+    if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length > 1) {
+      const bounds = new window.kakao.maps.LatLngBounds();
+      for (const item of mapMarkers) {
+        bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
+      }
+      mapRef.current.setBounds(bounds, 48, 48, 48, 48);
+      hasFitMarkersRef.current = true;
+    } else if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length === 1) {
+      mapRef.current.setCenter(new window.kakao.maps.LatLng(mapMarkers[0]!.latitude, mapMarkers[0]!.longitude));
+      hasFitMarkersRef.current = true;
+    }
+  }, [fitMarkers, mapMarkers, ready]);
+
+  if (!appConfig.kakaoMapJsKey) {
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
+  }
 
   return (
     <View style={styles.wrapper}>
@@ -264,17 +278,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
+const styles = StyleSheet.create({
   wrapper: { flex: 1, minHeight: 280, backgroundColor: "#F2EFEB" },
   map: { flex: 1, minHeight: 280 },
-  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 14, backgroundColor: palette.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  message: { color: palette.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
-
-      }),
-    [palette],
-  );
-}
+  overlay: { position: "absolute", left: 16, right: 16, bottom: 16, borderRadius: 6, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#1B3125", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  message: { color: colors.muted, fontSize: 11, fontWeight: "700", textAlign: "center" },
+});

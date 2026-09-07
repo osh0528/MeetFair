@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web --output-dir ../../public",
-  "outputDirectory": "public",
+  "buildCommand": "npm run build -w @meetfair/shared && npm run build:web",
+  "outputDirectory": "dist",
   "installCommand": "npm install"
 }

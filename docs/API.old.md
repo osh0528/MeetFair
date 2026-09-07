@@ -1,4 +1,4 @@
-# MeetFair API 계약
+# Meet World API 계약
 
 기본 주소는 `http://localhost:4000/api`입니다. 날짜는 UTC ISO 8601 문자열, ID는 UUID 문자열을 사용합니다.
 

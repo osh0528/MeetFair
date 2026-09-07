@@ -12,26 +12,23 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Camera } from "expo-camera";
 import { requestRecordingPermissionsAsync } from "expo-audio";
 import { ConnectionState, Track } from "livekit-client";
-import { useEffect, useState , useMemo} from "react";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { apiRequest, ApiError } from "../services/api";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 
 registerGlobals();
 
 type Props = NativeStackScreenProps<RootStackParamList, "VideoCall">;
-interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string }
+interface CallToken { url: string; token: string; roomName: string; recordingEnabled: boolean; leaveLockedUntil: string | null }
 interface SwitchableMediaStreamTrack {
   applyConstraints(constraints: { facingMode: "user" | "environment" }): Promise<void>;
 }
 
 function ParticipantGrid() {
-  const palette = useAppColors();
-  const styles = useStyles();
   const tracks = useTracks([Track.Source.Camera]);
   return (
     <FlatList
@@ -41,7 +38,7 @@ function ParticipantGrid() {
       contentContainerStyle={styles.grid}
       renderItem={({ item }) => (
         <View style={styles.videoTile}>
-          <VideoTrack trackRef={item} style={styles.video} objectFit="cover" />
+          <VideoTrack trackRef={item} style={styles.video} objectFit="contain" />
           <Text style={styles.participantName}>{item.participant.name || item.participant.identity}</Text>
         </View>
       )}
@@ -69,8 +66,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
   onLeave(): void;
   onError(message: string): void;
 }) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const {
     cameraTrack,
     isCameraEnabled,
@@ -92,12 +87,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
     }
   }
 
-  function toggleCamera() {
-    void run(async () => {
-      await localParticipant.setCameraEnabled(!isCameraEnabled);
-    });
-  }
-
   function toggleMicrophone() {
     void run(async () => {
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
@@ -116,7 +105,6 @@ function CallControls({ leaveLockRemainingMs, onLeave, onError }: {
 
   return (
     <View style={styles.controls}>
-      <ControlButton disabled={busy} label={isCameraEnabled ? "카메라 끄기" : "카메라 켜기"} onPress={toggleCamera} />
       <ControlButton disabled={busy} label={isMicrophoneEnabled ? "마이크 끄기" : "마이크 켜기"} onPress={toggleMicrophone} />
       <ControlButton disabled={busy || !isCameraEnabled} label="카메라 전환" onPress={switchCamera} />
       <ControlButton
@@ -135,8 +123,6 @@ function ControlButton({ danger = false, disabled = false, label, onPress }: {
   label: string;
   onPress(): void;
 }) {
-  const palette = useAppColors();
-  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -159,8 +145,6 @@ function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
   onError(message: string): void;
   onLeave(): void;
 }) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const connectionState = useConnectionState();
   const participants = useParticipants();
   return (
@@ -176,32 +160,32 @@ function CallContent({ leaveLockRemainingMs, onError, onLeave }: {
 }
 
 export function VideoCallScreen({ navigation, route }: Props) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const { callId, meetingId } = route.params;
   const [credentials, setCredentials] = useState<CallToken | null>(null);
   const [message, setMessage] = useState("통화 연결 준비 중...");
   const [connecting, setConnecting] = useState(false);
+  const [microphonePermissionGranted, setMicrophonePermissionGranted] = useState(false);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean | null>(null);
   const [leaveLockedUntil, setLeaveLockedUntil] = useState<number | null>(null);
   const [leaveLockRemainingMs, setLeaveLockRemainingMs] = useState(0);
 
   async function connect() {
     setConnecting(true);
+    setMicrophonePermissionGranted(false);
     setMessage("통화 연결 준비 중...");
-    let microphonePermissionGranted = false;
+    let microphoneGranted = false;
     let micDeniedNotice: string | null = null;
     try {
       const camera = await Camera.requestCameraPermissionsAsync();
       if (!camera.granted) throw new Error("카메라 권한이 필요합니다.");
       try {
         const mic = await requestRecordingPermissionsAsync();
-        microphonePermissionGranted = mic.granted;
+        microphoneGranted = mic.granted;
         if (!mic.granted) {
           micDeniedNotice = "마이크 권한이 거부되어 음성 없이 연결됩니다. 설정에서 허용하면 음성 통화를 사용할 수 있습니다.";
         }
       } catch {
-        microphonePermissionGranted = false;
+        microphoneGranted = false;
         micDeniedNotice = "마이크 권한을 확인하지 못했습니다. 음성 없이 연결됩니다.";
       }
       try {
@@ -209,7 +193,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
           method: "PATCH",
           body: JSON.stringify({
             cameraPermissionGranted: true,
-            microphonePermissionGranted,
+            microphonePermissionGranted: microphoneGranted,
           }),
         });
       } catch (error) {
@@ -219,7 +203,8 @@ export function VideoCallScreen({ navigation, route }: Props) {
       await apiRequest(`/meeting-calls/${callId}`, { method: "PATCH", body: JSON.stringify({ action: "accept" }) });
       const token = await apiRequest<CallToken>(`/meeting-calls/${callId}/token`, { method: "POST", body: "{}" });
       setRecordingEnabled(token.recordingEnabled);
-      setLeaveLockedUntil(new Date(token.leaveLockedUntil).getTime());
+      setLeaveLockedUntil(token.leaveLockedUntil ? new Date(token.leaveLockedUntil).getTime() : null);
+      setMicrophonePermissionGranted(microphoneGranted);
       setCredentials(token);
       setMessage(micDeniedNotice ?? "");
     } catch (error) {
@@ -289,7 +274,7 @@ export function VideoCallScreen({ navigation, route }: Props) {
       {leaveLockRemainingMs > 0 ? (
         <Text style={styles.leaveLockNotice}>최소 통화 시간 · 종료까지 {formatRemainingTime(leaveLockRemainingMs)}</Text>
       ) : null}
-      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio={false} video onError={(error) => setMessage(error.message)}>
+      <LiveKitRoom serverUrl={credentials.url} token={credentials.token} connect audio={microphonePermissionGranted} video onError={(error) => setMessage(error.message)}>
         <CallContent leaveLockRemainingMs={leaveLockRemainingMs} onError={setMessage} onLeave={() => void leave()} />
         {message ? <Text style={styles.error}>{message}</Text> : null}
       </LiveKitRoom>
@@ -297,34 +282,27 @@ export function VideoCallScreen({ navigation, route }: Props) {
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.charcoal },
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.charcoal },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   grid: { flexGrow: 1, padding: 6 },
-  videoTile: { flex: 1, minWidth: "47%", height: 280, margin: 4, borderRadius: 16, overflow: "hidden", backgroundColor: palette.text },
+  videoTile: { width: "47%", flexGrow: 0, aspectRatio: 16 / 9, margin: 4, borderRadius: 6, overflow: "hidden", backgroundColor: colors.text },
   video: { flex: 1 },
-  participantName: { position: "absolute", left: 10, bottom: 9, color: palette.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  waiting: { color: palette.surface, textAlign: "center", padding: 24 },
-  error: { color: palette.red, textAlign: "center", padding: 8 },
-  recordingNotice: { color: palette.surface, backgroundColor: palette.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingPendingNotice: { color: palette.surface, backgroundColor: palette.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
-  recordingDisabledNotice: { color: palette.surface, backgroundColor: palette.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  participantName: { position: "absolute", left: 10, bottom: 9, color: colors.surface, fontSize: 12, fontWeight: "800", backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  waiting: { color: colors.surface, textAlign: "center", padding: 24 },
+  error: { color: colors.red, textAlign: "center", padding: 8 },
+  recordingNotice: { color: colors.surface, backgroundColor: colors.red, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingPendingNotice: { color: colors.surface, backgroundColor: colors.primary, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
+  recordingDisabledNotice: { color: colors.surface, backgroundColor: colors.amber, textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "800" },
   leaveLockNotice: { color: "#FFFFFF", backgroundColor: "#8A4B00", textAlign: "center", paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, fontWeight: "900" },
-  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: palette.text },
-  statusText: { color: palette.surface, fontSize: 12, fontWeight: "800" },
-  controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: palette.text },
-  controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 14, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.surface },
-  dangerButton: { backgroundColor: palette.red },
+  statusBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: colors.text },
+  statusText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
+  controls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, padding: 12, backgroundColor: colors.text },
+  controlButton: { minHeight: 44, minWidth: "30%", borderRadius: 6, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  dangerButton: { backgroundColor: colors.red },
   controlPressed: { opacity: 0.75 },
   controlDisabled: { opacity: 0.4 },
-  controlText: { color: palette.text, fontSize: 12, fontWeight: "900" },
-  dangerText: { color: palette.surface },
+  controlText: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  dangerText: { color: colors.surface },
+});
 
-      }),
-    [palette],
-  );
-}

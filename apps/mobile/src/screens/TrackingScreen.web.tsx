@@ -1,14 +1,16 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useRef, useState , useMemo} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
+import { OpenStreetMapFallback } from "../components/OpenStreetMapFallback";
 import { apiRequest } from "../services/api";
-import { createMeetingSocket } from "../services/socket";
+import { arrivalErrorMessage } from "../services/arrival-errors";
+import { getCurrentCoordinates } from "../services/current-location";
+import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 import { appConfig } from "../config/env";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
@@ -59,8 +61,6 @@ function loadKakaoMaps() {
 }
 
 function LocationMap({ locations, meeting }: { locations: LocationItem[]; meeting: MeetingLocationDetail | null }) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -130,6 +130,24 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
     return () => { cancelled = true; };
   }, [locations, meeting]);
 
+  if (!appConfig.kakaoMapJsKey) {
+    return (
+      <View style={styles.locationMap}>
+        <OpenStreetMapFallback
+          focusTarget={meeting?.confirmedPlace ? { ...meeting.confirmedPlace, address: meeting.confirmedPlace.name } : null}
+          mapMarkers={mappedLocations.map((item) => ({
+            id: `live:${item.userId}`,
+            label: item.nickname,
+            kind: "HOME" as const,
+            address: item.nickname,
+            latitude: item.latitude!,
+            longitude: item.longitude!,
+          }))}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.locationMap}>
       <View ref={containerRef} style={styles.map} />
@@ -140,16 +158,21 @@ function LocationMap({ locations, meeting }: { locations: LocationItem[]; meetin
 }
 
 export function TrackingScreen({ navigation, route }: Props) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const meetingId = route.params.meetingId;
   const { accessToken, user } = useSession();
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState("");
+  const [arriving, setArriving] = useState(false);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const sharingRef = useRef(false);
+
+  const updateSharingState = useCallback((value: boolean) => {
+    sharingRef.current = value;
+    setSharing(value);
+  }, []);
 
   const load = useCallback(async () => {
     const [meetingData, locationData] = await Promise.all([
@@ -158,7 +181,39 @@ export function TrackingScreen({ navigation, route }: Props) {
     ]);
     setMeeting(meetingData);
     setLocations(locationData.locations);
-  }, [meetingId]);
+    updateSharingState(locationData.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING"));
+  }, [meetingId, updateSharingState, user?.id]);
+
+  const updateMyLocation = useCallback((position: GeolocationPosition) => {
+    setLocations((current) => current.map((item) => item.userId === user?.id ? {
+      ...item,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      updatedAt: new Date(position.timestamp).toISOString(),
+      sharingStatus: "SHARING",
+    } : item));
+  }, [user?.id]);
+
+  async function waitForSharingStatus() {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      if (data.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING")) return;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error("위치 공유 상태를 서버에 저장하지 못했습니다. 다시 시도해 주세요.");
+  }
+
+  async function waitForFirstLocation(sentAt: string) {
+    const sentTime = new Date(sentAt).getTime();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      const mine = data.locations.find((item) => item.userId === user?.id);
+      if (mine?.updatedAt && new Date(mine.updatedAt).getTime() >= sentTime) return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error("서버가 현재 위치를 저장하지 않았습니다. 모임의 위치 공유 시간 설정을 확인해 주세요.");
+  }
 
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "위치를 불러오지 못했습니다."));
@@ -173,14 +228,33 @@ export function TrackingScreen({ navigation, route }: Props) {
         if (payload.meetingId !== meetingId) return;
         setLocations((current) => current.map((item) => item.userId === payload.userId ? { ...item, sharingStatus: payload.status, arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt } : item));
       });
+      socket.on("meeting:error", (payload) => {
+        const messageByCode: Record<string, string> = {
+          MEETING_LOCATION_SHARE_OFF: "이 모임은 위치 공유가 꺼져 있습니다.",
+          SHARING_TOO_EARLY: "아직 위치 공유를 시작할 수 있는 시간이 아닙니다.",
+          LOCATION_NOT_ALLOWED: "위치 공유 동의 또는 공유 상태를 확인해 주세요.",
+          INVALID_LOCATION_TIME: "현재 위치의 시간이 올바르지 않습니다. 기기 시간을 확인해 주세요.",
+        };
+        setMessage(messageByCode[payload.code] ?? payload.message);
+      });
+      socket.on("connect_error", (error) => setMessage(`실시간 서버 연결 실패: ${error.message}`));
       socket.connect();
       socket.once("connect", () => socket.emit("meeting:join", { meetingId }));
     }
     return () => {
       clearInterval(timer);
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-      socket?.disconnect();
+      watchIdRef.current = null;
       socketRef.current = null;
+      if (sharingRef.current) {
+        socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
+        void apiRequest(`/meetings/${meetingId}/location-consent`, {
+          method: "PATCH",
+          body: JSON.stringify({ consent: false }),
+        }).catch(() => undefined).finally(() => socket?.disconnect());
+      } else {
+        socket?.disconnect();
+      }
     };
   }, [accessToken, load, meetingId]);
 
@@ -190,28 +264,43 @@ export function TrackingScreen({ navigation, route }: Props) {
       return;
     }
     try {
-      await new Promise<void>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(() => resolve(), (error) => reject(new Error(error.message)), { enableHighAccuracy: true });
+      setMessage("");
+      const firstPosition = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, (error) => reject(new Error(error.message)), { enableHighAccuracy: true, timeout: 10000 });
       });
-      await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: true }) });
       const socket = socketRef.current;
       if (!socket) throw new Error("실시간 위치 연결을 준비하지 못했습니다.");
+      await waitForSocketConnection(socket);
+      await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: true }) });
       socket.emit("meeting:join", { meetingId });
       socket.emit("sharing:status", { meetingId, status: "SHARING" });
+      await waitForSharingStatus();
+      const sentAt = new Date(firstPosition.timestamp).toISOString();
+      socket.emit("location:update", {
+        meetingId,
+        latitude: firstPosition.coords.latitude,
+        longitude: firstPosition.coords.longitude,
+        accuracy: firstPosition.coords.accuracy,
+        sentAt,
+      });
+      await waitForFirstLocation(sentAt);
+      updateMyLocation(firstPosition);
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = navigator.geolocation.watchPosition((position) => {
         socket.emit("location:update", { meetingId, latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, sentAt: new Date(position.timestamp).toISOString() });
-        setLocations((current) => current.map((item) => item.userId === user?.id ? {
-          ...item,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          updatedAt: new Date(position.timestamp).toISOString(),
-          sharingStatus: "SHARING",
-        } : item));
+        updateMyLocation(position);
       }, (error) => setMessage(`위치 갱신에 실패했습니다: ${error.message}`), { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
-      setSharing(true);
+      updateSharingState(true);
       setMessage("실시간 위치 공유를 시작했습니다.");
     } catch (error) {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: false }),
+      }).catch(() => undefined);
+      updateSharingState(false);
       setMessage(error instanceof Error ? `위치 권한이 필요합니다: ${error.message}` : "위치 권한이 필요합니다.");
     }
   }
@@ -221,14 +310,25 @@ export function TrackingScreen({ navigation, route }: Props) {
     watchIdRef.current = null;
     socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
     await apiRequest(`/meetings/${meetingId}/location-consent`, { method: "PATCH", body: JSON.stringify({ consent: false }) });
-    setSharing(false);
+    updateSharingState(false);
     setMessage("실시간 위치 공유를 중지했습니다.");
   }
 
   async function arrive() {
-    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
-    await stopSharing();
-    await load();
+    if (arriving) return;
+    setArriving(true);
+    setMessage("");
+    try {
+      const coordinates = await getCurrentCoordinates();
+      await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
+      await stopSharing();
+      await load();
+      setMessage("도착 처리됐습니다.");
+    } catch (error) {
+      setMessage(arrivalErrorMessage(error));
+    } finally {
+      setArriving(false);
+    }
   }
 
   return (
@@ -254,39 +354,31 @@ export function TrackingScreen({ navigation, route }: Props) {
         ))}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
-          <Button label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={() => void (sharing ? stopSharing() : startSharing())} variant={sharing ? "secondary" : "primary"} />
-          <Button label="도착 처리" onPress={() => void arrive()} variant="soft" />
+          <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={() => void (sharing ? stopSharing() : startSharing())} variant={sharing ? "secondary" : "primary"} />
+          <Button compact disabled={arriving} label={arriving ? "위치 확인 중..." : "도착 처리"} onPress={() => void arrive()} variant="soft" />
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.background },
-  locationMap: { flex: 1, minHeight: 300, backgroundColor: palette.primarySoft },
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  locationMap: { flex: 1, minHeight: 300, backgroundColor: colors.primarySoft },
   map: { flex: 1, minHeight: 300 },
-  mapError: { color: palette.red, textAlign: "center", padding: 14 },
-  mapHint: { color: palette.muted, textAlign: "center", padding: 14 },
+  mapError: { color: colors.red, textAlign: "center", padding: 14 },
+  mapHint: { color: colors.muted, textAlign: "center", padding: 14 },
   legacyMapPlaceholder: { display: "none" },
-  mapIcon: { color: palette.primary, fontSize: 52, fontWeight: "900" },
-  mapTitle: { color: palette.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
-  mapBody: { color: palette.muted, textAlign: "center", marginTop: 8 },
-  place: { color: palette.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
-  panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
+  mapIcon: { color: colors.primary, fontSize: 52, fontWeight: "900" },
+  mapTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 8 },
+  mapBody: { color: colors.muted, textAlign: "center", marginTop: 8 },
+  place: { color: colors.primary, fontSize: 12, fontWeight: "800", marginTop: 14 },
+  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: palette.text, fontSize: 18, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
   person: { padding: 10 },
-  personName: { color: palette.text, fontWeight: "800" },
-  meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
-  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
-  actions: { gap: 8 },
-
-      }),
-    [palette],
-  );
-}
+  personName: { color: colors.text, fontWeight: "800" },
+  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
+});

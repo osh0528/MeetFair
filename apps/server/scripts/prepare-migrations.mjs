@@ -9,6 +9,12 @@ const chatMigrationName = "20260826010000_chat_board_visit_profile";
 const recordingMigrationName = "20260826053000_call_recording_retention";
 const chatRecordingMigrationName = "20260826062000_meeting_chat_recordings";
 const recordingSafeguardsMigrationName = "20260826070000_recording_backend_safeguards";
+const freeAndForcedCallsMigrationName = "20260831120000_free_and_forced_meeting_calls";
+const profileRoomMigrationNames = [
+  "20260903010000_profile_room_decor",
+  "20260903020000_profile_room_wallpaper",
+  "20260903030000_profile_room_layout",
+];
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required before preparing migrations.");
@@ -28,6 +34,9 @@ let shouldResolveChatRecordingMigration = false;
 let shouldRollbackFailedChatRecordingMigration = false;
 let shouldResolveRecordingSafeguardsMigration = false;
 let shouldRollbackFailedRecordingSafeguardsMigration = false;
+let shouldResolveFreeAndForcedCallsMigration = false;
+let shouldRollbackFailedFreeAndForcedCallsMigration = false;
+let profileRoomMigrationStates = [];
 
 function migrationState(rows, migrationName) {
   const matchingRows = rows.filter((migration) => migration.migration_name === migrationName);
@@ -173,11 +182,13 @@ try {
       shouldResolveRecordingMigration = true;
       shouldResolveChatRecordingMigration = true;
       shouldResolveRecordingSafeguardsMigration = true;
+      shouldResolveFreeAndForcedCallsMigration = true;
+      profileRoomMigrationStates = profileRoomMigrationNames.map((name) => ({ name, applied: false, failed: false }));
     } else {
       const migrations = await client.query(
         `SELECT migration_name, finished_at, rolled_back_at
          FROM public._prisma_migrations
-         WHERE migration_name IN ('0_init', $1, $2, $3, $4, $5)
+         WHERE migration_name IN ('0_init', $1, $2, $3, $4, $5, $6)
          ORDER BY started_at DESC`,
         [
           photoMigrationName,
@@ -185,6 +196,7 @@ try {
           recordingMigrationName,
           chatRecordingMigrationName,
           recordingSafeguardsMigrationName,
+          freeAndForcedCallsMigrationName,
         ],
       );
       const baseline = migrationState(migrations.rows, "0_init");
@@ -193,6 +205,7 @@ try {
       const recordingMigration = migrationState(migrations.rows, recordingMigrationName);
       const chatRecordingMigration = migrationState(migrations.rows, chatRecordingMigrationName);
       const recordingSafeguardsMigration = migrationState(migrations.rows, recordingSafeguardsMigrationName);
+      const freeAndForcedCallsMigration = migrationState(migrations.rows, freeAndForcedCallsMigrationName);
       shouldResolveBaseline = !baseline.applied;
       shouldRollbackFailedBaseline = shouldResolveBaseline && baseline.failed;
       shouldResolvePhotoMigration = !photoMigration.applied;
@@ -205,6 +218,19 @@ try {
       shouldRollbackFailedChatRecordingMigration = shouldResolveChatRecordingMigration && chatRecordingMigration.failed;
       shouldResolveRecordingSafeguardsMigration = !recordingSafeguardsMigration.applied;
       shouldRollbackFailedRecordingSafeguardsMigration = shouldResolveRecordingSafeguardsMigration && recordingSafeguardsMigration.failed;
+      shouldResolveFreeAndForcedCallsMigration = !freeAndForcedCallsMigration.applied;
+      shouldRollbackFailedFreeAndForcedCallsMigration = shouldResolveFreeAndForcedCallsMigration && freeAndForcedCallsMigration.failed;
+      const profileRoomMigrations = await client.query(
+        `SELECT migration_name, finished_at, rolled_back_at
+         FROM public._prisma_migrations
+         WHERE migration_name = ANY($1::text[])
+         ORDER BY started_at DESC`,
+        [profileRoomMigrationNames],
+      );
+      profileRoomMigrationStates = profileRoomMigrationNames.map((name) => ({
+        name,
+        ...migrationState(profileRoomMigrations.rows, name),
+      }));
     }
   }
 } finally {
@@ -241,6 +267,16 @@ if (shouldAlignExistingSchema) {
     console.log(`Failed ${recordingSafeguardsMigrationName} attempt detected; marking it rolled back.`);
     runPrisma(["migrate", "resolve", "--rolled-back", recordingSafeguardsMigrationName]);
   }
+  if (shouldRollbackFailedFreeAndForcedCallsMigration) {
+    console.log(`Failed ${freeAndForcedCallsMigrationName} attempt detected; marking it rolled back.`);
+    runPrisma(["migrate", "resolve", "--rolled-back", freeAndForcedCallsMigrationName]);
+  }
+  for (const migration of profileRoomMigrationStates) {
+    if (!migration.applied && migration.failed) {
+      console.log(`Failed ${migration.name} attempt detected; marking it rolled back.`);
+      runPrisma(["migrate", "resolve", "--rolled-back", migration.name]);
+    }
+  }
   console.log("Safely preparing recording-related columns, indexes, and constraints.");
   await alignRecordingSchema();
   console.log("Aligning the existing MeetFair database with the current schema.");
@@ -259,5 +295,13 @@ if (shouldAlignExistingSchema) {
   }
   if (shouldResolveRecordingSafeguardsMigration) {
     runPrisma(["migrate", "resolve", "--applied", recordingSafeguardsMigrationName]);
+  }
+  if (shouldResolveFreeAndForcedCallsMigration) {
+    runPrisma(["migrate", "resolve", "--applied", freeAndForcedCallsMigrationName]);
+  }
+  for (const migration of profileRoomMigrationStates) {
+    if (!migration.applied) {
+      runPrisma(["migrate", "resolve", "--applied", migration.name]);
+    }
   }
 }

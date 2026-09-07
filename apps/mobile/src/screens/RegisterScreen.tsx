@@ -1,21 +1,19 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState , useMemo} from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { apiRequest } from "../services/api";
+import { authErrorMessage } from "../services/auth-errors";
 import { useSession } from "../services/session";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 import type { AddressSelection } from "../types/location";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Register">;
 
 export function RegisterScreen({ navigation, route }: Props) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const session = useSession();
   const [nickname, setNickname] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -65,15 +63,19 @@ export function RegisterScreen({ navigation, route }: Props) {
     try {
       await session.register({ email: email.trim(), password, nickname: nickname.trim(), accountId });
       if (address) {
-        await apiRequest("/users/me/home", {
-          method: "PUT",
-          body: JSON.stringify(address),
-        });
-        await session.refreshUser();
+        try {
+          await apiRequest("/users/me/home", {
+            method: "PUT",
+            body: JSON.stringify(address),
+          });
+          await session.refreshUser();
+        } catch {
+          Alert.alert("회원가입 완료", "계정은 생성됐지만 위치를 저장하지 못했습니다. 프로필에서 다시 설정해 주세요.");
+        }
       }
       navigation.replace("Home");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "가입하지 못했습니다.");
+      setError(authErrorMessage(caught, "가입하지 못했습니다."));
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +104,7 @@ export function RegisterScreen({ navigation, route }: Props) {
         <GoogleAuthButton
           disabled={checkingAccountId || available !== true || nickname.trim().length < 2}
           label="Google로 가입"
-          onError={(caught) => setError(caught.message)}
+          onError={(caught) => setError(authErrorMessage(caught, "Google 가입에 실패했습니다."))}
           onIdToken={async (idToken) => {
             setError("");
             await session.googleLogin(idToken, {
@@ -118,27 +120,17 @@ export function RegisterScreen({ navigation, route }: Props) {
 }
 
 function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const { label, ...inputProps } = props;
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...inputProps} placeholderTextColor={palette.subtle} style={styles.input} /></View>;
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...inputProps} placeholderTextColor={colors.subtle} style={styles.input} /></View>;
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.background },
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 14 },
-  title: { color: palette.text, fontSize: 24, lineHeight: 32, fontWeight: "900", marginBottom: 8 },
+  title: { color: colors.text, fontSize: 24, lineHeight: 32, fontWeight: "900", marginBottom: 8 },
   field: { gap: 7 },
-  label: { color: palette.text, fontSize: 13, fontWeight: "800" },
-  input: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, paddingHorizontal: 15, color: palette.text },
-  hint: { color: palette.muted, fontSize: 11 },
-  error: { color: palette.red, fontSize: 12 },
-
-      }),
-    [palette],
-  );
-}
+  label: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  input: { height: 52, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, color: colors.text },
+  hint: { color: colors.muted, fontSize: 11 },
+  error: { color: colors.red, fontSize: 12 },
+});

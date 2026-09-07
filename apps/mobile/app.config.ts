@@ -1,26 +1,25 @@
 import type { ExpoConfig } from "expo/config";
 
-const naverMapClientId = process.env.EXPO_PUBLIC_NAVER_MAP_NCP_KEY_ID ?? process.env.NAVER_MAP_CLIENT_ID ?? "";
-
 export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ...config,
   name: "MeetFair",
   slug: "meetfair",
   scheme: "meetfair",
   version: "0.1.0",
+  icon: "./assets/icon.png",
   orientation: "portrait",
   userInterfaceStyle: "light",
   android: {
     ...config.android,
     package: "com.meetfair.app",
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#303030",
+    },
   },
   ios: {
     ...config.ios,
     bundleIdentifier: "com.meetfair.app",
-    infoPlist: {
-      ...config.ios?.infoPlist,
-      NMFClientId: naverMapClientId,
-    },
   },
   plugins: [
     [
@@ -33,8 +32,8 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       "expo-camera",
       {
         cameraPermission: "Camera access is required to take and share photos.",
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        microphonePermission: "영상 통화의 음성 연결을 위해 마이크 접근을 허용해 주세요.",
+        recordAudioAndroid: true,
       },
     ],
     [
@@ -54,23 +53,14 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     [
       "expo-audio",
       {
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        microphonePermission: "영상 통화의 음성 연결을 위해 마이크 접근을 허용해 주세요.",
+        recordAudioAndroid: true,
         enableBackgroundRecording: false,
         enableBackgroundPlayback: true,
       },
     ],
     "expo-web-browser",
     "expo-secure-store",
-    "@react-native-google-signin/google-signin",
-    [
-      "expo-build-properties",
-      {
-        android: {
-          extraMavenRepos: ["https://repository.map.naver.com/archive/maven"],
-        },
-      },
-    ],
     "@livekit/react-native-expo-plugin",
     "./plugins/with-video-only-webrtc",
   ],

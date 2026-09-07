@@ -1,19 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { KakaoAddressMap } from "../components/KakaoAddressMap";
-import type { MapDisplayMarker } from "../types/location";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
+import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { apiRequest } from "../services/api";
-import { createMeetingSocket } from "../services/socket";
+import { arrivalErrorMessage } from "../services/arrival-errors";
+import { getCurrentCoordinates } from "../services/current-location";
+import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
+import type { AddressSelection, MapDisplayMarker } from "../types/location";
 
 const TASK_NAME = "meetfair-meeting-location";
 const TASK_STATE_KEY = "meetfair.location-task";
@@ -64,16 +65,22 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
 
 export function TrackingScreen({ navigation, route }: Props) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const meetingId = route.params.meetingId;
   const { accessToken, user } = useSession();
   const [meeting, setMeeting] = useState<MeetingLocationDetail | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [sharing, setSharing] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const [message, setMessage] = useState("");
+  const [arriving, setArriving] = useState(false);
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
+  const sharingRef = useRef(false);
+
+  function updateSharingState(value: boolean) {
+    sharingRef.current = value;
+    setSharing(value);
+  }
 
   async function load() {
     const [meetingData, locationData] = await Promise.all([
@@ -82,6 +89,38 @@ export function TrackingScreen({ navigation, route }: Props) {
     ]);
     setMeeting(meetingData);
     setLocations(locationData.locations);
+    updateSharingState(locationData.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING"));
+  }
+
+  function updateMyLocation(position: Location.LocationObject) {
+    setLocations((current) => current.map((item) => item.userId === user?.id ? {
+      ...item,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? 0,
+      updatedAt: new Date(position.timestamp).toISOString(),
+      sharingStatus: "SHARING",
+    } : item));
+  }
+
+  async function waitForSharingStatus() {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      if (data.locations.some((item) => item.userId === user?.id && item.sharingStatus === "SHARING")) return;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error("위치 공유 상태를 서버에 저장하지 못했습니다. 다시 시도해 주세요.");
+  }
+
+  async function waitForFirstLocation(sentAt: string) {
+    const sentTime = new Date(sentAt).getTime();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const data = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${meetingId}/locations`);
+      const mine = data.locations.find((item) => item.userId === user?.id);
+      if (mine?.updatedAt && new Date(mine.updatedAt).getTime() >= sentTime) return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error("서버가 현재 위치를 저장하지 않았습니다. 모임의 위치 공유 시간 설정을 확인해 주세요.");
   }
 
   useEffect(() => {
@@ -108,117 +147,174 @@ export function TrackingScreen({ navigation, route }: Props) {
           arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt,
         } : item));
       });
+      socket.on("meeting:error", (payload) => {
+        const messageByCode: Record<string, string> = {
+          MEETING_LOCATION_SHARE_OFF: "이 모임은 위치 공유가 꺼져 있습니다.",
+          SHARING_TOO_EARLY: "아직 위치 공유를 시작할 수 있는 시간이 아닙니다.",
+          LOCATION_NOT_ALLOWED: "위치 공유 동의 또는 공유 상태를 확인해 주세요.",
+          INVALID_LOCATION_TIME: "현재 위치의 시간이 올바르지 않습니다. 기기 시간을 확인해 주세요.",
+        };
+        setMessage(messageByCode[payload.code] ?? payload.message);
+      });
+      socket.on("connect_error", (error) => setMessage(`실시간 서버 연결 실패: ${error.message}`));
       socket.connect();
       socket.once("connect", () => socket.emit("meeting:join", { meetingId }));
     }
     return () => {
       clearInterval(timer);
       watcher.current?.remove();
-      socketRef.current?.disconnect();
+      watcher.current = null;
+      const socket = socketRef.current;
       socketRef.current = null;
+      void Location.hasStartedLocationUpdatesAsync(TASK_NAME)
+        .catch(() => false)
+        .then(async (backgroundActive) => {
+          if (sharingRef.current && !backgroundActive) {
+            socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
+            await apiRequest(`/meetings/${meetingId}/location-consent`, {
+              method: "PATCH",
+              body: JSON.stringify({ consent: false }),
+            }).catch(() => undefined);
+          }
+          socket?.disconnect();
+        });
     };
-  }, [accessToken, meetingId]);
+  }, [accessToken, meetingId, user?.id]);
+
+  useEffect(() => {
+    if (!mapExpanded) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setMapExpanded(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [mapExpanded]);
+
+  const mapFocusTarget = useMemo<AddressSelection>(() => {
+    const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
+    if (meeting?.confirmedPlace) {
+      return { ...meeting.confirmedPlace, address: meeting.confirmedPlace.name };
+    }
+    if (mine) {
+      return { address: mine.nickname, latitude: mine.latitude!, longitude: mine.longitude! };
+    }
+    return { address: "서울", latitude: 37.5665, longitude: 126.978 };
+  }, [locations, meeting, user?.id]);
 
   const mapMarkers = useMemo<MapDisplayMarker[]>(() => {
     const markers: MapDisplayMarker[] = [];
     if (meeting?.confirmedPlace) {
       markers.push({
-        id: `place:${meeting.id}`,
+        id: "confirmed-place",
         label: `약속 장소 · ${meeting.confirmedPlace.name}`,
+        kind: "RECOMMENDED",
         address: meeting.confirmedPlace.name,
         latitude: meeting.confirmedPlace.latitude,
         longitude: meeting.confirmedPlace.longitude,
-        kind: "PLACE",
       });
     }
     for (const item of locations) {
       if (item.homeLatitude != null && item.homeLongitude != null) {
         markers.push({
           id: `home:${item.userId}`,
-          label: item.nickname,
-          address: "",
+          label: `${item.nickname} 출발 위치`,
+          kind: "HOME",
+          address: item.nickname,
           latitude: item.homeLatitude,
           longitude: item.homeLongitude,
-          kind: "HOME",
         });
       }
       if (item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null) {
         markers.push({
           id: `live:${item.userId}`,
           label: item.userId === user?.id ? `${item.nickname} (나)` : item.nickname,
-          address: "",
+          kind: "LIVE",
+          address: item.nickname,
           latitude: item.latitude,
           longitude: item.longitude,
-          kind: "LIVE",
         });
       }
     }
     return markers;
-  }, [locations, meeting, user?.id]);
-
-  const focusTarget = useMemo(() => {
-    if (!meeting?.confirmedPlace) return null;
-    return {
-      address: meeting.confirmedPlace.name,
-      latitude: meeting.confirmedPlace.latitude,
-      longitude: meeting.confirmedPlace.longitude,
-    };
-  }, [meeting]);
+  }, [locations, meeting?.confirmedPlace, user?.id]);
 
   async function startSharing() {
     if (!accessToken) return;
-    const foreground = await Location.requestForegroundPermissionsAsync();
-    if (!foreground.granted) {
-      Alert.alert("위치 권한 필요", "실시간 위치 공유를 위해 위치 권한을 허용해 주세요.");
-      return;
-    }
-    await apiRequest(`/meetings/${meetingId}/location-consent`, {
-      method: "PATCH",
-      body: JSON.stringify({ consent: true }),
-    });
-    const socket = socketRef.current;
-    if (!socket) {
-      setMessage("실시간 위치 연결을 준비하지 못했습니다.");
-      return;
-    }
-    socket.emit("meeting:join", { meetingId });
-    socket.emit("sharing:status", { meetingId, status: "SHARING" });
-    watcher.current = await Location.watchPositionAsync({
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-      distanceInterval: 10,
-    }, (position) => {
+    setMessage("");
+    try {
+      const foreground = await Location.requestForegroundPermissionsAsync();
+      if (!foreground.granted) {
+        Alert.alert("위치 권한 필요", "실시간 위치 공유를 위해 위치 권한을 허용해 주세요.");
+        return;
+      }
+      const socket = socketRef.current;
+      if (!socket) throw new Error("실시간 위치 연결을 준비하지 못했습니다.");
+      await waitForSocketConnection(socket);
+      const firstPosition = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: true }),
+      });
+      socket.emit("meeting:join", { meetingId });
+      socket.emit("sharing:status", { meetingId, status: "SHARING" });
+      await waitForSharingStatus();
+      const sentAt = new Date(firstPosition.timestamp).toISOString();
       socket.emit("location:update", {
         meetingId,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy ?? 0,
-        sentAt: new Date(position.timestamp).toISOString(),
+        latitude: firstPosition.coords.latitude,
+        longitude: firstPosition.coords.longitude,
+        accuracy: firstPosition.coords.accuracy ?? 0,
+        sentAt,
       });
-      setLocations((current) => current.map((item) => item.userId === user?.id ? {
-        ...item,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy ?? 0,
-        updatedAt: new Date(position.timestamp).toISOString(),
-        sharingStatus: "SHARING",
-      } : item));
-    });
-    await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
-    const background = await Location.requestBackgroundPermissionsAsync();
-    if (background.granted && !await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
-      await Location.startLocationUpdatesAsync(TASK_NAME, {
+      await waitForFirstLocation(sentAt);
+      updateMyLocation(firstPosition);
+      watcher.current?.remove();
+      watcher.current = await Location.watchPositionAsync({
         accuracy: Location.Accuracy.High,
-        timeInterval: 10000,
-        distanceInterval: 20,
-        foregroundService: {
-          notificationTitle: "MeetFair 위치 공유 중",
-          notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
-        },
+        timeInterval: 5000,
+        distanceInterval: 10,
+      }, (position) => {
+        socket.emit("location:update", {
+          meetingId,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy ?? 0,
+          sentAt: new Date(position.timestamp).toISOString(),
+        });
+        updateMyLocation(position);
       });
+      await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
+      updateSharingState(true);
+      setMessage("실시간 위치 공유를 시작했습니다.");
+
+      try {
+        const background = await Location.requestBackgroundPermissionsAsync();
+        if (background.granted && !await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
+          await Location.startLocationUpdatesAsync(TASK_NAME, {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 10000,
+            distanceInterval: 20,
+            foregroundService: {
+              notificationTitle: "MeetFair 위치 공유 중",
+              notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
+            },
+          });
+        }
+      } catch {
+        setMessage("위치 공유를 시작했습니다. 백그라운드에서는 앱 설정에 따라 갱신이 제한될 수 있습니다.");
+      }
+    } catch (error) {
+      watcher.current?.remove();
+      watcher.current = null;
+      socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
+      await AsyncStorage.removeItem(TASK_STATE_KEY);
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: false }),
+      }).catch(() => undefined);
+      updateSharingState(false);
+      setMessage(error instanceof Error ? error.message : "위치 공유를 시작하지 못했습니다.");
     }
-    setSharing(true);
-    setMessage("실시간 위치 공유를 시작했습니다.");
   }
 
   async function stopSharing() {
@@ -231,31 +327,67 @@ export function TrackingScreen({ navigation, route }: Props) {
       method: "PATCH",
       body: JSON.stringify({ consent: false }),
     });
-    setSharing(false);
+    updateSharingState(false);
   }
 
   async function arrive() {
-    await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: "{}" });
-    await stopSharing();
-    await load();
+    if (arriving) return;
+    setArriving(true);
+    setMessage("");
+    try {
+      const coordinates = await getCurrentCoordinates();
+      await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
+      await stopSharing();
+      await load();
+      setMessage("도착 처리됐습니다.");
+    } catch (error) {
+      setMessage(arrivalErrorMessage(error));
+    } finally {
+      setArriving(false);
+    }
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
+      <View style={mapExpanded && styles.hidden}>
+        <ScreenHeader title="실시간 위치" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
+      </View>
       {meeting ? (
-        <KakaoAddressMap
-          query=""
-          requestId={0}
-          focusTarget={focusTarget}
-          mapMarkers={mapMarkers}
-        />
+        <View style={[styles.map, mapExpanded && styles.mapExpanded]}>
+          <KakaoAddressMap
+            fitMarkers={false}
+            focusTarget={mapFocusTarget}
+            interactive
+            mapMarkers={mapMarkers}
+            query=""
+            requestId={0}
+          />
+        </View>
       ) : (
         <View style={[styles.map, styles.mapLoading]}>
           <Text style={styles.meta}>지도를 준비하고 있습니다.</Text>
         </View>
       )}
-      <View style={styles.panel}>
+      {mapExpanded ? (
+        <Pressable
+          accessibilityLabel="지도 축소"
+          accessibilityRole="button"
+          onPress={() => setMapExpanded(false)}
+          style={styles.collapseMapButton}
+        >
+          <Text style={styles.collapseMapButtonText}>지도 닫기</Text>
+        </Pressable>
+      ) : meeting ? (
+        <Pressable
+          accessibilityLabel="지도 확대"
+          accessibilityRole="button"
+          onPress={() => setMapExpanded(true)}
+          style={styles.expandMapButton}
+        >
+          <Text style={styles.collapseMapButtonText}>지도 크게 보기</Text>
+        </Pressable>
+      ) : null}
+      {!mapExpanded ? <View style={styles.panel}>
         <View style={styles.row}>
           <Text style={styles.title}>{locations.filter((item) => item.sharingStatus === "SHARING" && item.latitude != null && item.longitude != null).length}명 위치 공유</Text>
           <Pill label={sharing ? "공유 중" : "공유 안 함"} tone={sharing ? "green" : "gray"} />
@@ -268,32 +400,29 @@ export function TrackingScreen({ navigation, route }: Props) {
         ))}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         <View style={styles.actions}>
-          <Button label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
-          <Button label="도착 처리" onPress={arrive} variant="soft" />
+          <Button compact label={sharing ? "위치 공유 중지" : "위치 공유 시작"} onPress={sharing ? stopSharing : startSharing} variant={sharing ? "secondary" : "primary"} />
+          <Button compact disabled={arriving} label={arriving ? "위치 확인 중..." : "도착 처리"} onPress={arrive} variant="soft" />
         </View>
-      </View>
+      </View> : null}
     </SafeAreaView>
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.background },
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
   map: { flex: 1, minHeight: 300 },
-  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: palette.primarySoft },
-  panel: { maxHeight: "48%", backgroundColor: palette.surface, padding: 18, gap: 9 },
+  mapExpanded: { minHeight: 0 },
+  mapLoading: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  hidden: { display: "none" },
+  collapseMapButton: { position: "absolute", top: 14, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
+  expandMapButton: { position: "absolute", top: 82, right: 14, zIndex: 10, borderRadius: 6, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 14, paddingVertical: 9 },
+  collapseMapButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  panel: { maxHeight: "48%", backgroundColor: colors.surface, padding: 18, gap: 9 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: palette.text, fontSize: 18, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 18, fontWeight: "900" },
   person: { padding: 10 },
-  personName: { color: palette.text, fontWeight: "800" },
-  meta: { color: palette.muted, fontSize: 11, marginTop: 3 },
-  message: { color: palette.primary, fontSize: 12, fontWeight: "700" },
-  actions: { gap: 8 },
-
-      }),
-    [palette],
-  );
-}
+  personName: { color: colors.text, fontWeight: "800" },
+  meta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  message: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 },
+});

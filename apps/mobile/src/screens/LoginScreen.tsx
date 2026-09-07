@@ -1,19 +1,17 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState , useMemo} from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, LogoMark } from "../components/ui";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
+import { authErrorMessage } from "../services/auth-errors";
 import { useSession } from "../services/session";
-import { useAppColors } from "../services/theme";
-
+import { colors } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export function LoginScreen({ navigation }: Props) {
-  const palette = useAppColors();
-  const styles = useStyles();
   const session = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,18 +32,46 @@ export function LoginScreen({ navigation }: Props) {
       await session.login(email.trim(), password, rememberLogin);
       navigation.replace("Home");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "로그인하지 못했습니다.");
+      setError(authErrorMessage(caught, "로그인하지 못했습니다."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function reconnectStoredSession() {
+    setSubmitting(true);
+    setError("");
+    try {
+      await session.refreshUser();
+      navigation.replace("Home");
+    } catch (caught) {
+      setError(authErrorMessage(caught, "서버에 다시 연결하지 못했습니다."));
     } finally {
       setSubmitting(false);
     }
   }
 
   if (session.loading) {
-    return <SafeAreaView style={styles.center}><ActivityIndicator color={palette.primary} /></SafeAreaView>;
+    return <SafeAreaView style={styles.center}><ActivityIndicator color={colors.primary} /></SafeAreaView>;
   }
   if (session.user) {
     navigation.replace("Home");
     return null;
+  }
+  if (session.accessToken) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <LogoMark />
+          <Text style={styles.brand}>MeetFair</Text>
+          <Text style={styles.title}>서버 연결이 지연되고 있어요</Text>
+          <Text style={styles.recoveryText}>로그인 정보는 안전하게 유지했습니다. 네트워크를 확인한 뒤 다시 연결해 주세요.</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button disabled={submitting} label={submitting ? "연결 중..." : "다시 연결"} onPress={reconnectStoredSession} />
+          <Button label="다른 계정으로 로그인" onPress={() => void session.logout()} variant="secondary" />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -59,7 +85,7 @@ export function LoginScreen({ navigation }: Props) {
           keyboardType="email-address"
           onChangeText={setEmail}
           placeholder="이메일"
-          placeholderTextColor={palette.subtle}
+          placeholderTextColor={colors.subtle}
           style={styles.input}
           value={email}
         />
@@ -67,7 +93,7 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
           onChangeText={setPassword}
           placeholder="비밀번호"
-          placeholderTextColor={palette.subtle}
+          placeholderTextColor={colors.subtle}
           secureTextEntry
           style={styles.input}
           value={password}
@@ -90,7 +116,7 @@ export function LoginScreen({ navigation }: Props) {
         <Button disabled={submitting || !email || password.length < 8} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
         <GoogleAuthButton
           label="Google로 로그인"
-          onError={(caught) => setError(caught.message)}
+          onError={(caught) => setError(authErrorMessage(caught, "Google 로그인에 실패했습니다."))}
           onIdToken={async (idToken) => {
             setError("");
             await session.googleLogin(idToken);
@@ -103,27 +129,20 @@ export function LoginScreen({ navigation }: Props) {
   );
 }
 
-function useStyles() {
-  const palette = useAppColors();
-  return useMemo(
-    () =>
-      StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.background, justifyContent: "center" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: palette.background },
-  container: { padding: 24, gap: 14 },
-  brand: { color: palette.primary, fontSize: 17, fontWeight: "900" },
-  title: { color: palette.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
-  input: { height: 54, borderRadius: 16, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 16, color: palette.text },
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background, justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+  container: { width: "100%", maxWidth: 560, alignSelf: "center", padding: 24, gap: 14 },
+  brand: { color: colors.primary, fontSize: 17, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 28, fontWeight: "900", marginBottom: 12 },
+  input: { height: 54, borderRadius: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, color: colors.text },
   rememberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
-  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { borderColor: palette.primary, backgroundColor: palette.primary },
-  checkmark: { color: palette.surface, fontSize: 14, fontWeight: "900" },
+  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
+  checkmark: { color: colors.surface, fontSize: 14, fontWeight: "900" },
   rememberCopy: { flex: 1, gap: 2 },
-  rememberLabel: { color: palette.text, fontSize: 13, fontWeight: "800" },
-  rememberHelp: { color: palette.muted, fontSize: 10, lineHeight: 14 },
-  error: { color: palette.red, fontSize: 12 },
-
-      }),
-    [palette],
-  );
-}
+  rememberLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  rememberHelp: { color: colors.muted, fontSize: 10, lineHeight: 14 },
+  recoveryText: { color: colors.muted, fontSize: 14, lineHeight: 22, marginBottom: 8 },
+  error: { color: colors.red, fontSize: 12 },
+});

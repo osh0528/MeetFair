@@ -1,8 +1,8 @@
-# MeetFair backend
+# Meet World backend
 
 ## Start locally
 
-All commands run from the **repository root** (`C:\Users\dudgh\Desktop\MeetFair`). The package manager is **npm only** (`package-lock.json`).
+All commands run from the **repository root** (`C:\Users\dudgh\Desktop\Meet World`). The package manager is **npm only** (`package-lock.json`).
 
 1. Copy `apps/server/.env.example` to `apps/server/.env`.
 2. Set `DATABASE_URL` to a running PostgreSQL database and replace `JWT_SECRET` with a private value of at least 32 characters.

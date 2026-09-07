@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PublicUser } from "@meetfair/shared";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { apiRequest, setApiAccessToken } from "./api";
+import { ApiError, apiRequest, setApiAccessToken } from "./api";
 import { getStoredAccessToken, removeStoredAccessToken, setStoredAccessToken } from "./authStorage";
 
 const LEGACY_TOKEN_KEY = "meetfair.access-token";
@@ -59,13 +59,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (!token) return;
       setApiAccessToken(token);
       setAccessToken(token);
-      try {
-        const data = await apiRequest<{ user: PublicUser }>("/auth/me");
-        setUser(data.user);
-      } catch {
-        setApiAccessToken(null);
-        setAccessToken(null);
-        await removeStoredAccessToken();
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const data = await apiRequest<{ user: PublicUser }>("/auth/me");
+          setUser(data.user);
+          return;
+        } catch (caught) {
+          if (caught instanceof ApiError && caught.status === 401) {
+            setApiAccessToken(null);
+            setAccessToken(null);
+            await removeStoredAccessToken();
+            return;
+          }
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1_500));
+          }
+        }
       }
     }).finally(() => setLoading(false));
   }, []);

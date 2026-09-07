@@ -3,7 +3,7 @@ services:
     name: meetfair
     runtime: node
     plan: free
-    branch: main
+    branch: suhyeok
     autoDeployTrigger: commit
     buildCommand: npm ci && npm run build
     startCommand: npm run start --workspace @meetfair/server

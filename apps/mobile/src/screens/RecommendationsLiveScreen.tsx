@@ -1,4 +1,4 @@
-﻿import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
+import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -26,9 +26,9 @@ interface MeetingSummary {
 }
 
 const metricLabels: Record<TravelMetric, string> = {
-  TRANSIT: "?以묎탳???쒓컙",
-  CAR: "?먮룞李??쒓컙",
-  DISTANCE: "?대룞 嫄곕━",
+  TRANSIT: "대중교통 시간",
+  CAR: "자동차 시간",
+  DISTANCE: "이동 거리",
 };
 
 function formatDistance(meters: number) {
@@ -54,7 +54,7 @@ function values(item: MeetingRecommendation, metric: TravelMetric) {
 }
 
 function formatValue(value: number, metric: TravelMetric) {
-  return metric === "DISTANCE" ? formatDistance(value) : `${Math.round(value)}遺?;
+  return metric === "DISTANCE" ? formatDistance(value) : `${Math.round(value)}분`;
 }
 
 function fairnessScore(item: Recommendation, metric: TravelMetric) {
@@ -66,23 +66,23 @@ function fairnessScore(item: Recommendation, metric: TravelMetric) {
 }
 
 function recommendationError(error: unknown, meeting?: MeetingSummary | null) {
-  if (!(error instanceof ApiError)) return error instanceof Error ? error.message : "異붿쿇 ?μ냼瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??";
+  if (!(error instanceof ApiError)) return error instanceof Error ? error.message : "추천 장소를 불러오지 못했습니다.";
   if (error.code === "MEETING_ORIGINS_INCOMPLETE") {
     const ids = Array.isArray(error.details?.missingParticipantIds)
       ? error.details.missingParticipantIds.filter((id): id is string => typeof id === "string")
       : [];
     const names = ids.map((id) => meeting?.participants.find((participant) => participant.userId === id)?.user.nickname ?? id);
     return names.length
-      ? `${names.join(", ")} ?섏씠 異쒕컻 ?꾩튂瑜??ㅼ젙?댁빞 ?⑸땲??`
-      : "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙?????ㅼ떆 怨꾩궛??二쇱꽭??";
+      ? `${names.join(", ")} 님이 출발 위치를 설정해야 합니다.`
+      : "모든 참가자가 출발 위치를 설정한 뒤 다시 계산해 주세요.";
   }
-  if (error.code === "VOTES_EXIST") return "?ы몴媛 ?쒖옉???ㅼ뿉??異붿쿇 ?꾨낫瑜??ㅼ떆 怨꾩궛?????놁뒿?덈떎.";
+  if (error.code === "VOTES_EXIST") return "투표가 시작된 뒤에는 추천 후보를 다시 계산할 수 없습니다.";
   const messages: Record<string, string> = {
-    MEETING_ORIGINS_INCOMPLETE: "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆쓣 ???덉뒿?덈떎.",
-    TRANSIT_NOT_CONFIGURED: "?以묎탳??異붿쿇 以鍮꾧? ?꾨즺?섏? ?딆븯?듬땲??",
-    TRANSIT_TIMEOUT: "?以묎탳??寃쎈줈 怨꾩궛??吏?곕릺怨??덉뒿?덈떎. ?ㅼ떆 ?쒕룄??二쇱꽭??",
-    TRANSIT_NO_ROUTE: "紐⑤뱺 李멸??먭? ?대룞?????덈뒗 ?以묎탳??寃쎈줈瑜?李얠? 紐삵뻽?듬땲??",
-    RECOMMENDATION_PLACES_NOT_FOUND: "以묒떖 ?꾩튂 二쇰??먯꽌 議곌굔??留욌뒗 ?μ냼瑜?李얠? 紐삵뻽?듬땲??",
+    MEETING_ORIGINS_INCOMPLETE: "모든 참가자가 출발 위치를 설정한 뒤 추천을 받을 수 있습니다.",
+    TRANSIT_NOT_CONFIGURED: "대중교통 추천 준비가 완료되지 않았습니다.",
+    TRANSIT_TIMEOUT: "대중교통 경로 계산이 지연되고 있습니다. 다시 시도해 주세요.",
+    TRANSIT_NO_ROUTE: "모든 참가자가 이동할 수 있는 대중교통 경로를 찾지 못했습니다.",
+    RECOMMENDATION_PLACES_NOT_FOUND: "중심 위치 주변에서 조건에 맞는 장소를 찾지 못했습니다.",
   };
   return messages[error.code] ?? error.message;
 }
@@ -182,7 +182,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
         method: "POST",
         body: JSON.stringify({ placeCandidateId: selected.id }),
       });
-      setMessage(`${selected.name}???ы몴?덉뒿?덈떎.`);
+      setMessage(`${selected.name}에 투표했습니다.`);
       setMeeting(await apiRequest<MeetingSummary>(`/meetings/${meetingId}`));
     } catch (error) {
       setMessage(recommendationError(error, meeting));
@@ -193,18 +193,18 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScreenHeader title="怨듯룊???μ냼 異붿쿇" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
+      <ScreenHeader title="공평한 장소 추천" subtitle={meeting?.title} onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
       >
-        {loading ? <State title="?대룞 寃쎈줈瑜?怨꾩궛?섍퀬 ?덉뼱?? body="李멸????섏? 寃쎈줈 ?곹솴???곕씪 ?좎떆 嫄몃┫ ???덉뒿?덈떎." /> : null}
+        {loading ? <State title="이동 경로를 계산하고 있어요" body="참가자 수와 경로 상황에 따라 잠시 걸릴 수 있습니다." /> : null}
         {!loading && !items.length ? (
           <State
-            title="異붿쿇 寃곌낵瑜?以鍮꾪븯吏 紐삵뻽?댁슂"
-            body={message || "李멸???異쒕컻 ?꾩튂? ?먰븯???μ냼 醫낅쪟瑜??뺤씤??二쇱꽭??"}
+            title="추천 결과를 준비하지 못했어요"
+            body={message || "참가자 출발 위치와 원하는 장소 종류를 확인해 주세요."}
             retry={canRegenerate ? () => void regenerate() : () => void load()}
-            retryLabel={canRegenerate ? (regenerating ? "怨꾩궛 以?.." : "異붿쿇 ?μ냼 怨꾩궛?섍린") : "?덈줈怨좎묠"}
+            retryLabel={canRegenerate ? (regenerating ? "계산 중..." : "추천 장소 계산하기") : "새로고침"}
           />
         ) : null}
 
@@ -212,24 +212,24 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
           <>
             <View style={styles.intro}>
               <View style={styles.introCopy}>
-                <Text style={styles.eyebrow}>MeetFair 遺꾩꽍 ?꾨즺</Text>
-                <Text style={styles.title}>?대룞 寃⑹감媛 ?묒?{`\n`}?μ냼瑜?李얠븯?댁슂</Text>
-                <Text style={styles.caption}>{metricLabels[metric]} 湲곗? 쨌 ??? 寃⑹감遺??異붿쿇</Text>
+                <Text style={styles.eyebrow}>MeetFair 분석 완료</Text>
+                <Text style={styles.title}>이동 격차가 작은{`\n`}장소를 찾았어요</Text>
+                <Text style={styles.caption}>{metricLabels[metric]} 기준 · 낮은 격차부터 추천</Text>
               </View>
               {selected ? (
                 <View style={styles.score}>
                   <Text style={styles.scoreValue}>{fairnessScore(selected, metric)}</Text>
-                  <Text style={styles.scoreLabel}>洹좏삎 ?먯닔</Text>
+                  <Text style={styles.scoreLabel}>균형 점수</Text>
                 </View>
               ) : null}
             </View>
             {canRegenerate ? (
               <View style={styles.regenerateRow}>
-                <Button compact variant="soft" label={regenerating ? "怨꾩궛 以?.." : "異붿쿇 ?ㅼ떆 怨꾩궛"} disabled={regenerating} onPress={() => void regenerate()} />
+                <Button compact variant="soft" label={regenerating ? "계산 중..." : "추천 다시 계산"} disabled={regenerating} onPress={() => void regenerate()} />
               </View>
             ) : null}
-            {voteStarted ? <Text style={styles.lockNotice}>?ы몴媛 ?쒖옉?섏뼱 異붿쿇 ?꾨낫媛 怨좎젙?먯뒿?덈떎.</Text> : null}
-            <Text style={styles.sectionTitle}>異붿쿇 ?μ냼 {items.length}怨?/Text>
+            {voteStarted ? <Text style={styles.lockNotice}>투표가 시작되어 추천 후보가 고정됐습니다.</Text> : null}
+            <Text style={styles.sectionTitle}>추천 장소 {items.length}곳</Text>
             <View style={styles.list}>
               {items.map((item, index) => {
                 const active = selected?.id === item.id;
@@ -245,17 +245,17 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                           <View style={styles.nameRow}>
                             <Text style={styles.placeName}>{item.name}</Text>
                             {index === 0 ? <Pill label="BEST" tone="purple" /> : null}
-                            {item.id === myVoteId ? <Pill label="???좏깮" tone="green" /> : null}
+                            {item.id === myVoteId ? <Pill label="내 선택" tone="green" /> : null}
                           </View>
-                          <Text style={styles.address}>{item.category} 쨌 {item.address}</Text>
+                          <Text style={styles.address}>{item.category} · {item.address}</Text>
                         </View>
                         <View style={[styles.radio, active && styles.activeRadio]}>{active ? <View style={styles.dot} /> : null}</View>
                       </View>
                       <View style={styles.metrics}>
-                        <Metric label="?됯퇏" value={formatValue(stats.average, metric)} />
-                        <Metric label="媛???ㅻ옒" value={formatValue(stats.maximum, metric)} />
-                        <Metric label="理쒕? 寃⑹감" value={formatValue(stats.gap, metric)} fair />
-                        <Metric label="怨듯룊?? value={`${fairnessScore(item, metric)}??} fair />
+                        <Metric label="평균" value={formatValue(stats.average, metric)} />
+                        <Metric label="가장 오래" value={formatValue(stats.maximum, metric)} />
+                        <Metric label="최대 격차" value={formatValue(stats.gap, metric)} fair />
+                        <Metric label="공평도" value={`${fairnessScore(item, metric)}점`} fair />
                       </View>
                       {active ? (
                         <View style={styles.travels}>
@@ -264,14 +264,14 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                               <Avatar name={travel.nickname} size={30} />
                               <Text style={styles.travelName}>{travel.nickname}</Text>
                               <Text style={styles.travelValue}>
-                                {metric === "DISTANCE" ? formatDistance(travel.distanceMeters) : `${travel.durationMinutes}遺?}
+                                {metric === "DISTANCE" ? formatDistance(travel.distanceMeters) : `${travel.durationMinutes}분`}
                               </Text>
                             </View>
                           ))}
-                          <Text style={styles.explanation}>洹좏삎 ?먯닔??媛??湲??대룞媛??鍮?李멸???媛?寃⑹감媛 ?묒쓣?섎줉 ?믪븘吏묐땲??</Text>
+                          <Text style={styles.explanation}>균형 점수는 가장 긴 이동값 대비 참가자 간 격차가 작을수록 높아집니다.</Text>
                         </View>
                       ) : null}
-                      {item.id && voteCounts.has(item.id) ? <Text style={styles.voteCount}>?꾩옱 {voteCounts.get(item.id)}??/Text> : null}
+                      {item.id && voteCounts.has(item.id) ? <Text style={styles.voteCount}>현재 {voteCounts.get(item.id)}표</Text> : null}
                     </Card>
                   </Pressable>
                 );
@@ -279,13 +279,12 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
             </View>
             {selected ? (
               <View style={styles.mapSection}>
-                <Text style={styles.mapTitle}>?좏깮???μ냼 二쇰? 吏??/Text>
-                <Text style={styles.mapSubtitle}>{selected.name} 遺洹쇨낵 異붿쿇 ?μ냼 2怨녹쓣 ?뺤씤??蹂댁꽭??</Text>
+                <Text style={styles.mapTitle}>추천 장소 위치</Text>
+                <Text style={styles.mapSubtitle}>추천 장소 2곳을 지도에서 간략하게 확인해 보세요.</Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
                     query=""
                     requestId={0}
-                    focusTarget={{ address: selected.address, latitude: selected.latitude, longitude: selected.longitude }}
                     mapMarkers={mapMarkers}
                   />
                 </Card>
@@ -298,7 +297,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
       {selected ? (
         <View style={styles.footer}>
           <Button
-            label={voting ? "?ы몴 以?.." : `${selected.name}???ы몴?섍린`}
+            label={voting ? "투표 중..." : `${selected.name}에 투표하기`}
             disabled={!selected.id || voting || selected.id === myVoteId || meeting?.status !== "PLANNING" || Boolean(meeting?.confirmedPlace)}
             onPress={() => void vote()}
           />
@@ -308,7 +307,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
   );
 }
 
-function State({ title, body, retry, retryLabel = "?ㅼ떆 ?쒕룄" }: { title: string; body: string; retry?: () => void; retryLabel?: string }) {
+function State({ title, body, retry, retryLabel = "다시 시도" }: { title: string; body: string; retry?: () => void; retryLabel?: string }) {
   return <Card style={styles.state}><Text style={styles.stateTitle}>{title}</Text><Text style={styles.stateBody}>{body}</Text>{retry ? <Button compact label={retryLabel} onPress={retry} /> : null}</Card>;
 }
 

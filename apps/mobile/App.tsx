@@ -1,15 +1,15 @@
 import { DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddressSearchScreen } from "./src/screens/AddressSearchScreen";
 import { CreateMeetingScreen } from "./src/screens/CreateMeetingScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MeetingScreen } from "./src/screens/MeetingScreen";
-import { RecommendationsScreen } from "./src/screens/RecommendationsScreen";
+import { RecommendationsLiveScreen } from "./src/screens/RecommendationsLiveScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { TrackingScreen } from "./src/screens/TrackingScreen";
 import { FriendsScreen } from "./src/screens/FriendsScreen";
@@ -26,8 +26,9 @@ import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge"
 import { WebNotificationToast } from "./src/components/WebNotificationToast";
 import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
+import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
-import { ThemeProvider, useAppColors, useAppTheme } from "./src/services/theme";
+import { ThemeProvider, useAppTheme } from "./src/services/theme";
 import { DirectMessagesScreen } from "./src/screens/DirectMessagesScreen";
 import { MiniHomeSearchScreen } from "./src/screens/MiniHomeSearchScreen";
 import { MeetingChatScreen } from "./src/screens/MeetingChatScreen";
@@ -41,7 +42,7 @@ export type RootStackParamList = {
   AddressSearch: { returnTo?: "Register" | "Profile" } | undefined;
   Home: undefined;
   CreateMeeting: undefined;
-  Recommendations: undefined;
+  Recommendations: { meetingId: string };
   Meeting: { meetingId: string };
   Tracking: { meetingId: string };
   Friends: undefined;
@@ -63,6 +64,18 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const navigationTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: colors.background,
+    card: colors.surface,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.primary,
+  },
+};
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -78,18 +91,8 @@ export default function App() {
 function AppNavigator() {
   const { user } = useSession();
   const { mode } = useAppTheme();
-  const palette = useAppColors();
-  const navigationTheme = useMemo(() => ({
-    ...DefaultTheme,
-    colors: {
-      ...DefaultTheme.colors,
-      background: palette.background,
-      card: palette.surface,
-      text: palette.text,
-      border: palette.border,
-      primary: palette.primary,
-    },
-  }), [palette]);
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const [currentRoute, setCurrentRoute] = useState<keyof RootStackParamList>("Login");
   const bottomNavHidden = currentRoute === "Login" || currentRoute === "Register" || currentRoute === "VideoCall";
@@ -99,9 +102,26 @@ function AppNavigator() {
     if (routeName) setCurrentRoute(routeName);
   }
 
+  function openMeetingsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Home" }] });
+  }
+
+  function openFriendsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Friends" }] });
+  }
+
+  function openSettingsTab() {
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "Settings" }] });
+  }
+
+  function openUserPageTab() {
+    if (!user) return;
+    navigationRef.resetRoot({ index: 0, routes: [{ name: "UserPage", params: { userId: user.id } }] });
+  }
+
   return (
     <NavigationContainer
-      documentTitle={{ formatter: () => "MeetFair" }}
+      documentTitle={{ formatter: () => "MeetFair | 공평한 약속 장소와 실시간 모임 관리" }}
       ref={navigationRef}
       theme={navigationTheme}
       onReady={updateCurrentRoute}
@@ -110,13 +130,24 @@ function AppNavigator() {
       <StatusBar style={mode === "DARK" ? "light" : "dark"} />
       <PokeNotificationBridge />
       <WebNotificationToast />
-      <View style={styles.appShell}>
-        <Stack.Navigator
+      <View style={[styles.appShell, isDesktop && styles.appShellDesktop]}>
+        {user && !bottomNavHidden && isDesktop ? (
+          <AppBottomNavigation
+            layout="sidebar"
+            currentRoute={currentRoute}
+            onMeetings={openMeetingsTab}
+            onFriends={openFriendsTab}
+            onSettings={openSettingsTab}
+            onUserPage={openUserPageTab}
+          />
+        ) : null}
+        <View style={styles.navigatorShell}>
+          <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
             headerShown: false,
             animation: "slide_from_right",
-            contentStyle: { backgroundColor: palette.background },
+            contentStyle: { backgroundColor: colors.background },
           }}
         >
           <Stack.Screen name="Login" component={LoginScreen} />
@@ -124,7 +155,7 @@ function AppNavigator() {
           <Stack.Screen name="AddressSearch" component={AddressSearchScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="CreateMeeting" component={CreateMeetingScreen} />
-          <Stack.Screen name="Recommendations" component={RecommendationsScreen} />
+          <Stack.Screen name="Recommendations" component={RecommendationsLiveScreen} />
           <Stack.Screen name="Meeting" component={MeetingScreen} />
           <Stack.Screen name="Tracking" component={TrackingScreen} />
           <Stack.Screen name="Friends" component={FriendsScreen} />
@@ -142,14 +173,16 @@ function AppNavigator() {
           <Stack.Screen name="MeetingBoard" component={MeetingBoardScreen} />
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
           <Stack.Screen name="MiniHome" component={MiniHomeScreen} />
-        </Stack.Navigator>
-        {user && !bottomNavHidden ? (
+          </Stack.Navigator>
+        </View>
+        {user && !bottomNavHidden && !isDesktop ? (
           <AppBottomNavigation
+            layout="bottom"
             currentRoute={currentRoute}
-            onMeetings={() => navigationRef.navigate("Home")}
-            onFriends={() => navigationRef.navigate("Friends")}
-            onSettings={() => navigationRef.navigate("Settings")}
-            onUserPage={() => navigationRef.navigate("UserPage", { userId: user.id })}
+            onMeetings={openMeetingsTab}
+            onFriends={openFriendsTab}
+            onSettings={openSettingsTab}
+            onUserPage={openUserPageTab}
           />
         ) : null}
       </View>
@@ -159,4 +192,6 @@ function AppNavigator() {
 
 const styles = StyleSheet.create({
   appShell: { flex: 1 },
+  appShellDesktop: { flexDirection: "row" },
+  navigatorShell: { flex: 1, minWidth: 0 },
 });
