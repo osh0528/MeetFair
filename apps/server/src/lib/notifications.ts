@@ -43,6 +43,7 @@ async function sendExpoPush(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
+    const isDirectMessage = notificationType === "DIRECT_MESSAGE";
     const isPoke = notificationType === "CASUAL_POKE"
       || notificationType === "MEETING_POKE"
       || notificationType === "AUTOMATIC_MEETING_POKE";
@@ -54,6 +55,7 @@ async function sendExpoPush(
         to: expoPushToken,
         sound: "default",
         ...(isPoke ? { channelId: "pokes-v3", priority: "high" } : {}),
+        ...(isDirectMessage ? { channelId: "direct-messages-v1", priority: "high" } : {}),
         title,
         body,
         data: { ...data, notificationType },

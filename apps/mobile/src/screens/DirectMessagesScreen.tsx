@@ -246,17 +246,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
   }
 
   function handleBack() {
-    if (selectedId) {
-      setSelectedId(null);
-      setMessages([]);
-      setNextCursor(null);
-      void loadConversations();
-      if (route.params?.conversationId || route.params?.friendUserId) {
-        navigation.setParams({ conversationId: undefined, friendUserId: undefined });
-      }
-    } else {
-      navigation.goBack();
-    }
+    navigation.goBack();
   }
 
   const filteredConversations = conversations.filter((conversation) => {
@@ -298,8 +288,8 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
           </View>
         ) : (
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={80}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
             style={styles.threadContainer}
           >
             <FlatList
@@ -308,6 +298,7 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
               inverted
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messagesContent}
+              keyboardShouldPersistTaps="handled"
               onEndReached={() => {
                 if (nextCursor && !messagesLoading) void loadMessages(selectedId, nextCursor);
               }}
