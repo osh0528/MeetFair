@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useRef } from "react";
-import { Platform, Vibration } from "react-native";
+import { AppState, Platform, Vibration } from "react-native";
 import { isPokeSoundEnabled } from "../services/poke-sound";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
@@ -12,15 +12,26 @@ import { navigateForNotificationData, stringValue } from "../services/notificati
 import { apiRequest } from "../services/api";
 
 const POKE_CHANNEL_ID = "pokes-v3";
-const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v1";
+const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v2";
+const GENERAL_NOTIFICATION_CHANNEL_ID = "meeting-reminders";
 const POKE_VIBRATION_PATTERN = [0, 250, 120, 250, 120, 400];
+const PUSH_REGISTRATION_RETRY_MS = [5_000, 15_000, 60_000];
 
-async function configurePokeChannel() {
+async function configureNotificationChannels() {
   if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(GENERAL_NOTIFICATION_CHANNEL_ID, {
+    name: "모임 알림",
+    description: "초대, 일정, 통화 등 주요 모임 소식을 알려줍니다.",
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: "default",
+    enableVibrate: true,
+    vibrationPattern: [0, 250, 120, 250],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
   await Notifications.setNotificationChannelAsync(DIRECT_MESSAGE_CHANNEL_ID, {
     name: "DM 알림",
     description: "새 다이렉트 메시지를 진동으로 알려줍니다.",
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: Notifications.AndroidImportance.MAX,
     sound: "default",
     enableVibrate: true,
     vibrationPattern: [0, 250, 120, 250],
@@ -48,7 +59,7 @@ if (Platform.OS !== "web") {
     }),
   });
   if (Platform.OS === "android") {
-    void configurePokeChannel();
+    void configureNotificationChannels();
   }
 }
 
@@ -88,6 +99,9 @@ export function PokeNotificationBridge() {
   useEffect(() => {
     if (Platform.OS === "web" || !accessToken) return;
     let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let registering = false;
+    let retryAttempt = 0;
 
     const saveToken = async (expoPushToken: string) => {
       await apiRequest("/users/me/push-token", {
@@ -96,25 +110,48 @@ export function PokeNotificationBridge() {
       });
     };
     const register = async () => {
-      await configurePokeChannel();
-      const existingPermission = await Notifications.getPermissionsAsync();
-      const permission = existingPermission.granted
-        ? existingPermission
-        : await Notifications.requestPermissionsAsync();
-      if (!permission.granted || !active) return;
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-      const token = projectId
-        ? await Notifications.getExpoPushTokenAsync({ projectId })
-        : await Notifications.getExpoPushTokenAsync();
-      if (active) await saveToken(token.data);
+      if (!active || registering) return;
+      registering = true;
+      try {
+        await configureNotificationChannels();
+        const existingPermission = await Notifications.getPermissionsAsync();
+        const permission = existingPermission.granted
+          ? existingPermission
+          : await Notifications.requestPermissionsAsync();
+        if (!permission.granted || !active) return;
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        const token = projectId
+          ? await Notifications.getExpoPushTokenAsync({ projectId })
+          : await Notifications.getExpoPushTokenAsync();
+        if (!active) return;
+        await saveToken(token.data);
+        retryAttempt = 0;
+      } catch (error) {
+        console.warn("푸시 알림 등록에 실패했어요.", error);
+        if (active && retryAttempt < PUSH_REGISTRATION_RETRY_MS.length) {
+          const delay = PUSH_REGISTRATION_RETRY_MS[retryAttempt++]!;
+          retryTimer = setTimeout(() => void register(), delay);
+        }
+      } finally {
+        registering = false;
+      }
     };
 
-    void register().catch((error) => console.warn("푸시 알림 등록에 실패했어요.", error));
+    void register();
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      retryAttempt = 0;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      void register();
+    });
     const tokenSubscription = Notifications.addPushTokenListener((token) => {
       void saveToken(token.data).catch((error) => console.warn("변경된 푸시 토큰 저장에 실패했어요.", error));
     });
     return () => {
       active = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      appStateSubscription.remove();
       tokenSubscription.remove();
     };
   }, [accessToken]);

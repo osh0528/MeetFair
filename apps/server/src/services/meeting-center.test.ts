@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { meetingIncenter } from "./meeting-center.js";
+import { meetingCentroid } from "./meeting-center.js";
 
-describe("meetingIncenter", () => {
+describe("meetingCentroid", () => {
+  it("returns the only participant coordinate", () => {
+    const center = meetingCentroid([
+      { latitude: 37.5, longitude: 126.9 },
+    ]);
+    expect(center.latitude).toBe(37.5);
+    expect(center.longitude).toBe(126.9);
+  });
+
   it("returns the midpoint for two participants", () => {
-    const center = meetingIncenter([
+    const center = meetingCentroid([
       { latitude: 37.5, longitude: 126.9 },
       { latitude: 37.7, longitude: 127.1 },
     ]);
@@ -11,24 +19,28 @@ describe("meetingIncenter", () => {
     expect(center.longitude).toBeCloseTo(127, 8);
   });
 
-  it("returns the triangle incenter for three participants", () => {
-    const center = meetingIncenter([
+  it("returns the arithmetic centroid for three participants", () => {
+    const center = meetingCentroid([
       { latitude: 0, longitude: 0 },
       { latitude: 0, longitude: 4 },
       { latitude: 3, longitude: 0 },
     ]);
-    expect(center.latitude).toBeCloseTo(1, 3);
-    expect(center.longitude).toBeCloseTo(1, 3);
+    expect(center.latitude).toBeCloseTo(1, 8);
+    expect(center.longitude).toBeCloseTo(4 / 3, 8);
   });
 
-  it("finds the largest inscribed-circle center for four participants", () => {
-    const center = meetingIncenter([
+  it("includes every participant when calculating the centroid", () => {
+    const center = meetingCentroid([
       { latitude: 37.5, longitude: 126.9 },
       { latitude: 37.5, longitude: 127.1 },
       { latitude: 37.7, longitude: 127.1 },
-      { latitude: 37.7, longitude: 126.9 },
+      { latitude: 37.9, longitude: 126.9 },
     ]);
-    expect(center.latitude).toBeCloseTo(37.6, 5);
-    expect(center.longitude).toBeCloseTo(127, 5);
+    expect(center.latitude).toBeCloseTo(37.65, 8);
+    expect(center.longitude).toBeCloseTo(127, 8);
+  });
+
+  it("rejects an empty participant list", () => {
+    expect(() => meetingCentroid([])).toThrow("At least one coordinate is required.");
   });
 });
