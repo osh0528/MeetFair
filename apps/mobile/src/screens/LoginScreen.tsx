@@ -28,6 +28,8 @@ export function LoginScreen({ navigation }: Props) {
   }, [session.loading, session.rememberLogin, session.savedEmail]);
 
   async function submit() {
+    if (!email.trim()) { setError("이메일을 입력해 주세요."); return; }
+    if (password.length < 8) { setError("비밀번호를 8자 이상 입력해 주세요."); return; }
     setSubmitting(true);
     setError("");
     try {
@@ -84,6 +86,7 @@ export function LoginScreen({ navigation }: Props) {
         <Text style={styles.title}>친구들과 공평하게 만나요</Text>
         <TextInput
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
           onChangeText={setEmail}
           placeholder="이메일"
@@ -93,6 +96,7 @@ export function LoginScreen({ navigation }: Props) {
         />
         <TextInput
           autoCapitalize="none"
+          autoComplete="current-password"
           onChangeText={setPassword}
           placeholder="비밀번호"
           placeholderTextColor={palette.subtle}
@@ -115,14 +119,18 @@ export function LoginScreen({ navigation }: Props) {
           </View>
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button disabled={submitting || !email || password.length < 8} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
+        <Button disabled={submitting} label={submitting ? "로그인 중..." : "로그인"} onPress={submit} />
         <GoogleAuthButton
           label="Google로 로그인"
           onError={(caught) => setError(authErrorMessage(caught, "Google 로그인에 실패했습니다."))}
           onIdToken={async (idToken) => {
             setError("");
-            await session.googleLogin(idToken);
-            navigation.replace("Home");
+            try {
+              await session.googleLogin(idToken);
+              navigation.replace("Home");
+            } catch (caught) {
+              setError(authErrorMessage(caught, "Google 로그인에 실패했습니다."));
+            }
           }}
         />
         <Button label="계정 만들기" onPress={() => navigation.navigate("Register")} variant="secondary" />
