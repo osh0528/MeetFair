@@ -54,6 +54,8 @@ async function sendExpoPush(
       body: JSON.stringify(tokens.map(({ expoPushToken }) => ({
         to: expoPushToken,
         sound: "default",
+        priority: "high",
+        ...(!isPoke && !isDirectMessage ? { channelId: "meeting-reminders" } : {}),
         ...(isPoke ? { channelId: "pokes-v3", priority: "high" } : {}),
         ...(isDirectMessage ? { channelId: "direct-messages-v1", priority: "high" } : {}),
         title,
