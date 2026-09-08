@@ -4,7 +4,7 @@ import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js"
 import { getDrivingDirections } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
-import { meetingIncenter } from "./meeting-center.js";
+import { meetingCentroid } from "./meeting-center.js";
 
 interface Origin {
   userId: string;
@@ -247,7 +247,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆븘二쇱꽭??");
   }
 
-  const center = meetingIncenter(origins);
+  const center = meetingCentroid(origins);
   // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
   const rawSearchCenters = origins.length > 2
     ? [
