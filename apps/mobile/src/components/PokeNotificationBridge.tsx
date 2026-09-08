@@ -12,7 +12,7 @@ import { navigateForNotificationData, stringValue } from "../services/notificati
 import { apiRequest } from "../services/api";
 
 const POKE_CHANNEL_ID = "pokes-v3";
-const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v1";
+const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v2";
 const GENERAL_NOTIFICATION_CHANNEL_ID = "meeting-reminders";
 const POKE_VIBRATION_PATTERN = [0, 250, 120, 250, 120, 400];
 const PUSH_REGISTRATION_RETRY_MS = [5_000, 15_000, 60_000];
@@ -31,7 +31,7 @@ async function configureNotificationChannels() {
   await Notifications.setNotificationChannelAsync(DIRECT_MESSAGE_CHANNEL_ID, {
     name: "DM 알림",
     description: "새 다이렉트 메시지를 진동으로 알려줍니다.",
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: Notifications.AndroidImportance.MAX,
     sound: "default",
     enableVibrate: true,
     vibrationPattern: [0, 250, 120, 250],

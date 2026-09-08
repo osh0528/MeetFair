@@ -57,7 +57,7 @@ async function sendExpoPush(
         priority: "high",
         ...(!isPoke && !isDirectMessage ? { channelId: "meeting-reminders" } : {}),
         ...(isPoke ? { channelId: "pokes-v3", priority: "high" } : {}),
-        ...(isDirectMessage ? { channelId: "direct-messages-v1", priority: "high" } : {}),
+        ...(isDirectMessage ? { channelId: "direct-messages-v2", priority: "high" } : {}),
         title,
         body,
         data: { ...data, notificationType },
