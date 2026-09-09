@@ -279,7 +279,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         strokeWeight: 5,
         strokeColor: route.color ?? ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
         strokeOpacity: 0.78,
-        strokeStyle: "solid",
+        strokeStyle: route.dashed ? "shortdash" : "solid",
       }));
   }, [mapRoutes, ready]);
 

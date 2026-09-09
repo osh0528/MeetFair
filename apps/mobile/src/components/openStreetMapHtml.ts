@@ -56,7 +56,8 @@ export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[], routes: Ope
       L.polyline(path, {
         color: route.color || ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
         weight: 5,
-        opacity: 0.78
+        opacity: 0.78,
+        dashArray: route.dashed ? "10 8" : undefined
       }).addTo(map);
     });
     if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });

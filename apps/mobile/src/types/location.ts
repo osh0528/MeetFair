@@ -17,5 +17,6 @@ export interface MapDisplayMarker extends AddressSelection {
 export interface MapDisplayRoute {
   id: string;
   color?: string;
+  dashed?: boolean;
   points: Array<Pick<AddressSelection, "latitude" | "longitude">>;
 }

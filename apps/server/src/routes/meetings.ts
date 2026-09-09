@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
+import { getTransitDirections } from "../lib/kakao-transit.js";
+import { getDrivingDirections } from "../lib/naver-maps.js";
 import {
   toMeetingInvitationSummary,
   toMeetingMemberStatusEntry,
@@ -153,6 +155,68 @@ meetingsRouter.post("/:meetingId/recommendations/regenerate", async (request: Au
     if (voteCount > 0) throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
     const recommendations = await generateRecommendations(meetingId, userId(request));
     response.json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const { meetingId, candidateId } = z.object({
+      meetingId: idSchema,
+      candidateId: idSchema,
+    }).parse(request.params);
+    const currentUserId = userId(request);
+    await participantFor(meetingId, currentUserId);
+    const candidate = await prisma.placeCandidate.findFirst({
+      where: { id: candidateId, meetingId },
+      include: { meeting: { select: { travelMetric: true } } },
+    });
+    if (!candidate) throw new AppError(404, "PLACE_CANDIDATE_NOT_FOUND", "Place candidate was not found.");
+
+    const participants = await prisma.meetingParticipant.findMany({
+      where: { meetingId },
+      include: { user: { select: { homeLatitude: true, homeLongitude: true } } },
+    });
+    const friendIds = await friendIdsAmong(currentUserId, participants.map((participant) => participant.userId));
+    const origins = participants.flatMap((participant) => {
+      if (!friendIds.has(participant.userId)) return [];
+      const latitude = approximateHomeCoordinate(participant.user.homeLatitude);
+      const longitude = approximateHomeCoordinate(participant.user.homeLongitude);
+      return latitude != null && longitude != null
+        ? [{ userId: participant.userId, latitude, longitude }]
+        : [];
+    });
+    const destination = { latitude: candidate.latitude, longitude: candidate.longitude };
+    const detailedRouteUserIds = new Set(origins.slice(0, 8).map((origin) => origin.userId));
+    const routes = await Promise.all(origins.map(async (origin) => {
+      const directPoints = [origin, destination].map(({ latitude, longitude }) => ({ latitude, longitude }));
+      if (candidate.meeting.travelMetric === "DISTANCE" || !detailedRouteUserIds.has(origin.userId)) {
+        return { userId: origin.userId, points: directPoints, approximate: true };
+      }
+      try {
+        const directions = candidate.meeting.travelMetric === "TRANSIT"
+          ? await getTransitDirections(origin, destination, true)
+          : await getDrivingDirections(origin, destination, "trafast", true);
+        const rawPoints = directions.points?.length ? directions.points : directPoints;
+        const maxPoints = 400;
+        const step = Math.max(1, Math.ceil(rawPoints.length / maxPoints));
+        const sampled = rawPoints.filter((_, index) => index % step === 0);
+        const points = [
+          directPoints[0]!,
+          ...sampled,
+          directPoints[1]!,
+        ].filter((point, index, items) => index === 0
+          || point.latitude !== items[index - 1]!.latitude
+          || point.longitude !== items[index - 1]!.longitude);
+        return {
+          userId: origin.userId,
+          points,
+          approximate: !directions.points?.length,
+        };
+      } catch {
+        return { userId: origin.userId, points: directPoints, approximate: true };
+      }
+    }));
+    response.json({ success: true, data: { routes } });
   } catch (error) { next(error); }
 });
 

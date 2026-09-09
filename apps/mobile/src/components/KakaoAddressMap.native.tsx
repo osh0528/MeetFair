@@ -216,7 +216,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
         strokeWeight: 5,
         strokeColor: item.color || ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
         strokeOpacity: 0.78,
-        strokeStyle: "solid"
+        strokeStyle: item.dashed ? "shortdash" : "solid"
       });
     });
   };

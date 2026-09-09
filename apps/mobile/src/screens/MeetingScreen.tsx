@@ -173,6 +173,7 @@ export function MeetingScreen({ navigation, route }: Props) {
   // 직접 추천할 장소의 이름과 카테고리입니다.
   const [placeName, setPlaceName] = useState("");
   const [placeCategory, setPlaceCategory] = useState("직접 추천");
+  const [destinationRoutes, setDestinationRoutes] = useState<MapDisplayRoute[]>([]);
   const candidateOverviewRef = useRef<{ signature: string; markers: MapDisplayMarker[]; routes: MapDisplayRoute[] }>({
     signature: "",
     markers: [],
@@ -260,6 +261,43 @@ export function MeetingScreen({ navigation, route }: Props) {
     return () => clearInterval(timer);
   }, [pokeCooldowns]);
 
+  const routeCandidate = meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1);
+  const destinationRouteSignature = routeCandidate
+    ? [
+        routeCandidate.id,
+        routeCandidate.latitude,
+        routeCandidate.longitude,
+        ...(meeting?.participants ?? []).map((participant) => [
+          participant.userId,
+          participant.user.homeLatitude ?? "",
+          participant.user.homeLongitude ?? "",
+        ].join(":")),
+      ].join("|")
+    : "";
+  useEffect(() => {
+    let cancelled = false;
+    setDestinationRoutes([]);
+    if (!routeCandidate) return () => { cancelled = true; };
+    void apiRequest<{
+      routes: Array<{
+        userId: string;
+        approximate: boolean;
+        points: Array<{ latitude: number; longitude: number }>;
+      }>;
+    }>(`/meetings/${meetingId}/place-candidates/${routeCandidate.id}/routes`)
+      .then((data) => {
+        if (cancelled) return;
+        setDestinationRoutes(data.routes.map((item, index) => ({
+          id: `route:home:${item.userId}:${routeCandidate.id}`,
+          color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+          dashed: item.approximate,
+          points: item.points,
+        })));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [destinationRouteSignature, meetingId]);
+
   // 첫 조회가 끝나기 전에는 본문 대신 로딩 또는 조회 오류를 표시합니다.
   if (!meeting) {
     return <SafeAreaView style={styles.safeArea}><ScreenHeader title="모임" onBack={() => navigation.goBack()} /><Text style={styles.loading}>{message || "불러오는 중..."}</Text></SafeAreaView>;
@@ -320,6 +358,7 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...homeMapMarkers.map((marker) => (
       `home:${marker.id}:${marker.latitude}:${marker.longitude}:${marker.label}`
     )),
+    ...destinationRoutes.map((route) => `${route.id}:${route.points.length}`),
   ].join("|");
   if (candidateOverviewRef.current.signature !== candidateOverviewSignature) {
     candidateOverviewRef.current = {
@@ -335,10 +374,13 @@ export function MeetingScreen({ navigation, route }: Props) {
         })),
         ...homeMapMarkers,
       ],
-      routes: recommendedCandidate
+      routes: destinationRoutes.length
+        ? destinationRoutes
+        : recommendedCandidate
         ? homeMapMarkers.map((marker, index) => ({
             id: `route:${marker.id}:${recommendedCandidate.id}`,
             color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+            dashed: true,
             points: [
               { latitude: marker.latitude, longitude: marker.longitude },
               { latitude: recommendedCandidate.latitude, longitude: recommendedCandidate.longitude },

@@ -5,6 +5,7 @@ import { distanceMeters } from "./geo.js";
 export interface TransitResult {
   distanceMeters: number;
   durationMinutes: number;
+  points?: Array<{ latitude: number; longitude: number }>;
 }
 
 interface KakaoTransitRoute {
@@ -12,6 +13,7 @@ interface KakaoTransitRoute {
     totalDistance?: number;
     totalTime?: number;
   };
+  sections?: Array<{ roads?: Array<{ vertexes?: number[] }> }>;
 }
 
 interface KakaoTransitResponse {
@@ -29,6 +31,7 @@ function kakaoRestKey(): string {
 export async function getTransitDirections(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
+  includePoints = false,
 ): Promise<TransitResult> {
   const directDistance = distanceMeters(
     origin.latitude,
@@ -81,16 +84,27 @@ export async function getTransitDirections(
       ) {
         return [];
       }
-      return [{ totalTime, totalDistance }];
+      return [{ route, totalTime, totalDistance }];
     }).sort((a, b) => a.totalTime - b.totalTime || a.totalDistance - b.totalDistance);
 
     const bestRoute = validRoutes[0];
     if (!bestRoute) {
       throw new AppError(404, "TRANSIT_NO_ROUTE", "No transit route found.");
     }
+    const points = includePoints ? bestRoute.route.sections?.flatMap((section) => section.roads ?? []).flatMap((road) => {
+      const vertexes = road.vertexes ?? [];
+      const roadPoints: Array<{ latitude: number; longitude: number }> = [];
+      for (let index = 0; index + 1 < vertexes.length; index += 2) {
+        const longitude = vertexes[index]!;
+        const latitude = vertexes[index + 1]!;
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) roadPoints.push({ latitude, longitude });
+      }
+      return roadPoints;
+    }) ?? [] : [];
     return {
       durationMinutes: Math.max(1, Math.round(bestRoute.totalTime / 60)),
       distanceMeters: Math.round(bestRoute.totalDistance),
+      ...(points.length ? { points } : {}),
     };
   } catch (error) {
     if (error instanceof AppError) throw error;

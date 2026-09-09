@@ -44,6 +44,33 @@ describe("getTransitDirections", () => {
     )).rejects.toMatchObject({ code: "TRANSIT_NO_ROUTE", status: 404 });
   });
 
+  it("returns route vertices when detailed points are requested", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        routes: [{
+          properties: { totalTime: 1_800, totalDistance: 12_345 },
+          sections: [{ roads: [{ vertexes: [127, 37.5, 127.1, 37.6] }] }],
+        }],
+      }),
+    }));
+    const { getTransitDirections } = await import("./kakao-transit.js");
+
+    await expect(getTransitDirections(
+      { latitude: 37.5, longitude: 127 },
+      { latitude: 37.6, longitude: 127.1 },
+      true,
+    )).resolves.toEqual({
+      durationMinutes: 30,
+      distanceMeters: 12_345,
+      points: [
+        { latitude: 37.5, longitude: 127 },
+        { latitude: 37.6, longitude: 127.1 },
+      ],
+    });
+  });
+
   it("does not expose an upstream error response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     const { getTransitDirections } = await import("./kakao-transit.js");
