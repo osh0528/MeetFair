@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 export interface KakaoAddressMapProps {
@@ -14,6 +14,7 @@ export interface KakaoAddressMapProps {
   onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  mapRoutes?: MapDisplayRoute[];
   fitMarkers?: boolean;
 }
 
@@ -75,11 +76,12 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], mapRoutes = [], fitMarkers = true }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const displayMarkersRef = useRef<any[]>([]);
+  const displayRoutesRef = useRef<any[]>([]);
   const hasFitMarkersRef = useRef(false);
   const onResultsRef = useRef(onResults);
   const onResolvedRef = useRef(onResolved);
@@ -266,8 +268,23 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     }
   }, [fitMarkers, mapMarkers, ready]);
 
+  useEffect(() => {
+    if (!ready || !window.kakao?.maps || !mapRef.current) return;
+    for (const route of displayRoutesRef.current) route.setMap(null);
+    displayRoutesRef.current = mapRoutes
+      .filter((route) => route.points.length > 1)
+      .map((route, index) => new window.kakao.maps.Polyline({
+        map: mapRef.current,
+        path: route.points.map((point) => new window.kakao.maps.LatLng(point.latitude, point.longitude)),
+        strokeWeight: 5,
+        strokeColor: route.color ?? ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+        strokeOpacity: 0.78,
+        strokeStyle: "solid",
+      }));
+  }, [mapRoutes, ready]);
+
   if (!appConfig.kakaoMapJsKey) {
-    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} mapRoutes={mapRoutes} />;
   }
 
   return (

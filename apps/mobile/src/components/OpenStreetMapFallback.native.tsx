@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import RNCWebView, { type WebViewProps } from "react-native-webview";
-import type { AddressSelection, MapDisplayMarker } from "../types/location";
+import type { AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 import { buildOpenStreetMapHtml } from "./openStreetMapHtml";
 
 const WebView = RNCWebView as unknown as React.ComponentType<WebViewProps>;
@@ -9,9 +9,11 @@ const WebView = RNCWebView as unknown as React.ComponentType<WebViewProps>;
 export function OpenStreetMapFallback({
   focusTarget,
   mapMarkers,
+  mapRoutes = [],
 }: {
   focusTarget?: AddressSelection | null;
   mapMarkers: MapDisplayMarker[];
+  mapRoutes?: MapDisplayRoute[];
 }) {
   const html = useMemo(() => buildOpenStreetMapHtml(
     mapMarkers.length
@@ -23,7 +25,8 @@ export function OpenStreetMapFallback({
       : focusTarget
         ? [{ latitude: focusTarget.latitude, longitude: focusTarget.longitude, label: focusTarget.address }]
         : [],
-  ), [focusTarget, mapMarkers]);
+    mapRoutes,
+  ), [focusTarget, mapMarkers, mapRoutes]);
 
   return (
     <View style={styles.container}>

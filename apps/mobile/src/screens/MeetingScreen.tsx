@@ -24,7 +24,7 @@ import { getCurrentCoordinates } from "../services/current-location";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 // 지도 검색 결과와 최종 선택 위치의 타입입니다.
-import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 
 // 이 화면은 Meeting 라우트에 연결되며 route.params로 meetingId를 받습니다.
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
@@ -173,9 +173,10 @@ export function MeetingScreen({ navigation, route }: Props) {
   // 직접 추천할 장소의 이름과 카테고리입니다.
   const [placeName, setPlaceName] = useState("");
   const [placeCategory, setPlaceCategory] = useState("직접 추천");
-  const candidateOverviewRef = useRef<{ signature: string; markers: MapDisplayMarker[] }>({
+  const candidateOverviewRef = useRef<{ signature: string; markers: MapDisplayMarker[]; routes: MapDisplayRoute[] }>({
     signature: "",
     markers: [],
+    routes: [],
   });
 
   // async는 API처럼 결과가 나중에 도착하는 비동기 작업을 처리하는 함수에 붙입니다.
@@ -334,9 +335,20 @@ export function MeetingScreen({ navigation, route }: Props) {
         })),
         ...homeMapMarkers,
       ],
+      routes: recommendedCandidate
+        ? homeMapMarkers.map((marker, index) => ({
+            id: `route:${marker.id}:${recommendedCandidate.id}`,
+            color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+            points: [
+              { latitude: marker.latitude, longitude: marker.longitude },
+              { latitude: recommendedCandidate.latitude, longitude: recommendedCandidate.longitude },
+            ],
+          }))
+        : [],
     };
   }
   const candidateOverviewMarkers = candidateOverviewRef.current.markers;
+  const candidateOverviewRoutes = candidateOverviewRef.current.routes;
 
   // 선택한 후보 장소에 한 표를 보내고 최신 투표 결과를 다시 불러옵니다.
   async function vote(placeCandidateId: string) {
@@ -715,6 +727,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   <ExpandableKakaoAddressMap
                     interactive
                     mapMarkers={candidateOverviewMarkers}
+                    mapRoutes={candidateOverviewRoutes}
                     query=""
                     requestId={0}
                   />

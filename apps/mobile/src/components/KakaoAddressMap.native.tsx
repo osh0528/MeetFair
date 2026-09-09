@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import RNCWebView, { type WebViewMessageEvent, type WebViewProps } from "react-native-webview";
 import { appConfig } from "../config/env";
 import { colors } from "../theme/colors";
-import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 // react-native-webview@14.0.1 루트 index.d.ts는 `Component<WebViewProps & P>`(P=undefined)라
@@ -32,11 +32,13 @@ export interface KakaoAddressMapProps {
   onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  mapRoutes?: MapDisplayRoute[];
   fitMarkers?: boolean;
 }
 
 const DEFAULT_CENTER = { lat: 37.56661, lng: 126.97839 };
 const EMPTY_MAP_MARKERS: MapDisplayMarker[] = [];
+const EMPTY_MAP_ROUTES: MapDisplayRoute[] = [];
 
 function buildMapHtml(appKey: string, interactive: boolean): string {
   const head =
@@ -200,6 +202,25 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
     }
   };
 
+  var displayRoutes = [];
+  window.meetfairSetRoutes = function (items) {
+    displayRoutes.forEach(function (route) { route.setMap(null); });
+    displayRoutes = (items || []).filter(function (item) {
+      return item.points && item.points.length > 1;
+    }).map(function (item, index) {
+      return new kakao.maps.Polyline({
+        map: map,
+        path: item.points.map(function (point) {
+          return new kakao.maps.LatLng(point.latitude, point.longitude);
+        }),
+        strokeWeight: 5,
+        strokeColor: item.color || ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+        strokeOpacity: 0.78,
+        strokeStyle: "solid"
+      });
+    });
+  };
+
   if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
     kakao.maps.load(init);
     setTimeout(function () {
@@ -214,7 +235,7 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   return head + body + tail;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = EMPTY_MAP_MARKERS, fitMarkers = true }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = EMPTY_MAP_MARKERS, mapRoutes = EMPTY_MAP_ROUTES, fitMarkers = true }: KakaoAddressMapProps) {
   const webViewRef = useRef<WebViewInstance>(null);
   const readyRef = useRef(false);
   const pendingQueryRef = useRef("");
@@ -250,6 +271,11 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     if (!readyRef.current) return;
     webViewRef.current?.injectJavaScript(`window.meetfairSetMarkers(${JSON.stringify(mapMarkers)}, ${fitMarkers}); true;`);
   }, [fitMarkers, mapMarkers, ready]);
+
+  useEffect(() => {
+    if (!readyRef.current) return;
+    webViewRef.current?.injectJavaScript(`window.meetfairSetRoutes(${JSON.stringify(mapRoutes)}); true;`);
+  }, [mapRoutes, ready]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -304,7 +330,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   );
 
   if (!appConfig.kakaoMapJsKey) {
-    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} mapRoutes={mapRoutes} />;
   }
 
   return (
