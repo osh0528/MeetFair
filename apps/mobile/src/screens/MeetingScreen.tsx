@@ -312,20 +312,28 @@ export function MeetingScreen({ navigation, route }: Props) {
   ] : homeMapMarkers;
   // 후보 위치 한눈에 보기 지도에는 상위 세 장소를 번호와 함께 표시합니다.
   const overviewCandidates = meeting.placeCandidates.slice(0, 3);
-  const candidateOverviewSignature = overviewCandidates
-    .map((candidate) => `${candidate.id}:${candidate.latitude}:${candidate.longitude}:${candidate.name}:${candidate.address}`)
-    .join("|");
+  const candidateOverviewSignature = [
+    ...overviewCandidates.map((candidate) => (
+      `candidate:${candidate.id}:${candidate.latitude}:${candidate.longitude}:${candidate.name}:${candidate.address}`
+    )),
+    ...homeMapMarkers.map((marker) => (
+      `home:${marker.id}:${marker.latitude}:${marker.longitude}:${marker.label}`
+    )),
+  ].join("|");
   if (candidateOverviewRef.current.signature !== candidateOverviewSignature) {
     candidateOverviewRef.current = {
       signature: candidateOverviewSignature,
-      markers: overviewCandidates.map((candidate, index) => ({
-        id: `candidate-overview:${candidate.id}`,
-        label: `${index + 1}. ${candidate.name}`,
-        kind: "RECOMMENDED" as const,
-        address: candidate.address,
-        latitude: candidate.latitude,
-        longitude: candidate.longitude,
-      })),
+      markers: [
+        ...overviewCandidates.map((candidate, index) => ({
+          id: `candidate-overview:${candidate.id}`,
+          label: `${index + 1}. ${candidate.name}`,
+          kind: "RECOMMENDED" as const,
+          address: candidate.address,
+          latitude: candidate.latitude,
+          longitude: candidate.longitude,
+        })),
+        ...homeMapMarkers,
+      ],
     };
   }
   const candidateOverviewMarkers = candidateOverviewRef.current.markers;
@@ -698,8 +706,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn, !isWideLayout && styles.recommendationColumnNarrow]}>
                 <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
                 <Text style={styles.candidateOverviewCaption}>
-                  {candidateOverviewMarkers.length
-                    ? `추천 후보 ${candidateOverviewMarkers.length}곳을 지도에서 확인해 보세요.`
+                  {overviewCandidates.length
+                    ? `추천 후보 ${overviewCandidates.length}곳과 친구 집 위치를 지도에서 확인해 보세요.`
                     : "장소를 추천받으면 후보 위치가 지도에 표시됩니다."}
                 </Text>
                 <View style={[styles.candidateOverviewMap, isWideLayout && styles.candidateOverviewMapWide]}>
