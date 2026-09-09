@@ -312,7 +312,7 @@ export function MeetingScreen({ navigation, route }: Props) {
 
   // 현재 로그인 사용자의 참여 정보와 모임 진행 상태를 계산합니다.
   const me = meeting.participants.find((participant) => participant.userId === user?.id);
-  // 나를 제외하고 집 근처 좌표가 있는 참여자를 지도 마커로 변환합니다.
+  // 집 근처 좌표가 있는 모든 참여자를 지도 마커로 변환합니다.
   const homeMapMarkers = meeting.participants.flatMap((participant) => (
     participant.user.homeLatitude != null
     && participant.user.homeLongitude != null
