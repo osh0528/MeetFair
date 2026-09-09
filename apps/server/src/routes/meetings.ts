@@ -697,10 +697,16 @@ meetingsRouter.patch("/:meetingId/confirm", async (request: AuthenticatedRequest
 meetingsRouter.patch("/:meetingId/location-consent", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
+    const participant = await participantFor(meetingId, userId(request));
     const { consent } = z.object({ consent: z.boolean() }).parse(request.body);
-    const participant = await prisma.meetingParticipant.update({ where: { meetingId_userId: { meetingId, userId: userId(request) } }, data: { locationConsent: consent, sharingStatus: consent ? undefined : "NOT_STARTED" } });
-    response.json({ success: true, data: participant });
+    const updated = await prisma.meetingParticipant.update({
+      where: { meetingId_userId: { meetingId, userId: userId(request) } },
+      data: {
+        locationConsent: consent,
+        sharingStatus: consent ? undefined : participant.arrivedAt ? "ARRIVED" : "NOT_STARTED",
+      },
+    });
+    response.json({ success: true, data: updated });
   } catch (error) { next(error); }
 });
 
