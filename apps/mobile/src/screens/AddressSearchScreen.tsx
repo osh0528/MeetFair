@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
@@ -14,6 +14,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "AddressSearch">;
 
 export function AddressSearchScreen({ navigation, route }: Props) {
   const session = useSession();
+  const { height } = useWindowDimensions();
+  const compactHeight = height < 720;
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [requestId, setRequestId] = useState(0);
@@ -49,6 +51,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
 
   const handleSearch = () => {
     if (!input.trim()) return;
+    Keyboard.dismiss();
     setMessage("");
     setCandidates([]);
     setSelection(null);
@@ -114,7 +117,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
 
-      <View style={styles.mapArea}>
+      <View style={[styles.mapArea, compactHeight && styles.mapAreaCompact]}>
         <KakaoAddressMap
           focusTarget={focusTarget}
           interactive
@@ -125,7 +128,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
         />
       </View>
 
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, compactHeight && styles.sheetCompact]}>
         <View style={styles.handle} />
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {candidates.length === 0 ? (
@@ -166,7 +169,11 @@ export function AddressSearchScreen({ navigation, route }: Props) {
             <Text style={styles.sheetEyebrow}>
               검색 결과 {candidates.length}개 · 원하는 장소를 선택하세요
             </Text>
-            <ScrollView style={styles.candidateList} contentContainerStyle={styles.candidateListContent}>
+            <ScrollView
+              contentContainerStyle={styles.candidateListContent}
+              keyboardShouldPersistTaps="handled"
+              style={[styles.candidateList, compactHeight && styles.candidateListCompact]}
+            >
               {candidates.map((candidate) => {
                 const picked = selection === candidate;
                 return (
@@ -204,7 +211,9 @@ const styles = StyleSheet.create({
   searchButton: { width: 58, height: 52, borderRadius: 6, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },
   searchButtonText: { color: colors.surface, fontSize: 13, fontWeight: "900" },
   mapArea: { flex: 1, minHeight: 250 },
+  mapAreaCompact: { minHeight: 150 },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, marginTop: -18, paddingHorizontal: 20, paddingTop: 9, paddingBottom: 12, minHeight: 190, borderWidth: 1, borderColor: colors.border },
+  sheetCompact: { paddingHorizontal: 16, paddingBottom: 8, minHeight: 170 },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 15 },
   sheetEyebrow: { color: colors.green, fontSize: 11, fontWeight: "900", marginBottom: 9 },
   resultRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
@@ -214,6 +223,7 @@ const styles = StyleSheet.create({
   resultAddress: { color: colors.text, fontSize: 14, fontWeight: "900" },
   resultCoordinate: { color: colors.muted, fontSize: 10, marginTop: 4 },
   candidateList: { maxHeight: 172 },
+  candidateListCompact: { maxHeight: 112 },
   candidateListContent: { gap: 8, paddingBottom: 4 },
   candidateRow: { borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: 14, paddingVertical: 10 },
   candidateRowPicked: { borderColor: colors.charcoal, backgroundColor: colors.primarySoft },
