@@ -314,14 +314,13 @@ export function MeetingScreen({ navigation, route }: Props) {
   const me = meeting.participants.find((participant) => participant.userId === user?.id);
   // 나를 제외하고 집 근처 좌표가 있는 참여자를 지도 마커로 변환합니다.
   const homeMapMarkers = meeting.participants.flatMap((participant) => (
-    participant.userId !== user?.id
-    && participant.user.homeLatitude != null
+    participant.user.homeLatitude != null
     && participant.user.homeLongitude != null
       ? [{
           id: `home:${participant.userId}`,
-          label: participant.user.nickname,
+          label: participant.userId === user?.id ? "내 집" : participant.user.nickname,
           kind: "HOME" as const,
-          address: "친구가 설정한 집 근처",
+          address: participant.userId === user?.id ? "설정한 내 집 위치" : "친구가 설정한 집 근처",
           latitude: participant.user.homeLatitude,
           longitude: participant.user.homeLongitude,
         }]

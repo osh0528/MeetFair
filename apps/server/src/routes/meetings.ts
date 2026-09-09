@@ -178,7 +178,7 @@ meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (re
     });
     const friendIds = await friendIdsAmong(currentUserId, participants.map((participant) => participant.userId));
     const origins = participants.flatMap((participant) => {
-      if (!friendIds.has(participant.userId)) return [];
+      if (participant.userId !== currentUserId && !friendIds.has(participant.userId)) return [];
       const latitude = approximateHomeCoordinate(participant.user.homeLatitude);
       const longitude = approximateHomeCoordinate(participant.user.homeLongitude);
       return latitude != null && longitude != null
