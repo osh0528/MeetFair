@@ -4,7 +4,7 @@ import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js"
 import { getDrivingDirections } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
-import { meetingCentroid } from "./meeting-center.js";
+import { meetingCenters } from "./meeting-center.js";
 
 interface Origin {
   userId: string;
@@ -43,7 +43,6 @@ const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
 const MAX_ROUTE_CANDIDATES = 24;
 const MAX_ROUTE_ESTIMATES = 120;
-const MAX_SEARCH_CENTERS = 6;
 const MAX_SEARCH_QUERIES = 3;
 
 function distanceMeters(
@@ -152,6 +151,29 @@ function fairnessScore(gap: number, max: number): number {
   return Math.max(0, Math.round(100 * (1 - gap / max)));
 }
 
+function selectPlacesAcrossCenters(
+  places: KakaoPlace[],
+  centers: Array<{ latitude: number; longitude: number }>,
+  limit: number,
+): KakaoPlace[] {
+  const selected: KakaoPlace[] = [];
+  const selectedIds = new Set<string>();
+  const placesByCenter = centers.map((center) => [...places]
+    .sort((a, b) => distanceMeters(center, a) - distanceMeters(center, b)));
+
+  for (let rank = 0; selected.length < limit && rank < places.length; rank += 1) {
+    for (const rankedPlaces of placesByCenter) {
+      const place = rankedPlaces[rank];
+      if (place && !selectedIds.has(place.id)) {
+        selected.push(place);
+        selectedIds.add(place.id);
+        if (selected.length === limit) break;
+      }
+    }
+  }
+  return selected;
+}
+
 function summarizeExistingCandidate(candidate: {
   id: string;
   providerPlaceId: string | null;
@@ -247,24 +269,12 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆븘二쇱꽭??");
   }
 
-  const center = meetingCentroid(origins);
+  const centers = meetingCenters(origins);
   // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
-  const rawSearchCenters = origins.length > 2
-    ? [
-        center,
-        {
-          latitude: origins.reduce((sum, origin) => sum + origin.latitude, 0) / origins.length,
-          longitude: origins.reduce((sum, origin) => sum + origin.longitude, 0) / origins.length,
-        },
-        ...origins.map(({ latitude, longitude }) => ({ latitude, longitude })),
-      ]
-    : [center];
-  const searchCenters = rawSearchCenters
+  const searchCenters = [centers.incenter, centers.centroid, centers.circumcenter]
     .filter((point, index, points) => points.findIndex((candidate) =>
       candidate.latitude.toFixed(5) === point.latitude.toFixed(5)
-      && candidate.longitude.toFixed(5) === point.longitude.toFixed(5)) === index)
-    .filter((_, index, points) => index < 2 || index % Math.max(1, Math.ceil((points.length - 2) / (MAX_SEARCH_CENTERS - 2))) === 0)
-    .slice(0, MAX_SEARCH_CENTERS);
+      && candidate.longitude.toFixed(5) === point.longitude.toFixed(5)) === index);
   const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])]
     .slice(0, MAX_SEARCH_QUERIES);
   const searchResults = await Promise.all(
@@ -280,13 +290,11 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     if (!uniquePlaces.has(place.id)) uniquePlaces.set(place.id, place);
   }
   const routeCandidateLimit = Math.max(2, Math.min(MAX_ROUTE_CANDIDATES, Math.floor(MAX_ROUTE_ESTIMATES / origins.length)));
-  const nearbyPlaces = [...uniquePlaces.values()]
-    .sort((a, b) => {
-      const nearestA = Math.min(...searchCenters.map((point) => distanceMeters(point, a)));
-      const nearestB = Math.min(...searchCenters.map((point) => distanceMeters(point, b)));
-      return nearestA - nearestB;
-    })
-    .slice(0, routeCandidateLimit);
+  const nearbyPlaces = selectPlacesAcrossCenters(
+    [...uniquePlaces.values()],
+    searchCenters,
+    routeCandidateLimit,
+  );
   if (!nearbyPlaces.length) {
     throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "以묒떖 ?꾩튂 二쇰??먯꽌 異붿쿇???μ냼瑜?李얠? 紐삵뻽?듬땲??");
   }
