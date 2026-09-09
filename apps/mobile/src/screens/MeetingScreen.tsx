@@ -273,6 +273,7 @@ export function MeetingScreen({ navigation, route }: Props) {
         routeCandidate.id,
         routeCandidate.latitude,
         routeCandidate.longitude,
+        meeting?.travelMetric ?? "",
         ...(meeting?.participants ?? []).map((participant) => [
           participant.userId,
           participant.user.homeLatitude ?? "",
@@ -382,7 +383,7 @@ export function MeetingScreen({ navigation, route }: Props) {
       ],
       routes: destinationRoutes.length
         ? destinationRoutes
-        : routeCandidate
+        : routeCandidate && meeting.travelMetric === "DISTANCE"
         ? homeMapMarkers.map((marker, index) => ({
             id: `route:${marker.id}:${routeCandidate.id}`,
             color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],

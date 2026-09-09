@@ -186,17 +186,18 @@ meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (re
         : [];
     });
     const destination = { latitude: candidate.latitude, longitude: candidate.longitude };
-    const detailedRouteUserIds = new Set(origins.slice(0, 8).map((origin) => origin.userId));
-    const routes = await Promise.all(origins.map(async (origin) => {
+    const routeOrigins = candidate.meeting.travelMetric === "DISTANCE" ? origins : origins.slice(0, 8);
+    const routeResults = await Promise.all(routeOrigins.map(async (origin) => {
       const directPoints = [origin, destination].map(({ latitude, longitude }) => ({ latitude, longitude }));
-      if (candidate.meeting.travelMetric === "DISTANCE" || !detailedRouteUserIds.has(origin.userId)) {
+      if (candidate.meeting.travelMetric === "DISTANCE") {
         return { userId: origin.userId, points: directPoints, approximate: true };
       }
       try {
         const directions = candidate.meeting.travelMetric === "TRANSIT"
           ? await getTransitDirections(origin, destination, true)
           : await getDrivingDirections(origin, destination, "trafast", true);
-        const rawPoints = directions.points?.length ? directions.points : directPoints;
+        const rawPoints = directions.points;
+        if (!rawPoints || rawPoints.length < 2) return null;
         const maxPoints = 400;
         const step = Math.max(1, Math.ceil(rawPoints.length / maxPoints));
         const sampled = rawPoints.filter((_, index) => index % step === 0);
@@ -210,12 +211,13 @@ meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (re
         return {
           userId: origin.userId,
           points,
-          approximate: !directions.points?.length,
+          approximate: false,
         };
       } catch {
-        return { userId: origin.userId, points: directPoints, approximate: true };
+        return null;
       }
     }));
+    const routes = routeResults.filter((route): route is NonNullable<typeof route> => route !== null);
     response.json({ success: true, data: { routes } });
   } catch (error) { next(error); }
 });
