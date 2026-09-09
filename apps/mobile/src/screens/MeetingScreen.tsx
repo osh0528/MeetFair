@@ -20,6 +20,8 @@ import { ApiError, apiRequest, createClientRequestId } from "../services/api";
 import { arrivalErrorMessage } from "../services/arrival-errors";
 // 기기의 현재 GPS 좌표를 가져옵니다.
 import { getCurrentCoordinates } from "../services/current-location";
+// 확정 장소를 카카오맵 앱의 대중교통 길찾기로 연결합니다.
+import { openKakaoRoute } from "../services/kakao-route";
 // 현재 로그인한 사용자 정보를 가져옵니다.
 import { useSession } from "../services/session";
 import { useAppColors, type Palette } from "../services/theme";
@@ -433,6 +435,41 @@ export function MeetingScreen({ navigation, route }: Props) {
     }
   }
 
+  async function openRoute() {
+    const place = meeting?.confirmedPlace;
+    if (!place) return;
+    if (
+      typeof place.latitude !== "number" ||
+      typeof place.longitude !== "number" ||
+      !Number.isFinite(place.latitude) ||
+      !Number.isFinite(place.longitude)
+    ) {
+      setMessage("확정 장소의 좌표가 올바르지 않아 길찾기를 열 수 없습니다.");
+      return;
+    }
+    if (busyAction === "route") return;
+    setBusyAction("route");
+    setMessage("");
+    try {
+      let start: { latitude: number; longitude: number } | null = null;
+      try {
+        start = await getCurrentCoordinates();
+      } catch {
+        start = null;
+      }
+      await openKakaoRoute({
+        ...(start ? { startLatitude: start.latitude, startLongitude: start.longitude } : {}),
+        endLatitude: place.latitude,
+        endLongitude: place.longitude,
+        endName: place.name,
+      });
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "길찾기를 열지 못했습니다.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   // 모임에 연결된 영상통화 방에 참여합니다.
   async function joinMeetingCall() {
     if (busyAction === "call") return;
@@ -662,6 +699,13 @@ export function MeetingScreen({ navigation, route }: Props) {
           <Card style={styles.card}>
             <Text style={styles.cardTitle}>확정 장소 · {meeting.confirmedPlace.name}</Text>
             <Text style={styles.meta}>{meeting.confirmedPlace.address}</Text>
+            {Platform.OS !== "web" &&
+            typeof meeting.confirmedPlace.latitude === "number" &&
+            typeof meeting.confirmedPlace.longitude === "number" &&
+            Number.isFinite(meeting.confirmedPlace.latitude) &&
+            Number.isFinite(meeting.confirmedPlace.longitude) ? (
+              <Button compact disabled={busyAction === "route"} label={busyAction === "route" ? "길찾기 여는 중..." : "길찾기"} onPress={() => void openRoute()} variant="secondary" />
+            ) : null}
           </Card>
         ) : (
           <>

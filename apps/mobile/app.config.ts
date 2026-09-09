@@ -21,6 +21,9 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
   ios: {
     ...config.ios,
     bundleIdentifier: "com.meetfair.app",
+    infoPlist: {
+      LSApplicationQueriesSchemes: ["kakaomap"],
+    },
   },
   plugins: [
     [
