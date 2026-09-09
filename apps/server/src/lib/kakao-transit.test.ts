@@ -41,7 +41,7 @@ describe("getTransitDirections", () => {
     await expect(getTransitDirections(
       { latitude: 37.5, longitude: 127.0 },
       { latitude: 37.6, longitude: 127.1 },
-    )).rejects.toMatchObject({ code: "TRANSIT_NO_ROUTE", status: 404 });
+    )).rejects.toMatchObject({ code: "TRANSIT_NO_ROUTE", status: 502 });
   });
 
   it("does not expose an upstream error response", async () => {
@@ -51,7 +51,7 @@ describe("getTransitDirections", () => {
     await expect(getTransitDirections(
       { latitude: 37.5, longitude: 127.0 },
       { latitude: 37.6, longitude: 127.1 },
-    )).rejects.toMatchObject({ code: "TRANSIT_API_ERROR", status: 502 });
+    )).rejects.toMatchObject({ code: "TRANSIT_FAILED", status: 502 });
   });
 
   it("fails clearly when the Kakao REST API key is missing", async () => {
