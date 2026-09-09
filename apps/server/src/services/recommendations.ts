@@ -152,6 +152,22 @@ function fairnessScore(gap: number, max: number): number {
   return Math.max(0, Math.round(100 * (1 - gap / max)));
 }
 
+function computeInputHash(
+  meeting: { travelMetric: string; categories?: string[] | null },
+  origins: Array<{ userId: string; latitude: number; longitude: number }>,
+): string {
+  const cats = meeting.categories ?? [];
+  const sorted = [...origins].sort((a, b) => a.userId.localeCompare(b.userId));
+  const payload = JSON.stringify({
+    travelMetric: meeting.travelMetric,
+    categories: [...cats].sort(),
+    origins: sorted.map((o) => ({ userId: o.userId, lat: o.latitude.toFixed(5), lng: o.longitude.toFixed(5) })),
+  });
+  let hash = 0;
+  for (let i = 0; i < payload.length; i += 1) hash = (hash * 31 + payload.charCodeAt(i)) >>> 0;
+  return hash.toString(16);
+}
+
 function summarizeExistingCandidate(candidate: {
   id: string;
   providerPlaceId: string | null;
@@ -241,14 +257,14 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
       : [];
   });
   if (origins.length < 2) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "異붿쿇??諛쏆쑝?ㅻ㈃ ?꾩튂瑜??ㅼ젙??李멸??먭? 2紐??댁긽 ?꾩슂?⑸땲??");
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "추천을 받으려면 위치를 설정한 참가자가 2명 이상 필요합니다.");
   }
   if (origins.length !== meeting.participants.length) {
-    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆븘二쇱꽭??");
+    throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "모든 참가자가 출발 위치를 설정한 후 추천을 받아주세요.");
   }
 
   const center = meetingCentroid(origins);
-  // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
+  // 3명 이상은 단일 중심만 검색하지 않고 여러 중심을 탐색한 뒤 실제 이동시간으로 결정합니다.
   const rawSearchCenters = origins.length > 2
     ? [
         center,
@@ -288,7 +304,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     })
     .slice(0, routeCandidateLimit);
   if (!nearbyPlaces.length) {
-    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "以묒떖 ?꾩튂 二쇰??먯꽌 異붿쿇???μ냼瑜?李얠? 紐삵뻽?듬땲??");
+    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "중심 위치 주변에서 추천할 장소를 찾지 못했습니다.");
   }
 
   const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
@@ -389,6 +405,17 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
       }));
     }
     return created;
+  });
+
+  const recommendationsInputHash = computeInputHash(meeting, origins);
+  const now = new Date();
+  await prisma.meeting.update({
+    where: { id: meetingId },
+    data: {
+      recommendationsGeneratedAt: now,
+      recommendationsInputHash,
+      recommendationsVersion: { increment: 1 },
+    },
   });
 
   return persisted.map(summarizeExistingCandidate);

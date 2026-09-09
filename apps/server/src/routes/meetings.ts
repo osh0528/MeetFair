@@ -634,43 +634,24 @@ meetingsRouter.post("/:meetingId/recommendations", async (request: Authenticated
 meetingsRouter.get("/:meetingId/midpoint-recommendations", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    const participant = await participantFor(meetingId, userId(request));
-    const meeting = participant.meeting as unknown as {
-      id: string;
-      recommendationsGeneratedAt: Date | null;
-      recommendationsInputHash: string | null;
-      recommendationsVersion: number;
-    };
-    const candidates = await prisma.placeCandidate.findMany({
-      where: { meetingId },
-      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
-      orderBy: { recommendationRank: "asc" },
+    await participantFor(meetingId, userId(request));
+    const result = await generateMidpointRecommendations(meetingId, userId(request));
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: {
+        recommendationsGeneratedAt: true,
+        recommendationsInputHash: true,
+        recommendationsVersion: true,
+      },
     });
-    const recommendations = candidates.map(recommendationSummary);
-    const origins = await prisma.meetingParticipant.findMany({
-      where: { meetingId },
-      include: { user: { select: { homeLatitude: true, homeLongitude: true } } },
-    });
-    const points = origins
-      .map((p) => {
-        if (p.originLatitude != null && p.originLongitude != null) return { latitude: p.originLatitude, longitude: p.originLongitude };
-        if (p.user.homeLatitude != null && p.user.homeLongitude != null) return { latitude: p.user.homeLatitude, longitude: p.user.homeLongitude };
-        return null;
-      })
-      .filter((v): v is { latitude: number; longitude: number } => v !== null);
-    let midpoint: { latitude: number; longitude: number } | null = null;
-    if (points.length === 2) {
-      const { midpointOf } = await import("../lib/geo.js");
-      midpoint = midpointOf(points[0]!, points[1]!);
-    }
     response.json({
       success: true,
       data: {
-        midpoint,
-        recommendations,
-        generatedAt: meeting.recommendationsGeneratedAt?.toISOString() ?? null,
-        inputHash: meeting.recommendationsInputHash ?? null,
-        version: meeting.recommendationsVersion ?? 0,
+        midpoint: result.midpoint,
+        recommendations: result.recommendations,
+        generatedAt: meeting?.recommendationsGeneratedAt?.toISOString() ?? null,
+        inputHash: meeting?.recommendationsInputHash ?? null,
+        version: meeting?.recommendationsVersion ?? 0,
       },
     });
   } catch (error) { next(error); }
