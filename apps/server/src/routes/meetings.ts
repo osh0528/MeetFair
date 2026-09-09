@@ -200,14 +200,7 @@ meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (re
           : await getDrivingDirections(origin, destination, "trafast", true);
         const rawPoints = directions.points;
         if (!rawPoints || rawPoints.length < 2) return null;
-        const maxPoints = 400;
-        const step = Math.max(1, Math.ceil(rawPoints.length / maxPoints));
-        const sampled = rawPoints.filter((_, index) => index % step === 0);
-        const points = [
-          directPoints[0]!,
-          ...sampled,
-          directPoints[1]!,
-        ].filter((point, index, items) => index === 0
+        const points = rawPoints.filter((point, index, items) => index === 0
           || point.latitude !== items[index - 1]!.latitude
           || point.longitude !== items[index - 1]!.longitude);
         return {

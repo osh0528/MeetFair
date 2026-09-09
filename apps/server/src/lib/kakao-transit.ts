@@ -13,7 +13,7 @@ interface KakaoTransitRoute {
     totalDistance?: number;
     totalTime?: number;
   };
-  sections?: Array<{ roads?: Array<{ vertexes?: number[] }> }>;
+  steps?: Array<{ path?: { points?: number[][] } }>;
 }
 
 interface KakaoTransitResponse {
@@ -91,16 +91,10 @@ export async function getTransitDirections(
     if (!bestRoute) {
       throw new AppError(404, "TRANSIT_NO_ROUTE", "No transit route found.");
     }
-    const points = includePoints ? bestRoute.route.sections?.flatMap((section) => section.roads ?? []).flatMap((road) => {
-      const vertexes = road.vertexes ?? [];
-      const roadPoints: Array<{ latitude: number; longitude: number }> = [];
-      for (let index = 0; index + 1 < vertexes.length; index += 2) {
-        const longitude = vertexes[index]!;
-        const latitude = vertexes[index + 1]!;
-        if (Number.isFinite(latitude) && Number.isFinite(longitude)) roadPoints.push({ latitude, longitude });
-      }
-      return roadPoints;
-    }) ?? [] : [];
+    const points = includePoints ? bestRoute.route.steps?.flatMap((step) => step.path?.points ?? []).flatMap(([longitude, latitude]) =>
+      typeof latitude === "number" && typeof longitude === "number"
+        && Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? [{ latitude, longitude }] : []) ?? [] : [];
     return {
       durationMinutes: Math.max(1, Math.round(bestRoute.totalTime / 60)),
       distanceMeters: Math.round(bestRoute.totalDistance),

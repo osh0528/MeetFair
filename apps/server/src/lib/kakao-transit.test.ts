@@ -51,7 +51,10 @@ describe("getTransitDirections", () => {
         status: "OK",
         routes: [{
           properties: { totalTime: 1_800, totalDistance: 12_345 },
-          sections: [{ roads: [{ vertexes: [127, 37.5, 127.1, 37.6] }] }],
+          steps: [
+            { path: { points: [[127, 37.5]] } },
+            { path: { points: [[127.1, 37.6], [127], [127, null]] } },
+          ],
         }],
       }),
     }));
