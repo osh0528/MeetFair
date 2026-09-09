@@ -175,3 +175,16 @@ export function meetingCenters(coordinates: Coordinate[]): {
     circumcenter: toCoordinate(triangleOuterCenter ?? minimumEnclosingCircleCenter(points)),
   };
 }
+
+export function meetingCenterChoices(coordinates: Coordinate[]): Array<{
+  id: "incenter" | "circumcenter" | "centroid";
+  name: "내심" | "외심" | "무게중심";
+  point: Coordinate;
+}> {
+  const centers = meetingCenters(coordinates);
+  return [
+    { id: "incenter", name: "내심", point: centers.incenter },
+    { id: "circumcenter", name: "외심", point: centers.circumcenter },
+    { id: "centroid", name: "무게중심", point: centers.centroid },
+  ];
+}

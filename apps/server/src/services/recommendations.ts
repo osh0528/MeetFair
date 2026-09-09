@@ -1,10 +1,10 @@
 import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import { AppError } from "../lib/app-error.js";
-import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js";
-import { getDrivingDirections } from "../lib/naver-maps.js";
+import type { KakaoPlace } from "../lib/kakao-local.js";
+import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
-import { meetingCenters } from "./meeting-center.js";
+import { meetingCenterChoices } from "./meeting-center.js";
 
 interface Origin {
   userId: string;
@@ -41,9 +41,6 @@ const routeCache = new Map<string, CachedRouteResult>();
 const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
-const MAX_ROUTE_CANDIDATES = 24;
-const MAX_ROUTE_ESTIMATES = 120;
-const MAX_SEARCH_QUERIES = 3;
 
 function distanceMeters(
   origin: { latitude: number; longitude: number },
@@ -151,29 +148,6 @@ function fairnessScore(gap: number, max: number): number {
   return Math.max(0, Math.round(100 * (1 - gap / max)));
 }
 
-function selectPlacesAcrossCenters(
-  places: KakaoPlace[],
-  centers: Array<{ latitude: number; longitude: number }>,
-  limit: number,
-): KakaoPlace[] {
-  const selected: KakaoPlace[] = [];
-  const selectedIds = new Set<string>();
-  const placesByCenter = centers.map((center) => [...places]
-    .sort((a, b) => distanceMeters(center, a) - distanceMeters(center, b)));
-
-  for (let rank = 0; selected.length < limit && rank < places.length; rank += 1) {
-    for (const rankedPlaces of placesByCenter) {
-      const place = rankedPlaces[rank];
-      if (place && !selectedIds.has(place.id)) {
-        selected.push(place);
-        selectedIds.add(place.id);
-        if (selected.length === limit) break;
-      }
-    }
-  }
-  return selected;
-}
-
 function summarizeExistingCandidate(candidate: {
   id: string;
   providerPlaceId: string | null;
@@ -269,37 +243,23 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "紐⑤뱺 李멸??먭? 異쒕컻 ?꾩튂瑜??ㅼ젙????異붿쿇??諛쏆븘二쇱꽭??");
   }
 
-  const centers = meetingCenters(origins);
-  // 3紐??댁긽? ?⑥씪 ?댁떖留?寃?됲븯吏 ?딄퀬 ?щ윭 以묒떖???먯깋?????ㅼ젣 ?대룞?쒓컙?쇰줈 寃곗젙?⑸땲??
-  const searchCenters = [centers.incenter, centers.centroid, centers.circumcenter]
-    .filter((point, index, points) => points.findIndex((candidate) =>
-      candidate.latitude.toFixed(5) === point.latitude.toFixed(5)
-      && candidate.longitude.toFixed(5) === point.longitude.toFixed(5)) === index);
-  const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])]
-    .slice(0, MAX_SEARCH_QUERIES);
-  const searchResults = await Promise.all(
-    searchCenters.flatMap((searchCenter) => queries.map((query) => searchNearbyKakaoPlaces({
-      query,
-      latitude: searchCenter.latitude,
-      longitude: searchCenter.longitude,
-      radiusMeters: origins.length > 2 ? 5000 : 3000,
-    }))),
-  );
-  const uniquePlaces = new Map<string, KakaoPlace>();
-  for (const place of searchResults.flat()) {
-    if (!uniquePlaces.has(place.id)) uniquePlaces.set(place.id, place);
-  }
-  const routeCandidateLimit = Math.max(2, Math.min(MAX_ROUTE_CANDIDATES, Math.floor(MAX_ROUTE_ESTIMATES / origins.length)));
-  const nearbyPlaces = selectPlacesAcrossCenters(
-    [...uniquePlaces.values()],
-    searchCenters,
-    routeCandidateLimit,
-  );
-  if (!nearbyPlaces.length) {
-    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "以묒떖 ?꾩튂 二쇰??먯꽌 異붿쿇???μ냼瑜?李얠? 紐삵뻽?듬땲??");
-  }
+  const centerDefinitions = meetingCenterChoices(origins);
+  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition) => {
+    const address = await reverseGeocode(definition.point.latitude, definition.point.longitude)
+      .then((result) => result.roadAddress || result.address)
+      .catch(() => `위도 ${definition.point.latitude.toFixed(5)}, 경도 ${definition.point.longitude.toFixed(5)}`);
+    return {
+      id: definition.id,
+      name: definition.name,
+      address,
+      category: "중심점 후보",
+      latitude: definition.point.latitude,
+      longitude: definition.point.longitude,
+      distanceMeters: 0,
+    };
+  }));
 
-  const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
+  const tasks = centerCandidates.flatMap((place) => origins.map((origin) => ({ place, origin })));
   const estimates: EstimatedRoute[] = await mapWithConcurrency(tasks, 6, async ({ place, origin }) => {
     try {
       const route = await cachedRouteDirections(meeting.travelMetric, origin, place);
@@ -312,16 +272,6 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         error: null,
       };
     } catch (error) {
-      if (meeting.travelMetric === "TRANSIT") {
-        return {
-          placeId: place.id,
-          userId: origin.userId,
-          nickname: origin.nickname,
-          durationMinutes: null,
-          distanceMeters: null,
-          error,
-        };
-      }
       const distance = distanceMeters(origin, place);
       return {
         placeId: place.id,
@@ -329,34 +279,25 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         nickname: origin.nickname,
         durationMinutes: Math.max(1, Math.round((distance / 1000 / 30) * 60)),
         distanceMeters: distance,
-        error: null,
+        error,
       };
     }
   });
 
-  const candidates = rankRecommendationCandidates(nearbyPlaces.flatMap((place) => {
-    const placeEstimates = estimates.filter((estimate) => estimate.placeId === place.id);
-    if (placeEstimates.some((estimate) => estimate.durationMinutes == null || estimate.distanceMeters == null)) return [];
-    return [{
-      ...place,
-      providerPlaceId: `kakao:${place.id}`,
-      travelTimes: placeEstimates.map((estimate) => ({
+  const candidates: CandidateWithTravel[] = centerCandidates.map((place) => ({
+    ...place,
+    providerPlaceId: `meetfair:center:${place.id}`,
+    travelTimes: estimates
+      .filter((estimate) => estimate.placeId === place.id)
+      .map((estimate) => ({
         userId: estimate.userId,
         nickname: estimate.nickname,
         durationMinutes: estimate.durationMinutes!,
         distanceMeters: estimate.distanceMeters!,
       })),
-    }];
-  }), meeting.travelMetric);
-  if (!candidates.length) {
-    const routeError = estimates.find((estimate) => estimate.error)?.error;
-    if (routeError instanceof AppError) throw routeError;
-    throw new AppError(502, "TRANSIT_FAILED", "Public transit routes could not be calculated.");
-  }
+  }));
 
   const persisted = await prisma.$transaction(async (transaction) => {
-  const topCandidates = candidates.slice(0, 2);
-
     await transaction.placeCandidate.deleteMany({
       where: {
         meetingId,
@@ -369,8 +310,8 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     });
 
     const created = [];
-    for (let index = 0; index < topCandidates.length; index += 1) {
-      const candidate = topCandidates[index]!;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
       created.push(await transaction.placeCandidate.create({
         data: {
           meetingId,

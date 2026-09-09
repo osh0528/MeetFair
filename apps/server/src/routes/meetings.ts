@@ -140,7 +140,7 @@ meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedR
       where: { meetingId },
       include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
       orderBy: { recommendationRank: "asc" },
-      take: 2,
+      take: 3,
     });
     response.json({ success: true, data: { recommendations: candidates.map(recommendationSummary) } });
   } catch (error) { next(error); }

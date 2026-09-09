@@ -112,7 +112,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
         a.recommendationRank - b.recommendationRank
         || a.timeGapMinutes - b.timeGapMinutes
         || a.maximumDurationMinutes - b.maximumDurationMinutes,
-      ).slice(0, 2);
+      ).slice(0, 3);
       setMeeting(meetingData);
       setItems(sorted);
       setSelectedId((current) => current && sorted.some((item) => item.id === current)
@@ -163,7 +163,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
         { method: "POST", body: "{}" },
         60_000,
       );
-      const sorted = [...result.recommendations].sort((a, b) => a.recommendationRank - b.recommendationRank).slice(0, 2);
+      const sorted = [...result.recommendations].sort((a, b) => a.recommendationRank - b.recommendationRank).slice(0, 3);
       setItems(sorted);
       setSelectedId(sorted[0]?.id ?? null);
       setMeeting(await apiRequest<MeetingSummary>(`/meetings/${meetingId}`));
@@ -244,7 +244,9 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                         <View style={styles.placeCopy}>
                           <View style={styles.nameRow}>
                             <Text style={styles.placeName}>{item.name}</Text>
-                            {index === 0 ? <Pill label="BEST" tone="purple" /> : null}
+                            {item.providerPlaceId?.startsWith("meetfair:center:")
+                              ? <Pill label="중심 후보" tone="purple" />
+                              : index === 0 ? <Pill label="BEST" tone="purple" /> : null}
                             {item.id === myVoteId ? <Pill label="내 선택" tone="green" /> : null}
                           </View>
                           <Text style={styles.address}>{item.category} · {item.address}</Text>
@@ -280,7 +282,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
             {selected ? (
               <View style={styles.mapSection}>
                 <Text style={styles.mapTitle}>추천 장소 위치</Text>
-                <Text style={styles.mapSubtitle}>추천 장소 2곳을 지도에서 간략하게 확인해 보세요.</Text>
+                <Text style={styles.mapSubtitle}>내심·외심·무게중심 후보를 지도에서 확인해 보세요.</Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
                     query=""

@@ -261,7 +261,13 @@ export function MeetingScreen({ navigation, route }: Props) {
     return () => clearInterval(timer);
   }, [pokeCooldowns]);
 
-  const routeCandidate = meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1);
+  const hasCenterCandidates = meeting?.placeCandidates.some((candidate) =>
+    candidate.providerPlaceId?.startsWith("meetfair:center:")) ?? false;
+  const routeCandidate = meeting?.placeCandidates.find((candidate) =>
+    candidate.votes.some((vote) => vote.userId === user?.id))
+    ?? (hasCenterCandidates
+      ? undefined
+      : meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1));
   const destinationRouteSignature = routeCandidate
     ? [
         routeCandidate.id,
@@ -342,7 +348,7 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...homeMapMarkers,
     {
       id: recommendedCandidate.id,
-      label: "이동시간 BEST",
+      label: hasCenterCandidates ? recommendedCandidate.name : "이동시간 BEST",
       kind: "RECOMMENDED" as const,
       address: recommendedCandidate.address,
       latitude: recommendedCandidate.latitude,
@@ -376,14 +382,14 @@ export function MeetingScreen({ navigation, route }: Props) {
       ],
       routes: destinationRoutes.length
         ? destinationRoutes
-        : recommendedCandidate
+        : routeCandidate
         ? homeMapMarkers.map((marker, index) => ({
-            id: `route:${marker.id}:${recommendedCandidate.id}`,
+            id: `route:${marker.id}:${routeCandidate.id}`,
             color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
             dashed: true,
             points: [
               { latitude: marker.latitude, longitude: marker.longitude },
-              { latitude: recommendedCandidate.latitude, longitude: recommendedCandidate.longitude },
+              { latitude: routeCandidate.latitude, longitude: routeCandidate.longitude },
             ],
           }))
         : [],
@@ -750,8 +756,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "공평한 장소 받기"}</Text>
-                <Text style={styles.recommendDescription}>중심 근처 장소를 검색하고 {travelMetricLabel} 기준 이동시간 차이를 비교해요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "중심 후보 3곳 받기"}</Text>
+                <Text style={styles.recommendDescription}>내심·외심·무게중심 세 곳을 투표 후보로 만들어요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
@@ -782,15 +788,16 @@ export function MeetingScreen({ navigation, route }: Props) {
               {/* 후보 카드를 누르면 vote 함수가 실행되며 이동 통계와 개인별 값을 보여줍니다. */}
               {meeting.placeCandidates.map((candidate) => {
                 const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
+                const isBest = !hasCenterCandidates && candidate.id === recommendedCandidate?.id;
                 return (
                   <Pressable
                     key={candidate.id}
                     onPress={() => vote(candidate.id)}
                     style={styles.candidateStackItem}
                   >
-                  <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
-                    {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
-                    <View style={styles.candidateHeaderRow}><Text numberOfLines={2} style={[styles.cardTitle, styles.candidateName, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                  <Card style={[styles.card, isBest && styles.recommendedCard]}>
+                    {isBest ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
+                    <View style={styles.candidateHeaderRow}><Text numberOfLines={2} style={[styles.cardTitle, styles.candidateName, isBest && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
                     <Text style={styles.meta}>{candidate.address}</Text>
                     {stats ? (
                       <>

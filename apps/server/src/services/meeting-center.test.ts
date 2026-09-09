@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { meetingCenters, meetingCentroid } from "./meeting-center.js";
+import { meetingCenterChoices, meetingCenters, meetingCentroid } from "./meeting-center.js";
 
 describe("meetingCentroid", () => {
   it("returns the only participant coordinate", () => {
@@ -95,5 +95,20 @@ describe("meetingCenters", () => {
 
     expect(centers.incenter.longitude).toBeCloseTo(3, 8);
     expect(centers.circumcenter.longitude).toBeCloseTo(3, 8);
+  });
+});
+
+describe("meetingCenterChoices", () => {
+  it("keeps three named choices even when their coordinates are identical", () => {
+    const choices = meetingCenterChoices([
+      { latitude: 37.5, longitude: 126.9 },
+      { latitude: 37.7, longitude: 127.1 },
+    ]);
+
+    expect(choices.map((choice) => choice.name)).toEqual(["내심", "외심", "무게중심"]);
+    expect(new Set(choices.map((choice) => choice.id)).size).toBe(3);
+    expect(choices.every((choice) =>
+      choice.point.latitude === choices[0]!.point.latitude
+      && choice.point.longitude === choices[0]!.point.longitude)).toBe(true);
   });
 });
