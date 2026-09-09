@@ -24,7 +24,7 @@ import { getCurrentCoordinates } from "../services/current-location";
 import { useSession } from "../services/session";
 import { colors } from "../theme/colors";
 // 지도 검색 결과와 최종 선택 위치의 타입입니다.
-import type { AddressCandidate, AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
 
 // 이 화면은 Meeting 라우트에 연결되며 route.params로 meetingId를 받습니다.
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
@@ -173,6 +173,10 @@ export function MeetingScreen({ navigation, route }: Props) {
   // 직접 추천할 장소의 이름과 카테고리입니다.
   const [placeName, setPlaceName] = useState("");
   const [placeCategory, setPlaceCategory] = useState("직접 추천");
+  const candidateOverviewRef = useRef<{ signature: string; markers: MapDisplayMarker[] }>({
+    signature: "",
+    markers: [],
+  });
 
   // async는 API처럼 결과가 나중에 도착하는 비동기 작업을 처리하는 함수에 붙입니다.
   // async 함수 안에서는 await로 각 요청의 완료를 기다릴 수 있고, async 함수의 반환값은 항상 Promise가 됩니다.
@@ -307,14 +311,24 @@ export function MeetingScreen({ navigation, route }: Props) {
     },
   ] : homeMapMarkers;
   // 후보 위치 한눈에 보기 지도에는 상위 세 장소를 번호와 함께 표시합니다.
-  const candidateOverviewMarkers = meeting.placeCandidates.slice(0, 3).map((candidate, index) => ({
-    id: `candidate-overview:${candidate.id}`,
-    label: `${index + 1}. ${candidate.name}`,
-    kind: "RECOMMENDED" as const,
-    address: candidate.address,
-    latitude: candidate.latitude,
-    longitude: candidate.longitude,
-  }));
+  const overviewCandidates = meeting.placeCandidates.slice(0, 3);
+  const candidateOverviewSignature = overviewCandidates
+    .map((candidate) => `${candidate.id}:${candidate.latitude}:${candidate.longitude}:${candidate.name}:${candidate.address}`)
+    .join("|");
+  if (candidateOverviewRef.current.signature !== candidateOverviewSignature) {
+    candidateOverviewRef.current = {
+      signature: candidateOverviewSignature,
+      markers: overviewCandidates.map((candidate, index) => ({
+        id: `candidate-overview:${candidate.id}`,
+        label: `${index + 1}. ${candidate.name}`,
+        kind: "RECOMMENDED" as const,
+        address: candidate.address,
+        latitude: candidate.latitude,
+        longitude: candidate.longitude,
+      })),
+    };
+  }
+  const candidateOverviewMarkers = candidateOverviewRef.current.markers;
 
   // 선택한 후보 장소에 한 표를 보내고 최신 투표 결과를 다시 불러옵니다.
   async function vote(placeCandidateId: string) {
