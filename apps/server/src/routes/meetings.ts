@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { getDrivingDirections } from "../lib/naver-maps.js";
+import { applyCandidateRegionNames } from "../services/candidate-region-names.js";
 import {
   toMeetingInvitationSummary,
   toMeetingMemberStatusEntry,
@@ -142,6 +143,7 @@ meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedR
       orderBy: { recommendationRank: "asc" },
       take: 3,
     });
+    await applyCandidateRegionNames(candidates);
     response.json({ success: true, data: { recommendations: candidates.map(recommendationSummary) } });
   } catch (error) { next(error); }
 });
@@ -451,6 +453,7 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
           respondedAt: invitation.respondedAt,
         })),
     ];
+    await applyCandidateRegionNames(meeting.placeCandidates);
     response.json({ success: true, data: { ...meeting, participants: maskedParticipants, memberStatuses } });
   } catch (error) { next(error); }
 });

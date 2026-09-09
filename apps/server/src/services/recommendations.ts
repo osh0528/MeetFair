@@ -244,15 +244,14 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const centerDefinitions = meetingCenterChoices(origins);
-  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition) => {
-    const address = await reverseGeocode(definition.point.latitude, definition.point.longitude)
-      .then((result) => result.roadAddress || result.address)
-      .catch(() => `위도 ${definition.point.latitude.toFixed(5)}, 경도 ${definition.point.longitude.toFixed(5)}`);
+  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition, index) => {
+    const location = await reverseGeocode(definition.point.latitude, definition.point.longitude).catch(() => null);
+    const address = location?.roadAddress || location?.address || `위도 ${definition.point.latitude.toFixed(5)}, 경도 ${definition.point.longitude.toFixed(5)}`;
     return {
       id: definition.id,
-      name: definition.name,
+      name: location?.regionName || `추천 지역 ${index + 1}`,
       address,
-      category: "중심점 후보",
+      category: "추천 지역",
       latitude: definition.point.latitude,
       longitude: definition.point.longitude,
       distanceMeters: 0,

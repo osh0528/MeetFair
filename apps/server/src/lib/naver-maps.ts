@@ -84,20 +84,24 @@ interface NaverReverseResponse {
 export interface ReverseGeocodeResult {
   address: string;
   roadAddress: string;
+  regionName: string;
 }
 
 export async function reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
   const url = `${BASE.reverseGeocode}/gc?coords=${longitude},${latitude}&orders=roadaddr,addr&output=json`;
-  const data = await fetchJson<NaverReverseResponse>(url, { headers: naverHeaders() });
+  const data = await fetchJson<NaverReverseResponse>(url, { headers: naverHeaders(), signal: AbortSignal.timeout(6000) });
   if (data.status.code !== 0 || data.results.length === 0) {
     throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", `Reverse geocode failed for ${latitude},${longitude}`);
   }
-  const road = data.results[0];
-  const addr = data.results[1] ?? road;
-  if (!road || !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+  const road = data.results.find((result) => result.name === "roadaddr");
+  const addr = data.results.find((result) => result.name === "addr") ?? road;
+  if (!addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+  const regionName = [addr.region.area1.name, addr.region.area2.name, addr.region.area3.name].filter(Boolean).join(" ");
+  const number = (land: typeof addr.land) => [land.number1, land.number2].filter(Boolean).join("-");
   return {
-    roadAddress: road.name ?? "",
-    address: addr.name ?? road.name ?? "",
+    roadAddress: road ? [road.region.area1.name, road.region.area2.name, road.land.name, number(road.land)].filter(Boolean).join(" ") : "",
+    address: [regionName, number(addr.land)].filter(Boolean).join(" "),
+    regionName,
   };
 }
 

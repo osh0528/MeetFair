@@ -756,8 +756,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "중심 후보 3곳 받기"}</Text>
-                <Text style={styles.recommendDescription}>내심·외심·무게중심 세 곳을 투표 후보로 만들어요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "추천 지역 3곳 받기"}</Text>
+                <Text style={styles.recommendDescription}>추천 지역 세 곳을 확인하고 투표해 보세요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
