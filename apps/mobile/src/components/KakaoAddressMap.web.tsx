@@ -82,7 +82,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
   const markerRef = useRef<any>(null);
   const displayMarkersRef = useRef<any[]>([]);
   const displayRoutesRef = useRef<any[]>([]);
-  const hasFitMarkersRef = useRef(false);
+  const lastFitMarkerSignatureRef = useRef("");
   const onResultsRef = useRef(onResults);
   const onResolvedRef = useRef(onResolved);
   const [ready, setReady] = useState(false);
@@ -229,6 +229,9 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
 
   useEffect(() => {
     if (!ready || !window.kakao?.maps || !mapRef.current) return;
+    const markerSignature = mapMarkers.map((item) => (
+      `${item.id}:${item.latitude}:${item.longitude}`
+    )).join("|");
     for (const overlay of displayMarkersRef.current) overlay.setMap(null);
     displayMarkersRef.current = mapMarkers.map((item) => {
       const content = document.createElement("div");
@@ -255,16 +258,16 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
         yAnchor: 1,
       });
     });
-    if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length > 1) {
+    if (fitMarkers && markerSignature !== lastFitMarkerSignatureRef.current && mapMarkers.length > 1) {
       const bounds = new window.kakao.maps.LatLngBounds();
       for (const item of mapMarkers) {
         bounds.extend(new window.kakao.maps.LatLng(item.latitude, item.longitude));
       }
       mapRef.current.setBounds(bounds, 48, 48, 48, 48);
-      hasFitMarkersRef.current = true;
-    } else if (fitMarkers && !hasFitMarkersRef.current && mapMarkers.length === 1) {
+      lastFitMarkerSignatureRef.current = markerSignature;
+    } else if (fitMarkers && markerSignature !== lastFitMarkerSignatureRef.current && mapMarkers.length === 1) {
       mapRef.current.setCenter(new window.kakao.maps.LatLng(mapMarkers[0]!.latitude, mapMarkers[0]!.longitude));
-      hasFitMarkersRef.current = true;
+      lastFitMarkerSignatureRef.current = markerSignature;
     }
   }, [fitMarkers, mapMarkers, ready]);
 

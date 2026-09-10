@@ -24,6 +24,7 @@ import { getCurrentCoordinates } from "../services/current-location";
 import { useSession } from "../services/session";
 import { AutomaticLocationConsent } from "../components/AutomaticLocationConsent";
 import { colors } from "../theme/colors";
+import { buildMeetingMapRoutes, type MeetingRoutePayload } from "../services/meeting-map-routes";
 // 지도 검색 결과와 최종 선택 위치의 타입입니다.
 import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 
@@ -265,11 +266,9 @@ export function MeetingScreen({ navigation, route }: Props) {
 
   const hasCenterCandidates = meeting?.placeCandidates.some((candidate) =>
     candidate.providerPlaceId?.startsWith("meetfair:center:")) ?? false;
-  const routeCandidate = meeting?.placeCandidates.find((candidate) =>
-    candidate.votes.some((vote) => vote.userId === user?.id))
-    ?? (hasCenterCandidates
-      ? undefined
-      : meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1));
+  const routeCandidate = meeting?.placeCandidates.find((candidate) => candidate.id === meeting.confirmedPlace?.id)
+    ?? meeting?.placeCandidates.find((candidate) => candidate.votes.some((vote) => vote.userId === user?.id))
+    ?? meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1);
   const destinationRouteSignature = routeCandidate
     ? [
         routeCandidate.id,
@@ -288,20 +287,15 @@ export function MeetingScreen({ navigation, route }: Props) {
     setDestinationRoutes([]);
     if (!routeCandidate) return () => { cancelled = true; };
     void apiRequest<{
-      routes: Array<{
-        userId: string;
-        approximate: boolean;
-        points: Array<{ latitude: number; longitude: number }>;
-      }>;
+      routes: MeetingRoutePayload[];
     }>(`/meetings/${meetingId}/place-candidates/${routeCandidate.id}/routes`)
       .then((data) => {
         if (cancelled) return;
-        setDestinationRoutes(data.routes.map((item, index) => ({
-          id: `route:home:${item.userId}:${routeCandidate.id}`,
-          color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
-          dashed: item.approximate,
-          points: item.points,
-        })));
+        const nicknames = new Map((meeting?.participants ?? []).map((participant) => [
+          participant.userId,
+          participant.user.nickname,
+        ]));
+        setDestinationRoutes(buildMeetingMapRoutes(data.routes, routeCandidate.id, nicknames).mapRoutes);
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
