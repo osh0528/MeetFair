@@ -25,6 +25,7 @@ import { openKakaoRoute } from "../services/kakao-route";
 // 현재 로그인한 사용자 정보를 가져옵니다.
 import { useSession } from "../services/session";
 import { useAppColors, type Palette } from "../services/theme";
+import { AutomaticLocationConsent } from "../components/AutomaticLocationConsent";
 // 지도 검색 결과와 최종 선택 위치의 타입입니다.
 import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 
@@ -54,6 +55,7 @@ interface MeetingDetail {
     userId: string;
     arrivedAt: string | null;
     sharingStatus: string;
+    locationConsent: boolean;
     cameraPermissionGranted: boolean;
     user: { id: string; nickname: string; accountId: string; homeLatitude?: number | null; homeLongitude?: number | null };
   }>;
@@ -735,6 +737,7 @@ export function MeetingScreen({ navigation, route }: Props) {
         <View style={styles.row}><Pill label={meeting.status} tone="green" /><Text style={styles.meta}>{new Date(meeting.scheduledAt).toLocaleString("ko-KR")}</Text></View>
         <Text style={styles.title}>{meeting.title}</Text>
         <Text style={styles.meta}>위치 공유: {meeting.locationShareMode}{meeting.shareMinutesBefore ? ` · ${meeting.shareMinutesBefore}분 전` : ""}</Text>
+        {user ? <AutomaticLocationConsent meeting={meeting} userId={user.id} /> : null}
         {/* 모임 상태와 사용자 권한에 맞는 주요 실행 버튼을 표시합니다. */}
         <View style={styles.actionGrid}>
           {/* 아직 도착하지 않은 참여자에게만 도착 처리 버튼을 보여줍니다. */}
@@ -802,8 +805,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "추천 지역 3곳 받기"}</Text>
-                <Text style={styles.recommendDescription}>추천 지역 세 곳을 확인하고 투표해 보세요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "위치 후보 3곳 받기"}</Text>
+                <Text style={styles.recommendDescription}>세 곳의 주소와 위치를 확인하고 투표해 보세요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>

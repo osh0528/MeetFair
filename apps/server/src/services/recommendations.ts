@@ -1,7 +1,8 @@
 import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import { AppError } from "../lib/app-error.js";
 import type { KakaoPlace } from "../lib/kakao-local.js";
-import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
+import { getDrivingDirections } from "../lib/naver-maps.js";
+import { applyCandidateRegionNames, candidateLocationLabel } from "./candidate-region-names.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
 import { meetingCenterChoices, meetingCentroid } from "./meeting-center.js";
@@ -235,6 +236,7 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   if (meeting.placeCandidates.some((candidate) => candidate.votes.length > 0)) {
+    await applyCandidateRegionNames(meeting.placeCandidates);
     return meeting.placeCandidates.map(summarizeExistingCandidate);
   }
 
@@ -260,14 +262,13 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
   }
 
   const centerDefinitions = meetingCenterChoices(origins);
-  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition, index) => {
-    const location = await reverseGeocode(definition.point.latitude, definition.point.longitude).catch(() => null);
-    const address = location?.roadAddress || location?.address || `위도 ${definition.point.latitude.toFixed(5)}, 경도 ${definition.point.longitude.toFixed(5)}`;
+  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition) => {
+    const address = await candidateLocationLabel(definition.point.latitude, definition.point.longitude);
     return {
       id: definition.id,
-      name: location?.regionName || `추천 지역 ${index + 1}`,
+      name: address,
       address,
-      category: "추천 지역",
+      category: "위치 후보",
       latitude: definition.point.latitude,
       longitude: definition.point.longitude,
       distanceMeters: 0,

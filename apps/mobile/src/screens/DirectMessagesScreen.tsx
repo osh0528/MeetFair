@@ -16,6 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Avatar, Card, ScreenHeader } from "../components/ui";
 import { apiRequest, createClientRequestId } from "../services/api";
+import {
+  clearActiveDirectConversationId,
+  setActiveDirectConversationId,
+} from "../services/active-direct-conversation";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
 import { useAppColors, type Palette } from "../services/theme";
@@ -120,6 +124,13 @@ export function DirectMessagesScreen({ navigation, route }: Props) {
     useCallback(() => {
       void loadConversations();
     }, [loadConversations]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      setActiveDirectConversationId(selectedId);
+      return () => clearActiveDirectConversationId(selectedId);
+    }, [selectedId]),
   );
 
   useEffect(() => {

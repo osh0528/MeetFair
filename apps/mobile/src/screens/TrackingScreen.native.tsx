@@ -8,18 +8,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { KakaoAddressMap } from "../components/KakaoAddressMap";
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
-import { apiRequest } from "../services/api";
+import { ApiError, apiRequest } from "../services/api";
 import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
 import { useAppColors } from "../services/theme";
+import { automaticLocationEnabled } from "../services/automatic-location";
 import type { AddressSelection, MapDisplayMarker } from "../types/location";
 
 const TASK_NAME = "meetfair-meeting-location";
 const TASK_STATE_KEY = "meetfair.location-task";
 
-interface StoredTaskState { meetingId: string; accessToken: string }
+interface StoredTaskState { meetingId: string; accessToken: string; userId: string }
 interface LocationItem {
   userId: string;
   nickname: string;
@@ -54,18 +55,43 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
   const latest = locations.at(-1);
   if (!latest) return;
   const socket = createMeetingSocket(state.accessToken);
-  socket.connect();
-  socket.once("connect", () => {
+  const headers = { authorization: `Bearer ${state.accessToken}` };
+  try {
+    const detail = await apiRequest<{ status: string; participants: Array<{ userId: string; locationConsent: boolean; arrivedAt: string | null }> }>(`/meetings/${state.meetingId}`, { headers });
+    const mine = detail.participants.find((participant) => participant.userId === state.userId);
+    if (!mine?.locationConsent || mine.arrivedAt || ["COMPLETED", "CANCELLED"].includes(detail.status)) {
+      await Location.stopLocationUpdatesAsync(TASK_NAME);
+      await AsyncStorage.removeItem(TASK_STATE_KEY);
+      return;
+    }
+    await waitForSocketConnection(socket);
+    const sentAt = new Date(latest.timestamp).toISOString();
     socket.emit("meeting:join", { meetingId: state.meetingId });
     socket.emit("location:update", {
       meetingId: state.meetingId,
       latitude: latest.coords.latitude,
       longitude: latest.coords.longitude,
       accuracy: latest.coords.accuracy ?? 0,
-      sentAt: new Date(latest.timestamp).toISOString(),
+      sentAt,
     });
-    setTimeout(() => socket.disconnect(), 1000);
-  });
+    // Await server persistence so Android does not finish the task before transmission.
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const result = await apiRequest<{ locations: LocationItem[] }>(`/meetings/${state.meetingId}/locations`, { headers });
+      const mine = result.locations.find((item) => item.userId === state.userId);
+      if (mine?.arrivedAt) {
+        await Location.stopLocationUpdatesAsync(TASK_NAME);
+        await AsyncStorage.removeItem(TASK_STATE_KEY);
+        break;
+      }
+      if (mine?.updatedAt && new Date(mine.updatedAt).getTime() >= latest.timestamp) break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  } catch (caught) {
+    if (caught instanceof ApiError && [401, 403, 404].includes(caught.status)) {
+      await Location.stopLocationUpdatesAsync(TASK_NAME).catch(() => undefined);
+      await AsyncStorage.removeItem(TASK_STATE_KEY);
+    }
+  } finally { socket.disconnect(); }
 });
 
 type Props = NativeStackScreenProps<RootStackParamList, "Tracking">;
@@ -189,7 +215,8 @@ export function TrackingScreen({ navigation, route }: Props) {
       void Location.hasStartedLocationUpdatesAsync(TASK_NAME)
         .catch(() => false)
         .then(async (backgroundActive) => {
-          if (sharingRef.current && !backgroundActive) {
+          const automaticActive = user?.id ? await automaticLocationEnabled(meetingId, user.id) : false;
+          if (sharingRef.current && !backgroundActive && !automaticActive) {
             socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
             await apiRequest(`/meetings/${meetingId}/location-consent`, {
               method: "PATCH",
@@ -266,7 +293,7 @@ export function TrackingScreen({ navigation, route }: Props) {
   }, [locations, meeting?.confirmedPlace, user?.id]);
 
   async function startSharing() {
-    if (!accessToken) return;
+    if (!accessToken || !user) return;
     setMessage("");
     try {
       const foreground = await Location.requestForegroundPermissionsAsync();
@@ -316,15 +343,17 @@ export function TrackingScreen({ navigation, route }: Props) {
       try {
         const background = await Location.requestBackgroundPermissionsAsync();
         if (background.granted) {
-          await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
+          await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken, userId: user.id } satisfies StoredTaskState));
           if (!await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
             await Location.startLocationUpdatesAsync(TASK_NAME, {
               accuracy: Location.Accuracy.High,
               timeInterval: 10000,
               distanceInterval: 20,
+              pausesUpdatesAutomatically: false,
               foregroundService: {
                 notificationTitle: "MeetFair 위치 공유 중",
                 notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
+                killServiceOnDestroy: false,
               },
             });
           }

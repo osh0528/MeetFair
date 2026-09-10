@@ -89,7 +89,8 @@ export function registerRealtimeHandlers(
           meeting: { include: { confirmedPlace: true } },
         },
       });
-      if (!participant || !participant.locationConsent || participant.sharingStatus !== "SHARING") {
+      if (!participant || !participant.locationConsent || participant.sharingStatus !== "SHARING"
+        || participant.arrivedAt || ["COMPLETED", "CANCELLED"].includes(participant.meeting.status)) {
         socket.emit("meeting:error", { code: "LOCATION_NOT_ALLOWED", message: "Location sharing is not enabled." });
         return;
       }
@@ -156,8 +157,9 @@ export function registerRealtimeHandlers(
         socket.emit("meeting:error", { code: "INVALID_SHARING_STATUS", message: "Sharing status is invalid." });
         return;
       }
-      const participant = await prisma.meetingParticipant.findUnique({ where: { meetingId_userId: { meetingId: payload.meetingId, userId: currentUserId } } });
-      if (!participant || (payload.status === "SHARING" && !participant.locationConsent)) {
+      const participant = await prisma.meetingParticipant.findUnique({ where: { meetingId_userId: { meetingId: payload.meetingId, userId: currentUserId } }, include: { meeting: true } });
+      if (!participant || (payload.status === "SHARING" && (!participant.locationConsent || participant.arrivedAt
+        || ["COMPLETED", "CANCELLED"].includes(participant.meeting.status)))) {
         socket.emit("meeting:error", { code: "SHARING_NOT_ALLOWED", message: "Location sharing has not been approved." });
         return;
       }

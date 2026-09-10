@@ -11,6 +11,23 @@ export interface KakaoPlace {
   distanceMeters: number;
 }
 
+export async function getKakaoCoordinateAddress(latitude: number, longitude: number): Promise<string> {
+  if (!env.KAKAO_REST_API_KEY) throw new AppError(503, "KAKAO_LOCAL_NOT_CONFIGURED", "Kakao REST API key is not configured.");
+  const params = new URLSearchParams({ x: String(longitude), y: String(latitude), input_coord: "WGS84" });
+  const response = await fetch(`https://dapi.kakao.com/v2/local/geo/coord2address.json?${params}`, {
+    headers: { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new AppError(502, "KAKAO_ADDRESS_FAILED", "Address lookup failed.");
+  const data = await response.json() as {
+    documents?: Array<{ road_address?: { address_name?: string } | null; address?: { address_name?: string } | null }>;
+  };
+  const document = data.documents?.[0];
+  const address = document?.road_address?.address_name || document?.address?.address_name;
+  if (!address) throw new AppError(404, "KAKAO_ADDRESS_NOT_FOUND", "Address not found.");
+  return address;
+}
+
 export async function searchNearbyKakaoPlaces(input: {
   query: string;
   latitude: number;

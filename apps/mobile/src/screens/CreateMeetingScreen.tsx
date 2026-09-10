@@ -97,7 +97,7 @@ export function CreateMeetingScreen({ navigation }: Props) {
   const [visibility, setVisibility] = useState<MeetingVisibility>("PRIVATE");
   const [travelMetric, setTravelMetric] = useState<TravelMetric>("DISTANCE");
   const [shareMode, setShareMode] = useState<LocationShareMode>("BEFORE_START");
-  const [minutesBefore, setMinutesBefore] = useState("60");
+  const [minutesBefore, setMinutesBefore] = useState("30");
   const [categories, setCategories] = useState<string[]>(["카페"]);
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [invitees, setInvitees] = useState<string[]>([]);
