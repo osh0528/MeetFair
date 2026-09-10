@@ -9,7 +9,10 @@ export function AutomaticLocationBridge() {
   useEffect(() => {
     if (loading) return;
     setAutomaticLocationSessionToken(accessToken);
-    const sync = () => { void syncAutomaticLocation(user?.id ?? null).catch(() => undefined); };
+    const sync = () => {
+      if (user && AppState.currentState !== "active") return;
+      void syncAutomaticLocation(user?.id ?? null).catch(() => undefined);
+    };
     sync();
     const timer = setInterval(sync, 30_000);
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") sync(); });

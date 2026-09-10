@@ -29,12 +29,18 @@ export function syncAutomaticLocation(userId: string | null): Promise<void> {
       if (active) await Location.stopLocationUpdatesAsync(TASK);
       return;
     }
+    if (!(await Location.getBackgroundPermissionsAsync()).granted) {
+      if (active) await Location.stopLocationUpdatesAsync(TASK);
+      throw new Error("백그라운드 위치 권한이 꺼져 있습니다. 위치 권한을 ‘항상 허용’으로 변경해 주세요.");
+    }
     if (active) return;
-    if (!(await Location.getBackgroundPermissionsAsync()).granted) return;
+    if (!await Location.hasServicesEnabledAsync()) throw new Error("휴대폰의 위치 서비스를 켜 주세요.");
     await Location.startLocationUpdatesAsync(TASK, {
       accuracy: Location.Accuracy.High,
       timeInterval: 10000,
       distanceInterval: 0,
+      deferredUpdatesInterval: 0,
+      deferredUpdatesDistance: 0,
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
@@ -43,6 +49,7 @@ export function syncAutomaticLocation(userId: string | null): Promise<void> {
         killServiceOnDestroy: false,
       },
     });
+    if (!await Location.hasStartedLocationUpdatesAsync(TASK)) throw new Error("백그라운드 위치 서비스를 시작하지 못했습니다. 앱을 다시 열고 자동 공유를 켜 주세요.");
   });
   syncing = job;
   return job;
