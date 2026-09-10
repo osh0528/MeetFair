@@ -22,7 +22,17 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
+  retryOnTimeout?: boolean,
 ): Promise<T> {
+  // Render free tier sleeps after ~15 min idle and needs 30-60s to wake, so the
+  // first request after idle always hits the 15s timeout. Retry once with a
+  // longer budget for safe (read-only/idempotent) requests only. Mutations
+  // (other POST/PUT/PATCH/DELETE: votes, pokes, register, posts) are excluded
+  // to avoid duplicate submits.
+  const method = (init.method ?? "GET").toUpperCase();
+  const allowRetry = retryOnTimeout ?? (
+    method === "GET" || method === "HEAD" || path === "/auth/login" || path === "/auth/google"
+  );
   const controller = new AbortController();
   let timedOut = false;
   const abortFromCaller = () => controller.abort(init.signal?.reason);
@@ -69,6 +79,10 @@ export async function apiRequest<T>(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (timedOut) {
+      if (allowRetry) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        return apiRequest<T>(path, init, 60_000, false);
+      }
       throw new ApiError(
         "SERVER_TIMEOUT",
         "서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
