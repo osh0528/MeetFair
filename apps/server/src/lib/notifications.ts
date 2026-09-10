@@ -5,6 +5,7 @@ import { emitNotificationCreated } from "../realtime/events.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { pushRequest } from "./push-request.js";
 import { classifyExpoPushTickets, type ExpoPushTicket } from "./expo-push-tickets.js";
+import { expoPushDeliveryOptions } from "./expo-push-delivery.js";
 
 export { isQuietTime, lastEndedQuietWindow } from "./quiet-time.js";
 
@@ -49,10 +50,7 @@ async function sendExpoPush(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const isDirectMessage = notificationType === "DIRECT_MESSAGE";
-    const isPoke = notificationType === "CASUAL_POKE"
-      || notificationType === "MEETING_POKE"
-      || notificationType === "AUTOMATIC_MEETING_POKE";
+    const deliveryOptions = expoPushDeliveryOptions(notificationType);
     let pendingTokens = tokens;
     const invalidTokens = new Set<string>();
     for (let ticketAttempt = 0; pendingTokens.length && ticketAttempt < 3; ticketAttempt += 1) {
@@ -64,9 +62,7 @@ async function sendExpoPush(
           to: expoPushToken,
           sound: "default",
           priority: "high",
-          ...(!isPoke && !isDirectMessage ? { channelId: "meeting-reminders" } : {}),
-          ...(isPoke ? { channelId: "pokes-v4", ttl: 300 } : {}),
-          ...(isDirectMessage ? { channelId: "direct-messages-v2" } : {}),
+          ...deliveryOptions,
           title,
           body,
           data: { ...data, notificationType },
