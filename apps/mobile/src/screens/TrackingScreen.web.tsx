@@ -10,6 +10,7 @@ import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
+import { automaticLocationEnabled } from "../services/automatic-location";
 import { colors } from "../theme/colors";
 import { appConfig } from "../config/env";
 
@@ -251,15 +252,15 @@ export function TrackingScreen({ navigation, route }: Props) {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
       socketRef.current = null;
-      if (sharingRef.current) {
-        socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
-        void apiRequest(`/meetings/${meetingId}/location-consent`, {
-          method: "PATCH",
-          body: JSON.stringify({ consent: false }),
-        }).catch(() => undefined).finally(() => socket?.disconnect());
-      } else {
-        socket?.disconnect();
-      }
+      void (async () => {
+        const automaticActive = user?.id ? await automaticLocationEnabled(meetingId, user.id) : false;
+        if (sharingRef.current && !automaticActive) {
+          socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
+          await apiRequest(`/meetings/${meetingId}/location-consent`, {
+            method: "PATCH", body: JSON.stringify({ consent: false }),
+          }).catch(() => undefined);
+        }
+      })().catch(() => undefined).finally(() => socket?.disconnect());
     };
   }, [accessToken, load, meetingId]);
 

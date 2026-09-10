@@ -13,6 +13,7 @@ import { arrivalErrorMessage } from "../services/arrival-errors";
 import { getCurrentCoordinates } from "../services/current-location";
 import { createMeetingSocket, waitForSocketConnection } from "../services/socket";
 import { useSession } from "../services/session";
+import { automaticLocationEnabled } from "../services/automatic-location";
 import { colors } from "../theme/colors";
 import type { AddressSelection, MapDisplayMarker } from "../types/location";
 
@@ -188,7 +189,8 @@ export function TrackingScreen({ navigation, route }: Props) {
       void Location.hasStartedLocationUpdatesAsync(TASK_NAME)
         .catch(() => false)
         .then(async (backgroundActive) => {
-          if (sharingRef.current && !backgroundActive) {
+          const automaticActive = user?.id ? await automaticLocationEnabled(meetingId, user.id) : false;
+          if (sharingRef.current && !backgroundActive && !automaticActive) {
             socket?.emit("sharing:status", { meetingId, status: "PAUSED" });
             await apiRequest(`/meetings/${meetingId}/location-consent`, {
               method: "PATCH",

@@ -28,6 +28,10 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
       "expo-location",
       {
         locationWhenInUsePermission: "Location access is required to show the meeting point and your movement status.",
+        locationAlwaysAndWhenInUsePermission: "동의한 모임의 시작 30분 전부터 앱을 사용하지 않을 때도 위치를 공유합니다.",
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+        isIosBackgroundLocationEnabled: true,
       },
     ],
     [

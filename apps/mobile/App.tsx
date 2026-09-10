@@ -23,6 +23,7 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { UserPageScreen } from "./src/screens/UserPageScreen";
 import { SessionProvider, useSession } from "./src/services/session";
 import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge";
+import { AutomaticLocationBridge } from "./src/components/AutomaticLocationBridge";
 import { WebNotificationToast } from "./src/components/WebNotificationToast";
 import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
@@ -132,6 +133,7 @@ function AppNavigator() {
     >
       <StatusBar style={mode === "DARK" ? "light" : "dark"} />
       <PokeNotificationBridge />
+      <AutomaticLocationBridge />
       <WebNotificationToast />
       <View style={[styles.appShell, isDesktop && styles.appShellDesktop]}>
         {user && !bottomNavHidden && isDesktop ? (
