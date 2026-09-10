@@ -97,7 +97,10 @@ function AppNavigator() {
   const isDesktop = width >= 1024;
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const [currentRoute, setCurrentRoute] = useState<keyof RootStackParamList>("Login");
-  const bottomNavHidden = currentRoute === "Login" || currentRoute === "Register" || currentRoute === "VideoCall";
+  const bottomNavHidden = currentRoute === "Login"
+    || currentRoute === "Register"
+    || currentRoute === "AddressSearch"
+    || currentRoute === "VideoCall";
 
   function updateCurrentRoute() {
     const routeName = navigationRef.getCurrentRoute()?.name;

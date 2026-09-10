@@ -13,6 +13,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     ...config.android,
     package: "com.meetfair.app",
     versionCode: 5,
+    softwareKeyboardLayoutMode: "resize",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#303030",

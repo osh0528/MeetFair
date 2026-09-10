@@ -1,10 +1,10 @@
 import type { MeetingRecommendation, TravelMetric } from "@meetfair/shared";
 import { AppError } from "../lib/app-error.js";
-import { searchNearbyKakaoPlaces, type KakaoPlace } from "../lib/kakao-local.js";
-import { getDrivingDirections } from "../lib/naver-maps.js";
+import type { KakaoPlace } from "../lib/kakao-local.js";
+import { getDrivingDirections, reverseGeocode } from "../lib/naver-maps.js";
 import { getTransitDirections } from "../lib/kakao-transit.js";
 import { prisma } from "../lib/prisma.js";
-import { meetingCentroid } from "./meeting-center.js";
+import { meetingCenterChoices, meetingCentroid } from "./meeting-center.js";
 
 interface Origin {
   userId: string;
@@ -41,10 +41,6 @@ const routeCache = new Map<string, CachedRouteResult>();
 const routeJobs = new Map<string, Promise<CachedRouteResult["value"]>>();
 const recommendationJobs = new Map<string, Promise<MeetingRecommendation[]>>();
 const ROUTE_CACHE_TTL_MS = 2 * 60_000;
-const MAX_ROUTE_CANDIDATES = 24;
-const MAX_ROUTE_ESTIMATES = 120;
-const MAX_SEARCH_CENTERS = 6;
-const MAX_SEARCH_QUERIES = 3;
 
 function distanceMeters(
   origin: { latitude: number; longitude: number },
@@ -263,51 +259,22 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     throw new AppError(409, "MEETING_ORIGINS_INCOMPLETE", "모든 참가자가 출발 위치를 설정한 후 추천을 받아주세요.");
   }
 
-  const center = meetingCentroid(origins);
-  // 3명 이상은 단일 중심만 검색하지 않고 여러 중심을 탐색한 뒤 실제 이동시간으로 결정합니다.
-  const rawSearchCenters = origins.length > 2
-    ? [
-        center,
-        {
-          latitude: origins.reduce((sum, origin) => sum + origin.latitude, 0) / origins.length,
-          longitude: origins.reduce((sum, origin) => sum + origin.longitude, 0) / origins.length,
-        },
-        ...origins.map(({ latitude, longitude }) => ({ latitude, longitude })),
-      ]
-    : [center];
-  const searchCenters = rawSearchCenters
-    .filter((point, index, points) => points.findIndex((candidate) =>
-      candidate.latitude.toFixed(5) === point.latitude.toFixed(5)
-      && candidate.longitude.toFixed(5) === point.longitude.toFixed(5)) === index)
-    .filter((_, index, points) => index < 2 || index % Math.max(1, Math.ceil((points.length - 2) / (MAX_SEARCH_CENTERS - 2))) === 0)
-    .slice(0, MAX_SEARCH_CENTERS);
-  const queries = [...new Set(["지하철역", ...(meeting.categories.length ? meeting.categories : ["카페", "음식점"])])]
-    .slice(0, MAX_SEARCH_QUERIES);
-  const searchResults = await Promise.all(
-    searchCenters.flatMap((searchCenter) => queries.map((query) => searchNearbyKakaoPlaces({
-      query,
-      latitude: searchCenter.latitude,
-      longitude: searchCenter.longitude,
-      radiusMeters: origins.length > 2 ? 5000 : 3000,
-    }))),
-  );
-  const uniquePlaces = new Map<string, KakaoPlace>();
-  for (const place of searchResults.flat()) {
-    if (!uniquePlaces.has(place.id)) uniquePlaces.set(place.id, place);
-  }
-  const routeCandidateLimit = Math.max(2, Math.min(MAX_ROUTE_CANDIDATES, Math.floor(MAX_ROUTE_ESTIMATES / origins.length)));
-  const nearbyPlaces = [...uniquePlaces.values()]
-    .sort((a, b) => {
-      const nearestA = Math.min(...searchCenters.map((point) => distanceMeters(point, a)));
-      const nearestB = Math.min(...searchCenters.map((point) => distanceMeters(point, b)));
-      return nearestA - nearestB;
-    })
-    .slice(0, routeCandidateLimit);
-  if (!nearbyPlaces.length) {
-    throw new AppError(404, "RECOMMENDATION_PLACES_NOT_FOUND", "중심 위치 주변에서 추천할 장소를 찾지 못했습니다.");
-  }
+  const centerDefinitions = meetingCenterChoices(origins);
+  const centerCandidates: KakaoPlace[] = await Promise.all(centerDefinitions.map(async (definition, index) => {
+    const location = await reverseGeocode(definition.point.latitude, definition.point.longitude).catch(() => null);
+    const address = location?.roadAddress || location?.address || `위도 ${definition.point.latitude.toFixed(5)}, 경도 ${definition.point.longitude.toFixed(5)}`;
+    return {
+      id: definition.id,
+      name: location?.regionName || `추천 지역 ${index + 1}`,
+      address,
+      category: "추천 지역",
+      latitude: definition.point.latitude,
+      longitude: definition.point.longitude,
+      distanceMeters: 0,
+    };
+  }));
 
-  const tasks = nearbyPlaces.flatMap((place) => origins.map((origin) => ({ place, origin })));
+  const tasks = centerCandidates.flatMap((place) => origins.map((origin) => ({ place, origin })));
   const estimates: EstimatedRoute[] = await mapWithConcurrency(tasks, 6, async ({ place, origin }) => {
     try {
       const route = await cachedRouteDirections(meeting.travelMetric, origin, place);
@@ -320,16 +287,6 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         error: null,
       };
     } catch (error) {
-      if (meeting.travelMetric === "TRANSIT") {
-        return {
-          placeId: place.id,
-          userId: origin.userId,
-          nickname: origin.nickname,
-          durationMinutes: null,
-          distanceMeters: null,
-          error,
-        };
-      }
       const distance = distanceMeters(origin, place);
       return {
         placeId: place.id,
@@ -337,34 +294,25 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
         nickname: origin.nickname,
         durationMinutes: Math.max(1, Math.round((distance / 1000 / 30) * 60)),
         distanceMeters: distance,
-        error: null,
+        error,
       };
     }
   });
 
-  const candidates = rankRecommendationCandidates(nearbyPlaces.flatMap((place) => {
-    const placeEstimates = estimates.filter((estimate) => estimate.placeId === place.id);
-    if (placeEstimates.some((estimate) => estimate.durationMinutes == null || estimate.distanceMeters == null)) return [];
-    return [{
-      ...place,
-      providerPlaceId: `kakao:${place.id}`,
-      travelTimes: placeEstimates.map((estimate) => ({
+  const candidates: CandidateWithTravel[] = centerCandidates.map((place) => ({
+    ...place,
+    providerPlaceId: `meetfair:center:${place.id}`,
+    travelTimes: estimates
+      .filter((estimate) => estimate.placeId === place.id)
+      .map((estimate) => ({
         userId: estimate.userId,
         nickname: estimate.nickname,
         durationMinutes: estimate.durationMinutes!,
         distanceMeters: estimate.distanceMeters!,
       })),
-    }];
-  }), meeting.travelMetric);
-  if (!candidates.length) {
-    const routeError = estimates.find((estimate) => estimate.error)?.error;
-    if (routeError instanceof AppError) throw routeError;
-    throw new AppError(502, "TRANSIT_FAILED", "Public transit routes could not be calculated.");
-  }
+  }));
 
   const persisted = await prisma.$transaction(async (transaction) => {
-  const topCandidates = candidates.slice(0, 2);
-
     await transaction.placeCandidate.deleteMany({
       where: {
         meetingId,
@@ -377,8 +325,8 @@ async function generateRecommendationsInternal(meetingId: string, requesterId: s
     });
 
     const created = [];
-    for (let index = 0; index < topCandidates.length; index += 1) {
-      const candidate = topCandidates[index]!;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
       created.push(await transaction.placeCandidate.create({
         data: {
           meetingId,

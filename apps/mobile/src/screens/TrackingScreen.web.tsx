@@ -229,6 +229,11 @@ export function TrackingScreen({ navigation, route }: Props) {
       socket.on("participant:status", (payload) => {
         if (payload.meetingId !== meetingId) return;
         setLocations((current) => current.map((item) => item.userId === payload.userId ? { ...item, sharingStatus: payload.status, arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt } : item));
+        if (payload.userId === user?.id && payload.status === "ARRIVED") {
+          if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+          updateSharingState(false);
+        }
       });
       socket.on("meeting:error", (payload) => {
         const messageByCode: Record<string, string> = {
@@ -323,7 +328,9 @@ export function TrackingScreen({ navigation, route }: Props) {
     try {
       const coordinates = await getCurrentCoordinates();
       await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
-      await stopSharing();
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      updateSharingState(false);
       await load();
       setMessage("도착 처리됐습니다.");
     } catch (error) {

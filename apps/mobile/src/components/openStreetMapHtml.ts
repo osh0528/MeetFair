@@ -4,7 +4,12 @@ export interface OpenStreetMapPoint {
   label: string;
 }
 
-export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
+export interface OpenStreetMapRoute {
+  color?: string;
+  points: Array<{ latitude: number; longitude: number }>;
+}
+
+export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[], routes: OpenStreetMapRoute[] = []): string {
   const validPoints = points.filter((point) =>
     Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90
     && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180);
@@ -12,6 +17,7 @@ export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
     ? validPoints
     : [{ latitude: 37.5665, longitude: 126.978, label: "서울" }];
   const serializedPoints = JSON.stringify(displayPoints).replace(/</g, "\\u003c");
+  const serializedRoutes = JSON.stringify(routes).replace(/</g, "\\u003c");
 
   return `<!doctype html>
 <html lang="ko">
@@ -26,6 +32,7 @@ export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const points = ${serializedPoints};
+    const routes = ${serializedRoutes};
     const map = L.map("map", { zoomControl: true, attributionControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
@@ -42,6 +49,16 @@ export function buildOpenStreetMapHtml(points: OpenStreetMapPoint[]): string {
         direction: "top",
         offset: [0, -10]
       });
+    });
+    routes.forEach((route, index) => {
+      if (!route.points || route.points.length < 2) return;
+      const path = route.points.map((point) => [point.latitude, point.longitude]);
+      L.polyline(path, {
+        color: route.color || ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+        weight: 5,
+        opacity: 0.78,
+        dashArray: route.dashed ? "10 8" : undefined
+      }).addTo(map);
     });
     if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
     else map.setView(bounds[0], 15);

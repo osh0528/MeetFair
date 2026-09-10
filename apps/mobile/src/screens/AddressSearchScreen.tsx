@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
 import { Button, ScreenHeader } from "../components/ui";
@@ -16,6 +16,8 @@ export function AddressSearchScreen({ navigation, route }: Props) {
   const palette = useAppColors();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const session = useSession();
+  const { height } = useWindowDimensions();
+  const compactHeight = height < 720;
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [requestId, setRequestId] = useState(0);
@@ -51,6 +53,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
 
   const handleSearch = () => {
     if (!input.trim()) return;
+    Keyboard.dismiss();
     setMessage("");
     setCandidates([]);
     setSelection(null);
@@ -116,7 +119,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
 
-      <View style={styles.mapArea}>
+      <View style={[styles.mapArea, compactHeight && styles.mapAreaCompact]}>
         <KakaoAddressMap
           focusTarget={focusTarget}
           interactive
@@ -127,7 +130,7 @@ export function AddressSearchScreen({ navigation, route }: Props) {
         />
       </View>
 
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, compactHeight && styles.sheetCompact]}>
         <View style={styles.handle} />
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {candidates.length === 0 ? (
@@ -168,7 +171,11 @@ export function AddressSearchScreen({ navigation, route }: Props) {
             <Text style={styles.sheetEyebrow}>
               검색 결과 {candidates.length}개 · 원하는 장소를 선택하세요
             </Text>
-            <ScrollView style={styles.candidateList} contentContainerStyle={styles.candidateListContent}>
+            <ScrollView
+              contentContainerStyle={styles.candidateListContent}
+              keyboardShouldPersistTaps="handled"
+              style={[styles.candidateList, compactHeight && styles.candidateListCompact]}
+            >
               {candidates.map((candidate) => {
                 const picked = selection === candidate;
                 return (
@@ -207,7 +214,9 @@ function makeStyles(palette: Palette) {
   searchButton: { width: 58, height: 52, borderRadius: 6, backgroundColor: palette.charcoal, alignItems: "center", justifyContent: "center" },
   searchButtonText: { color: palette.surface, fontSize: 13, fontWeight: "900" },
   mapArea: { flex: 1, minHeight: 250 },
+  mapAreaCompact: { minHeight: 150 },
   sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, marginTop: -18, paddingHorizontal: 20, paddingTop: 9, paddingBottom: 12, minHeight: 190, borderWidth: 1, borderColor: palette.border },
+  sheetCompact: { paddingHorizontal: 16, paddingBottom: 8, minHeight: 170 },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: palette.border, alignSelf: "center", marginBottom: 15 },
   sheetEyebrow: { color: palette.green, fontSize: 11, fontWeight: "900", marginBottom: 9 },
   resultRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
@@ -217,6 +226,7 @@ function makeStyles(palette: Palette) {
   resultAddress: { color: palette.text, fontSize: 14, fontWeight: "900" },
   resultCoordinate: { color: palette.muted, fontSize: 10, marginTop: 4 },
   candidateList: { maxHeight: 172 },
+  candidateListCompact: { maxHeight: 112 },
   candidateListContent: { gap: 8, paddingBottom: 4 },
   candidateRow: { borderRadius: 6, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, paddingVertical: 10 },
   candidateRowPicked: { borderColor: palette.charcoal, backgroundColor: palette.primarySoft },

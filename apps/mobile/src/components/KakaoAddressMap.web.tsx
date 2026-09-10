@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { appConfig } from "../config/env";
 import { useAppColors } from "../services/theme";
-import type { AddressCandidate, AddressSelection, MapDisplayMarker } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 import { OpenStreetMapFallback } from "./OpenStreetMapFallback";
 
 export interface KakaoAddressMapProps {
@@ -14,6 +14,7 @@ export interface KakaoAddressMapProps {
   onLocationConfirmed?: (selection: AddressSelection) => void;
   interactive?: boolean;
   mapMarkers?: MapDisplayMarker[];
+  mapRoutes?: MapDisplayRoute[];
   fitMarkers?: boolean;
 }
 
@@ -75,35 +76,41 @@ function loadKakaoMaps(appKey: string): Promise<void> {
   return window.meetfairKakaoMapsLoader;
 }
 
-export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], fitMarkers = true }: KakaoAddressMapProps) {
+export function KakaoAddressMap({ query, requestId, focusTarget = null, onResults, onResolved, interactive = false, mapMarkers = [], mapRoutes = [], fitMarkers = true }: KakaoAddressMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const displayMarkersRef = useRef<any[]>([]);
+  const displayRoutesRef = useRef<any[]>([]);
   const hasFitMarkersRef = useRef(false);
+  const onResultsRef = useRef(onResults);
+  const onResolvedRef = useRef(onResolved);
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
   const styles = useStyles();
+
+  onResultsRef.current = onResults;
+  onResolvedRef.current = onResolved;
 
   const emitResults = useCallback((items: AddressCandidate[]) => {
     const candidates = dedupeCandidates(items);
     const first = candidates[0];
     if (!first) {
       setMessage("검색 결과가 없습니다. 주소 또는 장소 이름으로 다시 검색해주세요.");
-      onResults?.([]);
+      onResultsRef.current?.([]);
       return;
     }
     const kakao = window.kakao;
     if (!kakao?.maps) {
-      onResults?.(candidates);
+      onResultsRef.current?.(candidates);
       return;
     }
     const position = new kakao.maps.LatLng(first.latitude, first.longitude);
     mapRef.current?.setCenter(position);
     markerRef.current?.setPosition(position);
     setMessage("");
-    onResults?.(candidates);
-  }, [onResults]);
+    onResultsRef.current?.(candidates);
+  }, []);
 
   useEffect(() => {
     if (!appConfig.kakaoMapJsKey) {
@@ -131,7 +138,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
               const address = status === window.kakao.maps.services.Status.OK && first
                 ? first.road_address?.address_name || first.address?.address_name
                 : "지도에서 선택한 위치";
-              onResolved?.({ address, latitude: latlng.getLat(), longitude: latlng.getLng() });
+              onResolvedRef.current?.({ address, latitude: latlng.getLat(), longitude: latlng.getLng() });
             });
           });
         }
@@ -144,7 +151,7 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     return () => {
       cancelled = true;
     };
-  }, [interactive, onResolved]);
+  }, [interactive]);
 
   useEffect(() => {
     if (!ready || !query.trim() || !window.kakao?.maps?.services) return;
@@ -262,8 +269,23 @@ export function KakaoAddressMap({ query, requestId, focusTarget = null, onResult
     }
   }, [fitMarkers, mapMarkers, ready]);
 
+  useEffect(() => {
+    if (!ready || !window.kakao?.maps || !mapRef.current) return;
+    for (const route of displayRoutesRef.current) route.setMap(null);
+    displayRoutesRef.current = mapRoutes
+      .filter((route) => route.points.length > 1)
+      .map((route, index) => new window.kakao.maps.Polyline({
+        map: mapRef.current,
+        path: route.points.map((point) => new window.kakao.maps.LatLng(point.latitude, point.longitude)),
+        strokeWeight: 5,
+        strokeColor: route.color ?? ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+        strokeOpacity: 0.78,
+        strokeStyle: route.dashed ? "shortdash" : "solid",
+      }));
+  }, [mapRoutes, ready]);
+
   if (!appConfig.kakaoMapJsKey) {
-    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} />;
+    return <OpenStreetMapFallback focusTarget={focusTarget} mapMarkers={mapMarkers} mapRoutes={mapRoutes} />;
   }
 
   return (

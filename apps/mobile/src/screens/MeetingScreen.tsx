@@ -26,7 +26,7 @@ import { openKakaoRoute } from "../services/kakao-route";
 import { useSession } from "../services/session";
 import { useAppColors, type Palette } from "../services/theme";
 // 지도 검색 결과와 최종 선택 위치의 타입입니다.
-import type { AddressCandidate, AddressSelection } from "../types/location";
+import type { AddressCandidate, AddressSelection, MapDisplayMarker, MapDisplayRoute } from "../types/location";
 
 // 이 화면은 Meeting 라우트에 연결되며 route.params로 meetingId를 받습니다.
 type Props = NativeStackScreenProps<RootStackParamList, "Meeting">;
@@ -177,6 +177,12 @@ export function MeetingScreen({ navigation, route }: Props) {
   // 직접 추천할 장소의 이름과 카테고리입니다.
   const [placeName, setPlaceName] = useState("");
   const [placeCategory, setPlaceCategory] = useState("직접 추천");
+  const [destinationRoutes, setDestinationRoutes] = useState<MapDisplayRoute[]>([]);
+  const candidateOverviewRef = useRef<{ signature: string; markers: MapDisplayMarker[]; routes: MapDisplayRoute[] }>({
+    signature: "",
+    markers: [],
+    routes: [],
+  });
 
   // async는 API처럼 결과가 나중에 도착하는 비동기 작업을 처리하는 함수에 붙입니다.
   // async 함수 안에서는 await로 각 요청의 완료를 기다릴 수 있고, async 함수의 반환값은 항상 Promise가 됩니다.
@@ -259,6 +265,50 @@ export function MeetingScreen({ navigation, route }: Props) {
     return () => clearInterval(timer);
   }, [pokeCooldowns]);
 
+  const hasCenterCandidates = meeting?.placeCandidates.some((candidate) =>
+    candidate.providerPlaceId?.startsWith("meetfair:center:")) ?? false;
+  const routeCandidate = meeting?.placeCandidates.find((candidate) =>
+    candidate.votes.some((vote) => vote.userId === user?.id))
+    ?? (hasCenterCandidates
+      ? undefined
+      : meeting?.placeCandidates.find((candidate) => candidate.recommendationRank === 1));
+  const destinationRouteSignature = routeCandidate
+    ? [
+        routeCandidate.id,
+        routeCandidate.latitude,
+        routeCandidate.longitude,
+        meeting?.travelMetric ?? "",
+        ...(meeting?.participants ?? []).map((participant) => [
+          participant.userId,
+          participant.user.homeLatitude ?? "",
+          participant.user.homeLongitude ?? "",
+        ].join(":")),
+      ].join("|")
+    : "";
+  useEffect(() => {
+    let cancelled = false;
+    setDestinationRoutes([]);
+    if (!routeCandidate) return () => { cancelled = true; };
+    void apiRequest<{
+      routes: Array<{
+        userId: string;
+        approximate: boolean;
+        points: Array<{ latitude: number; longitude: number }>;
+      }>;
+    }>(`/meetings/${meetingId}/place-candidates/${routeCandidate.id}/routes`)
+      .then((data) => {
+        if (cancelled) return;
+        setDestinationRoutes(data.routes.map((item, index) => ({
+          id: `route:home:${item.userId}:${routeCandidate.id}`,
+          color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+          dashed: item.approximate,
+          points: item.points,
+        })));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [destinationRouteSignature, meetingId]);
+
   // 첫 조회가 끝나기 전에는 본문 대신 로딩 또는 조회 오류를 표시합니다.
   if (!meeting) {
     return <SafeAreaView style={styles.safeArea}><ScreenHeader title="모임" onBack={() => navigation.goBack()} /><Text style={styles.loading}>{message || "불러오는 중..."}</Text></SafeAreaView>;
@@ -266,16 +316,15 @@ export function MeetingScreen({ navigation, route }: Props) {
 
   // 현재 로그인 사용자의 참여 정보와 모임 진행 상태를 계산합니다.
   const me = meeting.participants.find((participant) => participant.userId === user?.id);
-  // 나를 제외하고 집 근처 좌표가 있는 참여자를 지도 마커로 변환합니다.
+  // 집 근처 좌표가 있는 모든 참여자를 지도 마커로 변환합니다.
   const homeMapMarkers = meeting.participants.flatMap((participant) => (
-    participant.userId !== user?.id
-    && participant.user.homeLatitude != null
+    participant.user.homeLatitude != null
     && participant.user.homeLongitude != null
       ? [{
           id: `home:${participant.userId}`,
-          label: participant.user.nickname,
+          label: participant.userId === user?.id ? "내 집" : participant.user.nickname,
           kind: "HOME" as const,
-          address: "친구가 설정한 집 근처",
+          address: participant.userId === user?.id ? "설정한 내 집 위치" : "친구가 설정한 집 근처",
           latitude: participant.user.homeLatitude,
           longitude: participant.user.homeLongitude,
         }]
@@ -303,7 +352,7 @@ export function MeetingScreen({ navigation, route }: Props) {
     ...homeMapMarkers,
     {
       id: recommendedCandidate.id,
-      label: "이동시간 BEST",
+      label: hasCenterCandidates ? recommendedCandidate.name : "이동시간 BEST",
       kind: "RECOMMENDED" as const,
       address: recommendedCandidate.address,
       latitude: recommendedCandidate.latitude,
@@ -311,14 +360,47 @@ export function MeetingScreen({ navigation, route }: Props) {
     },
   ] : homeMapMarkers;
   // 후보 위치 한눈에 보기 지도에는 상위 세 장소를 번호와 함께 표시합니다.
-  const candidateOverviewMarkers = meeting.placeCandidates.slice(0, 3).map((candidate, index) => ({
-    id: `candidate-overview:${candidate.id}`,
-    label: `${index + 1}. ${candidate.name}`,
-    kind: "RECOMMENDED" as const,
-    address: candidate.address,
-    latitude: candidate.latitude,
-    longitude: candidate.longitude,
-  }));
+  const overviewCandidates = meeting.placeCandidates.slice(0, 3);
+  const candidateOverviewSignature = [
+    ...overviewCandidates.map((candidate) => (
+      `candidate:${candidate.id}:${candidate.latitude}:${candidate.longitude}:${candidate.name}:${candidate.address}`
+    )),
+    ...homeMapMarkers.map((marker) => (
+      `home:${marker.id}:${marker.latitude}:${marker.longitude}:${marker.label}`
+    )),
+    ...destinationRoutes.map((route) => `${route.id}:${route.points.length}`),
+  ].join("|");
+  if (candidateOverviewRef.current.signature !== candidateOverviewSignature) {
+    candidateOverviewRef.current = {
+      signature: candidateOverviewSignature,
+      markers: [
+        ...overviewCandidates.map((candidate, index) => ({
+          id: `candidate-overview:${candidate.id}`,
+          label: `${index + 1}. ${candidate.name}`,
+          kind: "RECOMMENDED" as const,
+          address: candidate.address,
+          latitude: candidate.latitude,
+          longitude: candidate.longitude,
+        })),
+        ...homeMapMarkers,
+      ],
+      routes: destinationRoutes.length
+        ? destinationRoutes
+        : routeCandidate && meeting.travelMetric === "DISTANCE"
+        ? homeMapMarkers.map((marker, index) => ({
+            id: `route:${marker.id}:${routeCandidate.id}`,
+            color: ["#2563EB", "#7C3AED", "#059669", "#EA580C"][index % 4],
+            dashed: true,
+            points: [
+              { latitude: marker.latitude, longitude: marker.longitude },
+              { latitude: routeCandidate.latitude, longitude: routeCandidate.longitude },
+            ],
+          }))
+        : [],
+    };
+  }
+  const candidateOverviewMarkers = candidateOverviewRef.current.markers;
+  const candidateOverviewRoutes = candidateOverviewRef.current.routes;
 
   // 선택한 후보 장소에 한 표를 보내고 최신 투표 결과를 다시 불러옵니다.
   async function vote(placeCandidateId: string) {
@@ -720,8 +802,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <Text style={styles.recommendSparkle}>✦</Text>
               <View style={styles.recommendCopy}>
                 <Text style={styles.recommendEyebrow}>MEETFAIR SMART PICK</Text>
-                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "공평한 장소 받기"}</Text>
-                <Text style={styles.recommendDescription}>중심 근처 장소를 검색하고 {travelMetricLabel} 기준 이동시간 차이를 비교해요</Text>
+                <Text style={styles.recommendTitle}>{busyAction === "recommendation" ? `${travelMetricLabel} 경로 계산 중...` : "추천 지역 3곳 받기"}</Text>
+                <Text style={styles.recommendDescription}>추천 지역 세 곳을 확인하고 투표해 보세요</Text>
               </View>
               <Text style={styles.recommendArrow}>→</Text>
             </Pressable>
@@ -730,8 +812,8 @@ export function MeetingScreen({ navigation, route }: Props) {
               <View style={[styles.candidateOverviewSection, styles.recommendationMapColumn, !isWideLayout && styles.recommendationColumnNarrow]}>
                 <Text style={styles.candidateOverviewTitle}>후보 위치 한눈에 보기</Text>
                 <Text style={styles.candidateOverviewCaption}>
-                  {candidateOverviewMarkers.length
-                    ? `추천 후보 ${candidateOverviewMarkers.length}곳을 지도에서 확인해 보세요.`
+                  {overviewCandidates.length
+                    ? `추천 후보 ${overviewCandidates.length}곳과 친구 집 위치를 지도에서 확인해 보세요.`
                     : "장소를 추천받으면 후보 위치가 지도에 표시됩니다."}
                 </Text>
                 <View style={[styles.candidateOverviewMap, isWideLayout && styles.candidateOverviewMapWide]}>
@@ -739,6 +821,7 @@ export function MeetingScreen({ navigation, route }: Props) {
                   <ExpandableKakaoAddressMap
                     interactive
                     mapMarkers={candidateOverviewMarkers}
+                    mapRoutes={candidateOverviewRoutes}
                     query=""
                     requestId={0}
                   />
@@ -751,15 +834,16 @@ export function MeetingScreen({ navigation, route }: Props) {
               {/* 후보 카드를 누르면 vote 함수가 실행되며 이동 통계와 개인별 값을 보여줍니다. */}
               {meeting.placeCandidates.map((candidate) => {
                 const stats = travelStats(candidate.travelEstimates, meeting.travelMetric);
+                const isBest = !hasCenterCandidates && candidate.id === recommendedCandidate?.id;
                 return (
                   <Pressable
                     key={candidate.id}
                     onPress={() => vote(candidate.id)}
                     style={styles.candidateStackItem}
                   >
-                  <Card style={[styles.card, candidate.id === recommendedCandidate?.id && styles.recommendedCard]}>
-                    {candidate.id === recommendedCandidate?.id ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
-                    <View style={styles.candidateHeaderRow}><Text numberOfLines={2} style={[styles.cardTitle, styles.candidateName, candidate.id === recommendedCandidate?.id && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
+                  <Card style={[styles.card, isBest && styles.recommendedCard]}>
+                    {isBest ? <Text style={styles.recommendedBadge}>✦ {travelMetricLabel} BEST</Text> : null}
+                    <View style={styles.candidateHeaderRow}><Text numberOfLines={2} style={[styles.cardTitle, styles.candidateName, isBest && styles.recommendedCardTitle]}>{candidate.name}</Text><Pill label={`${candidate.votes.length}표`} /></View>
                     <Text style={styles.meta}>{candidate.address}</Text>
                     {stats ? (
                       <>

@@ -84,20 +84,24 @@ interface NaverReverseResponse {
 export interface ReverseGeocodeResult {
   address: string;
   roadAddress: string;
+  regionName: string;
 }
 
 export async function reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
   const url = `${BASE.reverseGeocode}/gc?coords=${longitude},${latitude}&orders=roadaddr,addr&output=json`;
-  const data = await fetchJson<NaverReverseResponse>(url, { headers: naverHeaders() });
+  const data = await fetchJson<NaverReverseResponse>(url, { headers: naverHeaders(), signal: AbortSignal.timeout(6000) });
   if (data.status.code !== 0 || data.results.length === 0) {
     throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", `Reverse geocode failed for ${latitude},${longitude}`);
   }
-  const road = data.results[0];
-  const addr = data.results[1] ?? road;
-  if (!road || !addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+  const road = data.results.find((result) => result.name === "roadaddr");
+  const addr = data.results.find((result) => result.name === "addr") ?? road;
+  if (!addr) throw new AppError(404, "REVERSE_GEOCODE_NOT_FOUND", "No address found");
+  const regionName = [addr.region.area1.name, addr.region.area2.name, addr.region.area3.name].filter(Boolean).join(" ");
+  const number = (land: typeof addr.land) => [land.number1, land.number2].filter(Boolean).join("-");
   return {
-    roadAddress: road.name ?? "",
-    address: addr.name ?? road.name ?? "",
+    roadAddress: road ? [road.region.area1.name, road.region.area2.name, road.land.name, number(road.land)].filter(Boolean).join(" ") : "",
+    address: [regionName, number(addr.land)].filter(Boolean).join(" "),
+    regionName,
   };
 }
 
@@ -116,6 +120,7 @@ export interface DrivingResult {
   distanceMeters: number;
   durationMinutes: number;
   distanceText?: string;
+  points?: Array<{ latitude: number; longitude: number }>;
 }
 
 export type DirectionOption = "trafast" | "tracomfort" | "traoptimal";
@@ -131,13 +136,14 @@ export async function getDrivingDirections(
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number },
   _option: DirectionOption = "trafast",
+  includePoints = false,
 ): Promise<DrivingResult> {
   const key = kakaoDrivingKey();
   const url =
     `https://apis-navi.kakaomobility.com/v1/directions?` +
     `origin=${origin.longitude},${origin.latitude}` +
     `&destination=${destination.longitude},${destination.latitude}` +
-    `&priority=RECOMMEND&car_fuel=GASOLINE&car_hipass=false`;
+    `&priority=RECOMMEND&car_fuel=GASOLINE&car_hipass=false&summary=${includePoints ? "false" : "true"}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
@@ -153,7 +159,12 @@ export async function getDrivingDirections(
       throw new AppError(502, "DIRECTION_FAILED", "Directions API failed");
     }
     const data = (await res.json()) as {
-      routes?: Array<{ summary?: { distance?: number; duration?: number }; result_code?: number; result_msg?: string }>;
+      routes?: Array<{
+        summary?: { distance?: number; duration?: number };
+        sections?: Array<{ roads?: Array<{ vertexes?: number[] }> }>;
+        result_code?: number;
+        result_msg?: string;
+      }>;
       code?: number;
       msg?: string;
     };
@@ -168,9 +179,20 @@ export async function getDrivingDirections(
     if (summary.distance <= 0 || summary.duration <= 0 || summary.duration > 86400 || summary.distance > 2000000) {
       throw new AppError(502, "DIRECTION_NO_ROUTE", "No route found between origin and destination");
     }
+    const points = includePoints ? route.sections?.flatMap((section) => section.roads ?? []).flatMap((road) => {
+      const vertexes = road.vertexes ?? [];
+      const roadPoints: Array<{ latitude: number; longitude: number }> = [];
+      for (let index = 0; index + 1 < vertexes.length; index += 2) {
+        const longitude = vertexes[index]!;
+        const latitude = vertexes[index + 1]!;
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) roadPoints.push({ latitude, longitude });
+      }
+      return roadPoints;
+    }) ?? [] : [];
     return {
       distanceMeters: Math.round(summary.distance),
       durationMinutes: Math.max(1, Math.round(summary.duration / 60)),
+      ...(points.length ? { points } : {}),
     };
   } catch (error) {
     if (error instanceof AppError) throw error;

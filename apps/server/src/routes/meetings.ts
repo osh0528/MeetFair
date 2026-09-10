@@ -2,6 +2,9 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
+import { getTransitDirections } from "../lib/kakao-transit.js";
+import { getDrivingDirections } from "../lib/naver-maps.js";
+import { applyCandidateRegionNames } from "../services/candidate-region-names.js";
 import {
   toMeetingInvitationSummary,
   toMeetingMemberStatusEntry,
@@ -155,6 +158,90 @@ function recommendationSummary(candidate: {
     })),
   };
 }
+
+meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    await participantFor(meetingId, userId(request));
+    const candidates = await prisma.placeCandidate.findMany({
+      where: { meetingId },
+      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
+      orderBy: { recommendationRank: "asc" },
+      take: 3,
+    });
+    await applyCandidateRegionNames(candidates);
+    response.json({ success: true, data: { recommendations: candidates.map(recommendationSummary) } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.post("/:meetingId/recommendations/regenerate", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const meetingId = idSchema.parse(request.params.meetingId);
+    const host = await hostFor(meetingId, userId(request));
+    if (host.meeting.status !== "PLANNING") throw new AppError(409, "MEETING_NOT_PLANNING", "Recommendations can only be changed while planning.");
+    const voteCount = await prisma.vote.count({ where: { meetingId } });
+    if (voteCount > 0) throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
+    const recommendations = await generateRecommendations(meetingId, userId(request));
+    response.json({ success: true, data: { recommendations } });
+  } catch (error) { next(error); }
+});
+
+meetingsRouter.get("/:meetingId/place-candidates/:candidateId/routes", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const { meetingId, candidateId } = z.object({
+      meetingId: idSchema,
+      candidateId: idSchema,
+    }).parse(request.params);
+    const currentUserId = userId(request);
+    await participantFor(meetingId, currentUserId);
+    const candidate = await prisma.placeCandidate.findFirst({
+      where: { id: candidateId, meetingId },
+      include: { meeting: { select: { travelMetric: true } } },
+    });
+    if (!candidate) throw new AppError(404, "PLACE_CANDIDATE_NOT_FOUND", "Place candidate was not found.");
+
+    const participants = await prisma.meetingParticipant.findMany({
+      where: { meetingId },
+      include: { user: { select: { homeLatitude: true, homeLongitude: true } } },
+    });
+    const friendIds = await friendIdsAmong(currentUserId, participants.map((participant) => participant.userId));
+    const origins = participants.flatMap((participant) => {
+      if (participant.userId !== currentUserId && !friendIds.has(participant.userId)) return [];
+      const latitude = approximateHomeCoordinate(participant.user.homeLatitude);
+      const longitude = approximateHomeCoordinate(participant.user.homeLongitude);
+      return latitude != null && longitude != null
+        ? [{ userId: participant.userId, latitude, longitude }]
+        : [];
+    });
+    const destination = { latitude: candidate.latitude, longitude: candidate.longitude };
+    const routeOrigins = candidate.meeting.travelMetric === "DISTANCE" ? origins : origins.slice(0, 8);
+    const routeResults = await Promise.all(routeOrigins.map(async (origin) => {
+      const directPoints = [origin, destination].map(({ latitude, longitude }) => ({ latitude, longitude }));
+      if (candidate.meeting.travelMetric === "DISTANCE") {
+        return { userId: origin.userId, points: directPoints, approximate: true };
+      }
+      try {
+        const directions = candidate.meeting.travelMetric === "TRANSIT"
+          ? await getTransitDirections(origin, destination, true)
+          : await getDrivingDirections(origin, destination, "trafast", true);
+        const rawPoints = directions.points;
+        if (!rawPoints || rawPoints.length < 2) return null;
+        const points = rawPoints.filter((point, index, items) => index === 0
+          || point.latitude !== items[index - 1]!.latitude
+          || point.longitude !== items[index - 1]!.longitude);
+        return {
+          userId: origin.userId,
+          points,
+          approximate: false,
+        };
+      } catch {
+        return null;
+      }
+    }));
+    const routes = routeResults.filter((route): route is NonNullable<typeof route> => route !== null);
+    response.json({ success: true, data: { routes } });
+  } catch (error) { next(error); }
+});
 
 async function resolveInvitees(input: {
   inviteeUserIds?: string[];
@@ -385,6 +472,7 @@ meetingsRouter.get("/:meetingId", async (request: AuthenticatedRequest, response
           respondedAt: invitation.respondedAt,
         })),
     ];
+    await applyCandidateRegionNames(meeting.placeCandidates);
     response.json({ success: true, data: { ...meeting, participants: maskedParticipants, memberStatuses } });
   } catch (error) { next(error); }
 });
@@ -674,36 +762,6 @@ meetingsRouter.post("/:meetingId/midpoint-recommendations/regenerate", async (re
   } catch (error) { next(error); }
 });
 
-meetingsRouter.post("/:meetingId/recommendations/regenerate", async (request: AuthenticatedRequest, response, next) => {
-  try {
-    const meetingId = idSchema.parse(request.params.meetingId);
-    await hostFor(meetingId, userId(request));
-    const meeting = await prisma.meeting.findUnique({
-      where: { id: meetingId },
-      include: { placeCandidates: { include: { votes: true } } },
-    });
-    if (!meeting) throw new AppError(404, "MEETING_NOT_FOUND", "Meeting was not found.");
-    if (meeting.placeCandidates.some((c) => c.votes.length > 0)) {
-      throw new AppError(409, "VOTES_EXIST", "Cannot regenerate after voting has started.");
-    }
-    const recommendations = await generateRecommendations(meetingId, userId(request));
-    response.json({ success: true, data: { recommendations } });
-  } catch (error) { next(error); }
-});
-
-meetingsRouter.get("/:meetingId/recommendations", async (request: AuthenticatedRequest, response, next) => {
-  try {
-    const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
-    const candidates = await prisma.placeCandidate.findMany({
-      where: { meetingId },
-      include: { travelEstimates: { include: { user: { select: { id: true, accountId: true, nickname: true } } } } },
-      orderBy: { recommendationRank: "asc" },
-    });
-    const recommendations = candidates.map(recommendationSummary);
-    response.json({ success: true, data: { recommendations } });
-  } catch (error) { next(error); }
-});
 
 meetingsRouter.post("/:meetingId/place-candidates", async (request: AuthenticatedRequest, response, next) => {
   try {
@@ -771,10 +829,16 @@ meetingsRouter.patch("/:meetingId/confirm", async (request: AuthenticatedRequest
 meetingsRouter.patch("/:meetingId/location-consent", async (request: AuthenticatedRequest, response, next) => {
   try {
     const meetingId = idSchema.parse(request.params.meetingId);
-    await participantFor(meetingId, userId(request));
+    const participant = await participantFor(meetingId, userId(request));
     const { consent } = z.object({ consent: z.boolean() }).parse(request.body);
-    const participant = await prisma.meetingParticipant.update({ where: { meetingId_userId: { meetingId, userId: userId(request) } }, data: { locationConsent: consent, sharingStatus: consent ? undefined : "NOT_STARTED" } });
-    response.json({ success: true, data: participant });
+    const updated = await prisma.meetingParticipant.update({
+      where: { meetingId_userId: { meetingId, userId: userId(request) } },
+      data: {
+        locationConsent: consent,
+        sharingStatus: consent ? undefined : participant.arrivedAt ? "ARRIVED" : "NOT_STARTED",
+      },
+    });
+    response.json({ success: true, data: updated });
   } catch (error) { next(error); }
 });
 

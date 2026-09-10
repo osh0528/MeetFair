@@ -13,3 +13,10 @@ export interface MapDisplayMarker extends AddressSelection {
   label: string;
   kind: "HOME" | "LIVE" | "RECOMMENDED";
 }
+
+export interface MapDisplayRoute {
+  id: string;
+  color?: string;
+  dashed?: boolean;
+  points: Array<Pick<AddressSelection, "latitude" | "longitude">>;
+}

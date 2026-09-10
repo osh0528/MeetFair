@@ -43,7 +43,13 @@ TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
   if (error || !data) return;
   const stored = await AsyncStorage.getItem(TASK_STATE_KEY);
   if (!stored) return;
-  const state = JSON.parse(stored) as StoredTaskState;
+  let state: StoredTaskState;
+  try {
+    state = JSON.parse(stored) as StoredTaskState;
+  } catch {
+    await AsyncStorage.removeItem(TASK_STATE_KEY);
+    return;
+  }
   const locations = (data as { locations: Location.LocationObject[] }).locations;
   const latest = locations.at(-1);
   if (!latest) return;
@@ -77,10 +83,20 @@ export function TrackingScreen({ navigation, route }: Props) {
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const socketRef = useRef<ReturnType<typeof createMeetingSocket> | null>(null);
   const sharingRef = useRef(false);
+  const initialMapFocusRef = useRef<{ meetingId: string; target: AddressSelection | null }>({ meetingId, target: null });
 
   function updateSharingState(value: boolean) {
     sharingRef.current = value;
     setSharing(value);
+  }
+
+  async function stopLocalTracking() {
+    watcher.current?.remove();
+    watcher.current = null;
+    const backgroundActive = await Location.hasStartedLocationUpdatesAsync(TASK_NAME).catch(() => false);
+    if (backgroundActive) await Location.stopLocationUpdatesAsync(TASK_NAME).catch(() => undefined);
+    await AsyncStorage.removeItem(TASK_STATE_KEY).catch(() => undefined);
+    updateSharingState(false);
   }
 
   async function load() {
@@ -147,6 +163,9 @@ export function TrackingScreen({ navigation, route }: Props) {
           sharingStatus: payload.status,
           arrivedAt: payload.status === "ARRIVED" ? new Date().toISOString() : item.arrivedAt,
         } : item));
+        if (payload.userId === user?.id && payload.status === "ARRIVED") {
+          void stopLocalTracking();
+        }
       });
       socket.on("meeting:error", (payload) => {
         const messageByCode: Record<string, string> = {
@@ -191,7 +210,7 @@ export function TrackingScreen({ navigation, route }: Props) {
     return () => subscription.remove();
   }, [mapExpanded]);
 
-  const mapFocusTarget = useMemo<AddressSelection>(() => {
+  const nextMapFocusTarget = useMemo<AddressSelection>(() => {
     const mine = locations.find((item) => item.userId === user?.id && item.latitude != null && item.longitude != null);
     if (meeting?.confirmedPlace) {
       return { ...meeting.confirmedPlace, address: meeting.confirmedPlace.name };
@@ -201,6 +220,13 @@ export function TrackingScreen({ navigation, route }: Props) {
     }
     return { address: "서울", latitude: 37.5665, longitude: 126.978 };
   }, [locations, meeting, user?.id]);
+  if (initialMapFocusRef.current.meetingId !== meetingId) {
+    initialMapFocusRef.current = { meetingId, target: null };
+  }
+  if (!initialMapFocusRef.current.target && meeting) {
+    initialMapFocusRef.current = { meetingId, target: nextMapFocusTarget };
+  }
+  const mapFocusTarget = initialMapFocusRef.current.target ?? nextMapFocusTarget;
 
   const mapMarkers = useMemo<MapDisplayMarker[]>(() => {
     const markers: MapDisplayMarker[] = [];
@@ -284,24 +310,30 @@ export function TrackingScreen({ navigation, route }: Props) {
         });
         updateMyLocation(position);
       });
-      await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
       updateSharingState(true);
       setMessage("실시간 위치 공유를 시작했습니다.");
 
       try {
         const background = await Location.requestBackgroundPermissionsAsync();
-        if (background.granted && !await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
-          await Location.startLocationUpdatesAsync(TASK_NAME, {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 10000,
-            distanceInterval: 20,
-            foregroundService: {
-              notificationTitle: "MeetFair 위치 공유 중",
-              notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
-            },
-          });
+        if (background.granted) {
+          await AsyncStorage.setItem(TASK_STATE_KEY, JSON.stringify({ meetingId, accessToken } satisfies StoredTaskState));
+          if (!await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) {
+            await Location.startLocationUpdatesAsync(TASK_NAME, {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 10000,
+              distanceInterval: 20,
+              foregroundService: {
+                notificationTitle: "MeetFair 위치 공유 중",
+                notificationBody: "모임 도착 확인을 위해 위치를 공유하고 있습니다.",
+              },
+            });
+          }
+        } else {
+          await AsyncStorage.removeItem(TASK_STATE_KEY);
         }
       } catch {
+        const backgroundActive = await Location.hasStartedLocationUpdatesAsync(TASK_NAME).catch(() => false);
+        if (!backgroundActive) await AsyncStorage.removeItem(TASK_STATE_KEY).catch(() => undefined);
         setMessage("위치 공유를 시작했습니다. 백그라운드에서는 앱 설정에 따라 갱신이 제한될 수 있습니다.");
       }
     } catch (error) {
@@ -319,16 +351,15 @@ export function TrackingScreen({ navigation, route }: Props) {
   }
 
   async function stopSharing() {
-    watcher.current?.remove();
-    watcher.current = null;
     socketRef.current?.emit("sharing:status", { meetingId, status: "PAUSED" });
-    if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
-    await AsyncStorage.removeItem(TASK_STATE_KEY);
-    await apiRequest(`/meetings/${meetingId}/location-consent`, {
-      method: "PATCH",
-      body: JSON.stringify({ consent: false }),
-    });
-    updateSharingState(false);
+    try {
+      await apiRequest(`/meetings/${meetingId}/location-consent`, {
+        method: "PATCH",
+        body: JSON.stringify({ consent: false }),
+      });
+    } finally {
+      await stopLocalTracking();
+    }
   }
 
   async function arrive() {
@@ -338,7 +369,7 @@ export function TrackingScreen({ navigation, route }: Props) {
     try {
       const coordinates = await getCurrentCoordinates();
       await apiRequest(`/meetings/${meetingId}/arrive`, { method: "POST", body: JSON.stringify(coordinates) });
-      await stopSharing();
+      await stopLocalTracking();
       await load();
       setMessage("도착 처리됐습니다.");
     } catch (error) {
