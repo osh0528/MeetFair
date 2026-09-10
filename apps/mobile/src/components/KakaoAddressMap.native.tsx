@@ -165,8 +165,11 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
   };
 
   var displayOverlays = [];
-  var hasFitMarkers = false;
+  var lastFitMarkerSignature = "";
   window.meetfairSetMarkers = function (items, fitMarkers) {
+    var markerSignature = (items || []).map(function (item) {
+      return item.id + ":" + item.latitude + ":" + item.longitude;
+    }).join("|");
     displayOverlays.forEach(function (overlay) { overlay.setMap(null); });
     displayOverlays = (items || []).map(function (item) {
       var content = document.createElement("div");
@@ -189,16 +192,16 @@ function buildMapHtml(appKey: string, interactive: boolean): string {
       content.appendChild(label);
       return new kakao.maps.CustomOverlay({ map: map, position: new kakao.maps.LatLng(item.latitude, item.longitude), content: content, yAnchor: 1 });
     });
-    if (fitMarkers && !hasFitMarkers && map && items && items.length > 1) {
+    if (fitMarkers && markerSignature !== lastFitMarkerSignature && map && items && items.length > 1) {
       var bounds = new kakao.maps.LatLngBounds();
       items.forEach(function (item) {
         bounds.extend(new kakao.maps.LatLng(item.latitude, item.longitude));
       });
       map.setBounds(bounds, 48, 48, 48, 48);
-      hasFitMarkers = true;
-    } else if (fitMarkers && !hasFitMarkers && map && items && items.length === 1) {
+      lastFitMarkerSignature = markerSignature;
+    } else if (fitMarkers && markerSignature !== lastFitMarkerSignature && map && items && items.length === 1) {
       map.setCenter(new kakao.maps.LatLng(items[0].latitude, items[0].longitude));
-      hasFitMarkers = true;
+      lastFitMarkerSignature = markerSignature;
     }
   };
 

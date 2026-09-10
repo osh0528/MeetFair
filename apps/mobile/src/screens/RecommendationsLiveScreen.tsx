@@ -9,7 +9,8 @@ import { Avatar, Button, Card, Pill, ScreenHeader } from "../components/ui";
 import { ApiError, apiRequest } from "../services/api";
 import { useSession } from "../services/session";
 import { useAppColors, type Palette } from "../services/theme";
-import type { MapDisplayMarker } from "../types/location";
+import type { MapDisplayMarker, MapDisplayRoute } from "../types/location";
+import { buildMeetingMapRoutes, type MeetingRoutePayload } from "../services/meeting-map-routes";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Recommendations">;
 type Recommendation = MeetingRecommendation & { fairnessScore?: number };
@@ -100,6 +101,9 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
   const [voting, setVoting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [message, setMessage] = useState("");
+  const [mapRoutes, setMapRoutes] = useState<MapDisplayRoute[]>([]);
+  const [routeOriginMarkers, setRouteOriginMarkers] = useState<MapDisplayMarker[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -154,6 +158,34 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
     latitude: item.latitude,
     longitude: item.longitude,
   }] : []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMapRoutes([]);
+    setRouteOriginMarkers([]);
+    if (!selected?.id || metric === "DISTANCE") {
+      setRoutesLoading(false);
+      return () => { cancelled = true; };
+    }
+    setRoutesLoading(true);
+    void apiRequest<{ routes: MeetingRoutePayload[] }>(
+      `/meetings/${meetingId}/place-candidates/${selected.id}/routes`,
+      undefined,
+      60_000,
+    ).then((data) => {
+      if (cancelled) return;
+      const nicknames = new Map((meeting?.participants ?? []).map((participant) => [
+        participant.userId,
+        participant.user.nickname,
+      ]));
+      const display = buildMeetingMapRoutes(data.routes, selected.id!, nicknames);
+      setMapRoutes(display.mapRoutes);
+      setRouteOriginMarkers(display.originMarkers);
+    }).catch(() => undefined).finally(() => {
+      if (!cancelled) setRoutesLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [meetingId, metric, selected?.id, meeting?.participants]);
 
   async function regenerate() {
     if (!canRegenerate || regenerating) return;
@@ -283,13 +315,20 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
             </View>
             {selected ? (
               <View style={styles.mapSection}>
-                <Text style={styles.mapTitle}>추천 장소 위치</Text>
-                <Text style={styles.mapSubtitle}>후보 3곳의 정확한 위치를 지도에서 확인해 보세요.</Text>
+                <Text style={styles.mapTitle}>추천 장소 위치와 경로</Text>
+                <Text style={styles.mapSubtitle}>
+                  {metric === "DISTANCE"
+                    ? "후보 3곳의 정확한 위치를 지도에서 확인해 보세요."
+                    : routesLoading
+                    ? `${metricLabels[metric]} 경로를 불러오는 중입니다.`
+                    : `${selected.name}까지의 실제 ${metricLabels[metric]} 경로입니다.`}
+                </Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
                     query=""
                     requestId={0}
-                    mapMarkers={mapMarkers}
+                    mapMarkers={[...mapMarkers, ...routeOriginMarkers]}
+                    mapRoutes={mapRoutes}
                   />
                 </Card>
               </View>
