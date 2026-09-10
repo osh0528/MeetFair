@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { prisma } from "./prisma.js";
 import { emitNotificationCreated } from "../realtime/events.js";
 import { Prisma } from "../generated/prisma/client.js";
+import { pushRequest } from "./push-request.js";
 
 export { isQuietTime, lastEndedQuietWindow } from "./quiet-time.js";
 
@@ -33,10 +34,12 @@ async function sendExpoPush(
   body: string,
   data: Record<string, unknown>,
 ) {
-  const tokens = await prisma.deviceToken.findMany({
+  const storedTokens = await prisma.deviceToken.findMany({
     where: { userId },
     select: { expoPushToken: true },
   });
+  // Legacy clients could store a native FCM token here. It must not invalidate the Expo batch.
+  const tokens = storedTokens.filter(({ expoPushToken }) => /^(ExpoPushToken|ExponentPushToken)\[[^\]]+\]$/.test(expoPushToken));
   if (!tokens.length) return;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (env.EXPO_PUSH_ACCESS_TOKEN) headers.authorization = `Bearer ${env.EXPO_PUSH_ACCESS_TOKEN}`;
@@ -47,7 +50,7 @@ async function sendExpoPush(
     const isPoke = notificationType === "CASUAL_POKE"
       || notificationType === "MEETING_POKE"
       || notificationType === "AUTOMATIC_MEETING_POKE";
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+    const response = await pushRequest("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers,
       signal: controller.signal,

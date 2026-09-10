@@ -59,7 +59,7 @@ if (Platform.OS !== "web") {
     }),
   });
   if (Platform.OS === "android") {
-    void configureNotificationChannels();
+    void configureNotificationChannels().catch(() => undefined);
   }
 }
 
@@ -102,16 +102,19 @@ export function PokeNotificationBridge() {
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let registering = false;
     let retryAttempt = 0;
+    let devicePushToken: Notifications.DevicePushToken | undefined;
 
     const saveToken = async (expoPushToken: string) => {
       await apiRequest("/users/me/push-token", {
         method: "PUT",
+        headers: { authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ expoPushToken }),
       });
     };
     const register = async () => {
       if (!active || registering) return;
       registering = true;
+      const usedDeviceToken = devicePushToken;
       try {
         await configureNotificationChannels();
         const existingPermission = await Notifications.getPermissionsAsync();
@@ -120,20 +123,25 @@ export function PokeNotificationBridge() {
           : await Notifications.requestPermissionsAsync();
         if (!permission.granted || !active) return;
         const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-        const token = projectId
-          ? await Notifications.getExpoPushTokenAsync({ projectId })
-          : await Notifications.getExpoPushTokenAsync();
+        const token = await Notifications.getExpoPushTokenAsync({
+          ...(projectId ? { projectId } : {}),
+          ...(usedDeviceToken ? { devicePushToken: usedDeviceToken } : {}),
+        });
         if (!active) return;
         await saveToken(token.data);
         retryAttempt = 0;
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = null;
       } catch (error) {
         console.warn("푸시 알림 등록에 실패했어요.", error);
-        if (active && retryAttempt < PUSH_REGISTRATION_RETRY_MS.length) {
-          const delay = PUSH_REGISTRATION_RETRY_MS[retryAttempt++]!;
-          retryTimer = setTimeout(() => void register(), delay);
+        if (active) {
+          const delay = PUSH_REGISTRATION_RETRY_MS[Math.min(retryAttempt++, PUSH_REGISTRATION_RETRY_MS.length - 1)]!;
+          if (retryTimer) clearTimeout(retryTimer);
+          retryTimer = setTimeout(() => { retryTimer = null; void register(); }, delay);
         }
       } finally {
         registering = false;
+        if (active && devicePushToken !== usedDeviceToken) void register();
       }
     };
 
@@ -146,7 +154,8 @@ export function PokeNotificationBridge() {
       void register();
     });
     const tokenSubscription = Notifications.addPushTokenListener((token) => {
-      void saveToken(token.data).catch((error) => console.warn("변경된 푸시 토큰 저장에 실패했어요.", error));
+      devicePushToken = token;
+      void register();
     });
     return () => {
       active = false;
@@ -184,6 +193,8 @@ export function PokeNotificationBridge() {
     if (!accessToken) return;
     const socket = createMeetingSocket(accessToken);
     socket.on("poke:received", async (poke) => {
+      // Background alerts are displayed by the OS from the server push, not suspended JS.
+      if (Platform.OS !== "web" && AppState.currentState !== "active") return;
       if (seenPokeIds.current.has(poke.pokeId)) return;
       seenPokeIds.current.add(poke.pokeId);
       setTimeout(() => seenPokeIds.current.delete(poke.pokeId), 5 * 60_000);
