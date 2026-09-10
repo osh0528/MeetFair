@@ -245,7 +245,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
                           <View style={styles.nameRow}>
                             <Text style={styles.placeName}>{item.name}</Text>
                             {item.providerPlaceId?.startsWith("meetfair:center:")
-                              ? <Pill label="추천 지역" tone="purple" />
+                              ? <Pill label="위치 후보" tone="purple" />
                               : index === 0 ? <Pill label="BEST" tone="purple" /> : null}
                             {item.id === myVoteId ? <Pill label="내 선택" tone="green" /> : null}
                           </View>
@@ -282,7 +282,7 @@ export function RecommendationsLiveScreen({ navigation, route }: Props) {
             {selected ? (
               <View style={styles.mapSection}>
                 <Text style={styles.mapTitle}>추천 장소 위치</Text>
-                <Text style={styles.mapSubtitle}>추천 지역 3곳을 지도에서 확인해 보세요.</Text>
+                <Text style={styles.mapSubtitle}>후보 3곳의 정확한 위치를 지도에서 확인해 보세요.</Text>
                 <Card style={styles.mapCard}>
                   <KakaoAddressMap
                     query=""
