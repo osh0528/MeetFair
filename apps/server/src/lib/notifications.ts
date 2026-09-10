@@ -4,6 +4,7 @@ import { prisma } from "./prisma.js";
 import { emitNotificationCreated } from "../realtime/events.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { pushRequest } from "./push-request.js";
+import { classifyExpoPushTickets, type ExpoPushTicket } from "./expo-push-tickets.js";
 
 export { isQuietTime, lastEndedQuietWindow } from "./quiet-time.js";
 
@@ -39,7 +40,9 @@ async function sendExpoPush(
     select: { expoPushToken: true },
   });
   // Legacy clients could store a native FCM token here. It must not invalidate the Expo batch.
-  const tokens = storedTokens.filter(({ expoPushToken }) => /^(ExpoPushToken|ExponentPushToken)\[[^\]]+\]$/.test(expoPushToken));
+  const tokens = storedTokens
+    .map(({ expoPushToken }) => expoPushToken)
+    .filter((expoPushToken) => /^(ExpoPushToken|ExponentPushToken)\[[^\]]+\]$/.test(expoPushToken));
   if (!tokens.length) return;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (env.EXPO_PUSH_ACCESS_TOKEN) headers.authorization = `Bearer ${env.EXPO_PUSH_ACCESS_TOKEN}`;
@@ -50,37 +53,42 @@ async function sendExpoPush(
     const isPoke = notificationType === "CASUAL_POKE"
       || notificationType === "MEETING_POKE"
       || notificationType === "AUTOMATIC_MEETING_POKE";
-    const response = await pushRequest("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers,
-      signal: controller.signal,
-      body: JSON.stringify(tokens.map(({ expoPushToken }) => ({
-        to: expoPushToken,
-        sound: "default",
-        priority: "high",
-        ...(!isPoke && !isDirectMessage ? { channelId: "meeting-reminders" } : {}),
-        ...(isPoke ? { channelId: "pokes-v3", priority: "high" } : {}),
-        ...(isDirectMessage ? { channelId: "direct-messages-v2", priority: "high" } : {}),
-        title,
-        body,
-        data: { ...data, notificationType },
-      }))),
-    });
-    if (!response.ok) {
-      console.error(`Expo push request failed with status ${response.status}`);
-      return;
+    let pendingTokens = tokens;
+    const invalidTokens = new Set<string>();
+    for (let ticketAttempt = 0; pendingTokens.length && ticketAttempt < 3; ticketAttempt += 1) {
+      const response = await pushRequest("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify(pendingTokens.map((expoPushToken) => ({
+          to: expoPushToken,
+          sound: "default",
+          priority: "high",
+          ...(!isPoke && !isDirectMessage ? { channelId: "meeting-reminders" } : {}),
+          ...(isPoke ? { channelId: "pokes-v4", ttl: 300 } : {}),
+          ...(isDirectMessage ? { channelId: "direct-messages-v2" } : {}),
+          title,
+          body,
+          data: { ...data, notificationType },
+        }))),
+      });
+      if (!response.ok) {
+        console.error(`Expo push request failed with status ${response.status}`);
+        return;
+      }
+      const result = await response.json() as { data?: ExpoPushTicket[] };
+      const classified = classifyExpoPushTickets(pendingTokens, result.data);
+      classified.invalidTokens.forEach((token) => invalidTokens.add(token));
+      if (classified.failedTickets.length) console.error("Expo push tickets failed", classified.failedTickets);
+      pendingTokens = classified.retryTokens;
+      if (pendingTokens.length && ticketAttempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** ticketAttempt));
+      }
     }
-    const result = await response.json() as {
-      data?: Array<{ status?: string; message?: string; details?: { error?: string } }>;
-    };
-    const invalidTokens = tokens.flatMap((token, index) => (
-      result.data?.[index]?.details?.error === "DeviceNotRegistered" ? [token.expoPushToken] : []
-    ));
-    if (invalidTokens.length) {
-      await prisma.deviceToken.deleteMany({ where: { expoPushToken: { in: invalidTokens } } });
+    if (invalidTokens.size) {
+      await prisma.deviceToken.deleteMany({ where: { expoPushToken: { in: [...invalidTokens] } } });
     }
-    const failedTickets = result.data?.filter((ticket) => ticket.status === "error" && ticket.details?.error !== "DeviceNotRegistered") ?? [];
-    if (failedTickets.length) console.error("Expo push tickets failed", failedTickets);
+    if (pendingTokens.length) console.error("Expo push tickets remained rate limited after retries", pendingTokens.length);
   } catch (error) {
     console.error("Expo push request failed", error);
   } finally {

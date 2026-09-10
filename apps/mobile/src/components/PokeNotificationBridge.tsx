@@ -11,7 +11,7 @@ import type { RootStackParamList } from "../../App";
 import { navigateForNotificationData, stringValue } from "../services/notification-navigation";
 import { apiRequest } from "../services/api";
 
-const POKE_CHANNEL_ID = "pokes-v3";
+const POKE_CHANNEL_ID = "pokes-v4";
 const DIRECT_MESSAGE_CHANNEL_ID = "direct-messages-v2";
 const GENERAL_NOTIFICATION_CHANNEL_ID = "meeting-reminders";
 const POKE_VIBRATION_PATTERN = [0, 250, 120, 250, 120, 400];

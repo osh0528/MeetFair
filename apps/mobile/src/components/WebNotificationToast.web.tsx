@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../App";
+import { shouldShowWebNotification } from "../services/active-direct-conversation";
 import { useSession } from "../services/session";
 import { createMeetingSocket } from "../services/socket";
 import { navigateForNotification } from "../services/notification-navigation";
@@ -42,6 +43,7 @@ export function WebNotificationToast() {
     socket.on("notification:created", ({ notification }) => {
       if (seenNotificationIds.current.has(notification.id)) return;
       seenNotificationIds.current.add(notification.id);
+      if (!shouldShowWebNotification(notification)) return;
       setNotifications((current) => [...current.filter((item) => item.id !== notification.id), notification].slice(-MAX_TOASTS));
       const timer = setTimeout(() => dismiss(notification.id), TOAST_DURATION_MS);
       dismissTimers.current.set(notification.id, timer);
