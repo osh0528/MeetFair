@@ -26,6 +26,7 @@ import { PokeNotificationBridge } from "./src/components/PokeNotificationBridge"
 import { AutomaticLocationBridge } from "./src/components/AutomaticLocationBridge";
 import { WebNotificationToast } from "./src/components/WebNotificationToast";
 import { AppBottomNavigation } from "./src/components/AppBottomNavigation";
+import { SwipeNavigationShell } from "./src/components/SwipeNavigationShell";
 import type { MeetingInvitationSummary } from "@meetfair/shared";
 import { colors } from "./src/theme/colors";
 import type { AddressSelection } from "./src/types/location";
@@ -36,6 +37,12 @@ import { MeetingChatScreen } from "./src/screens/MeetingChatScreen";
 import { MeetingBoardScreen } from "./src/screens/MeetingBoardScreen";
 import { PostDetailScreen } from "./src/screens/PostDetailScreen";
 import { MiniHomeScreen } from "./src/screens/MiniHomeScreen";
+import {
+  getPrimaryTabSwipeTarget,
+  PRIMARY_TABS,
+  type PrimaryTab,
+  type SwipeDirection,
+} from "./src/services/primary-tab-swipe";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -123,6 +130,18 @@ function AppNavigator() {
     navigationRef.resetRoot({ index: 0, routes: [{ name: "UserPage", params: { userId: user.id } }] });
   }
 
+  function openPrimaryTab(tab: PrimaryTab) {
+    if (tab === "UserPage") openUserPageTab();
+    else if (tab === "Home") openMeetingsTab();
+    else if (tab === "Friends") openFriendsTab();
+    else openSettingsTab();
+  }
+
+  function handleTabSwipe(direction: SwipeDirection) {
+    const target = getPrimaryTabSwipeTarget(currentRoute, direction);
+    if (target) openPrimaryTab(target);
+  }
+
   return (
     <NavigationContainer
       documentTitle={{ formatter: () => "MeetFair | 공평한 약속 장소와 실시간 모임 관리" }}
@@ -146,7 +165,10 @@ function AppNavigator() {
             onUserPage={openUserPageTab}
           />
         ) : null}
-        <View style={styles.navigatorShell}>
+        <SwipeNavigationShell
+          enabled={!isDesktop && PRIMARY_TABS.some((route) => route === currentRoute)}
+          onSwipe={handleTabSwipe}
+        >
           <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
@@ -179,7 +201,7 @@ function AppNavigator() {
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
           <Stack.Screen name="MiniHome" component={MiniHomeScreen} />
           </Stack.Navigator>
-        </View>
+        </SwipeNavigationShell>
         {user && !bottomNavHidden && !isDesktop ? (
           <AppBottomNavigation
             layout="bottom"
@@ -198,5 +220,4 @@ function AppNavigator() {
 const styles = StyleSheet.create({
   appShell: { flex: 1 },
   appShellDesktop: { flexDirection: "row" },
-  navigatorShell: { flex: 1, minWidth: 0 },
 });
