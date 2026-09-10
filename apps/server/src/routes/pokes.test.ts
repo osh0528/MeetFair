@@ -13,7 +13,6 @@ vi.mock("../lib/auth.js", () => ({
 }));
 vi.mock("../lib/notifications.js", () => ({
   createNotification: vi.fn(async () => ({ id: "n", type: "x", title: "", body: "", data: null, readAt: null, createdAt: new Date().toISOString() })),
-  isQuietTime: vi.fn(() => false),
 }));
 vi.mock("../realtime/events.js", () => ({
   emitPoke: vi.fn(), emitNotificationCreated: vi.fn(), emitMeetingUpdated: vi.fn(), setRealtimeServer: vi.fn(),
@@ -53,11 +52,6 @@ describe("pokes routes - CASUAL (pure helper validation)", () => {
     vi.mocked(prisma.poke.upsert).mockResolvedValue(mockPoke as never);
     const poke = await prisma.poke.upsert({ where: { senderId_clientRequestId: { senderId: "a", clientRequestId: "c" } }, update: {}, create: { senderId: "a", targetId: "b", type: "CASUAL", clientRequestId: "c" } } as never);
     expect(poke.id).toBe("poke-1");
-  });
-  it("6. quiet push:false", async () => {
-    const { isQuietTime } = await import("../lib/notifications.js");
-    vi.mocked(isQuietTime).mockReturnValueOnce(true);
-    expect(isQuietTime(null, null, "Asia/Seoul")).toBe(true);
   });
   it("7. idempotency same clientRequestId returns same id", async () => {
     const { prisma } = await import("../lib/prisma.js");

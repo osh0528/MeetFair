@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
-import { createNotification, isQuietTime } from "../lib/notifications.js";
+import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitPoke } from "../realtime/events.js";
@@ -57,14 +57,13 @@ async function handleCasualPoke(senderId: string, targetId: string, clientReques
     senderNickname: sender.nickname,
     sentAt: poke.createdAt.toISOString(),
   });
-  const quiet = isQuietTime(target.pokeQuietStartMinutes, target.pokeQuietEndMinutes, target.timezone);
   await createNotification({
     userId: targetId,
     type: "CASUAL_POKE",
     title: `${sender.nickname}님이 찔렀어요`,
     body: "친구가 MeetFair에서 찌르기를 보냈습니다.",
     data: { pokeId: poke.id, senderId },
-    push: !quiet,
+    important: true,
   });
   return poke;
 }

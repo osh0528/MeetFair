@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../lib/app-error.js";
 import { randomUUID } from "node:crypto";
-import { createNotification, isQuietTime } from "../lib/notifications.js";
+import { createNotification } from "../lib/notifications.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { emitMeetingUpdated, emitPoke } from "../realtime/events.js";
@@ -328,8 +328,6 @@ meetingSocialRouter.post("/:meetingId/pokes", async (request: AuthenticatedReque
       throw new AppError(429, "POKE_COOLDOWN", `Please wait ${Math.ceil(remaining / 1000)}s before poking again.`);
     }
     const sender = await prisma.user.findUniqueOrThrow({ where: { id: senderId }, select: { nickname: true } });
-    const targetUser = targetParticipant.user;
-    const quiet = isQuietTime(targetUser.pokeQuietStartMinutes, targetUser.pokeQuietEndMinutes, targetUser.timezone);
     const poke = await prisma.poke.upsert({
       where: { senderId_clientRequestId: { senderId, clientRequestId: requestId } },
       update: {},
@@ -350,7 +348,7 @@ meetingSocialRouter.post("/:meetingId/pokes", async (request: AuthenticatedReque
       title: `${sender.nickname}님이 찔렀어요`,
       body: "모임에 늦고 있어요. 확인해 주세요.",
       data: { pokeId: poke.id, meetingId, senderId },
-      push: !quiet,
+      important: true,
     });
     response.status(201).json({ success: true, data: { poke } });
   } catch (error) { next(error); }
