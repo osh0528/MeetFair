@@ -30,6 +30,8 @@ export function NotificationsScreen({ navigation }: Props) {
     () => notifications.filter((item) => notificationMatchesCategory(item, selectedCategory)),
     [notifications, selectedCategory],
   );
+  const unreadNotifications = filteredNotifications.filter((item) => !item.readAt);
+  const readNotifications = filteredNotifications.filter((item) => Boolean(item.readAt));
   async function load() {
     const requestId = ++loadRequestRef.current;
     setLoading(true);
@@ -38,15 +40,6 @@ export function NotificationsScreen({ navigation }: Props) {
       const data = await apiRequest<{ notifications: NotificationSummary[] }>("/notifications");
       if (requestId !== loadRequestRef.current) return;
       setNotifications(data.notifications);
-      const unread = data.notifications.filter((item) => !item.readAt);
-      const results = await Promise.allSettled(
-        unread.map((item) => apiRequest(`/notifications/${item.id}/read`, { method: "PATCH" })),
-      );
-      if (requestId !== loadRequestRef.current) return;
-      const readIds = new Set(unread.filter((_, index) => results[index]?.status === "fulfilled").map((item) => item.id));
-      const readAt = new Date().toISOString();
-      setNotifications((current) => current.map((item) => readIds.has(item.id) ? { ...item, readAt: item.readAt ?? readAt } : item));
-      if (results.some((result) => result.status === "rejected")) setError("일부 알림의 읽음 상태를 저장하지 못했습니다. 다시 시도해 주세요.");
     } catch (caught) {
       if (requestId !== loadRequestRef.current) return;
       setError(caught instanceof Error ? caught.message : "알림을 불러오지 못했습니다.");
@@ -58,6 +51,62 @@ export function NotificationsScreen({ navigation }: Props) {
     void load();
     return () => { loadRequestRef.current += 1; };
   }, []);
+
+  function openNotification(item: NotificationSummary) {
+    if (!item.readAt) {
+      const readAt = new Date().toISOString();
+      setNotifications((current) => current.map((notification) => (
+        notification.id === item.id ? { ...notification, readAt } : notification
+      )));
+      void apiRequest(`/notifications/${item.id}/read`, { method: "PATCH" }).catch(() => {
+        setNotifications((current) => current.map((notification) => (
+          notification.id === item.id && notification.readAt === readAt
+            ? { ...notification, readAt: null }
+            : notification
+        )));
+        setError("알림의 읽음 상태를 저장하지 못했습니다. 다시 시도해 주세요.");
+      });
+    }
+    navigateForNotification(item, navigation, user?.id);
+  }
+
+  function renderNotification(item: NotificationSummary) {
+    const itemCategory = getNotificationCategory(item.type);
+    const unread = !item.readAt;
+    return (
+      <Pressable key={item.id} onPress={() => openNotification(item)}>
+        <Card style={[styles.card, unread && styles.unreadCard]}>
+          <View style={styles.cardHeader}>
+            <View style={[
+              styles.categoryBadge,
+              itemCategory === "POKE" && styles.pokeBadge,
+              itemCategory === "MEETING" && styles.meetingBadge,
+              itemCategory === "OTHER" && styles.otherBadge,
+            ]}>
+              <Text style={[
+                styles.categoryText,
+                itemCategory === "POKE" && styles.pokeBadgeText,
+                itemCategory === "MEETING" && styles.meetingBadgeText,
+                itemCategory === "OTHER" && styles.otherBadgeText,
+              ]}>
+                {getNotificationCategoryLabel(item.type)}
+              </Text>
+            </View>
+            <View style={[styles.readBadge, unread && styles.unreadBadge]}>
+              {unread ? <View style={styles.unreadDot} /> : null}
+              <Text style={[styles.readBadgeText, unread && styles.unreadBadgeText]}>
+                {unread ? "읽지 않음" : "읽음"}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.title, !unread && styles.readTitle]}>{item.title}</Text>
+          <Text style={[styles.body, !unread && styles.readBody]}>{item.body}</Text>
+          <Text style={styles.date}>{new Date(item.createdAt).toLocaleString("ko-KR")}</Text>
+        </Card>
+      </Pressable>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader title="알림" onBack={() => navigation.goBack()} />
@@ -85,33 +134,18 @@ export function NotificationsScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? <ActivityIndicator color={colors.primary} /> : null}
         {error ? <><Text style={styles.error}>{error}</Text><Button disabled={loading} label="다시 시도" onPress={load} variant="soft" /></> : null}
-        {filteredNotifications.map((item) => {
-          const itemCategory = getNotificationCategory(item.type);
-          return (
-            <Pressable key={item.id} onPress={() => navigateForNotification(item, navigation, user?.id)}>
-              <Card style={styles.card}>
-                <View style={[
-                  styles.categoryBadge,
-                  itemCategory === "POKE" && styles.pokeBadge,
-                  itemCategory === "MEETING" && styles.meetingBadge,
-                  itemCategory === "OTHER" && styles.otherBadge,
-                ]}>
-                  <Text style={[
-                    styles.categoryText,
-                    itemCategory === "POKE" && styles.pokeBadgeText,
-                    itemCategory === "MEETING" && styles.meetingBadgeText,
-                    itemCategory === "OTHER" && styles.otherBadgeText,
-                  ]}>
-                    {getNotificationCategoryLabel(item.type)}
-                  </Text>
-                </View>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.body}>{item.body}</Text>
-                <Text style={styles.date}>{new Date(item.createdAt).toLocaleString("ko-KR")}</Text>
-              </Card>
-            </Pressable>
-          );
-        })}
+        {unreadNotifications.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>읽지 않은 알림 {unreadNotifications.length}</Text>
+            {unreadNotifications.map(renderNotification)}
+          </View>
+        ) : null}
+        {readNotifications.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>읽은 알림 {readNotifications.length}</Text>
+            {readNotifications.map(renderNotification)}
+          </View>
+        ) : null}
         {!loading && !error && !filteredNotifications.length ? (
           <Text style={styles.empty}>
             {selectedCategory === "ALL" ? "알림이 없습니다." : "이 종류의 알림이 없습니다."}
@@ -129,8 +163,17 @@ const styles = StyleSheet.create({
   filterSelected: { backgroundColor: colors.primary },
   filterText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
   filterTextSelected: { color: colors.primaryContrast },
-  content: { padding: 20, gap: 10 },
+  content: { padding: 20, gap: 18 },
+  section: { gap: 10 },
+  sectionTitle: { color: colors.textSecondary, fontSize: 13, fontWeight: "900" },
   card: { gap: 5 },
+  unreadCard: { borderWidth: 1.5, borderColor: colors.borderStrong, backgroundColor: colors.surface },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  readBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surfaceSubtle },
+  unreadBadge: { backgroundColor: colors.primarySoft },
+  unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary },
+  readBadgeText: { color: colors.subtle, fontSize: 10, fontWeight: "800" },
+  unreadBadgeText: { color: colors.primary, fontWeight: "900" },
   categoryBadge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primarySoft },
   categoryText: { color: colors.blue, fontSize: 10, fontWeight: "900" },
   pokeBadge: { backgroundColor: colors.amberSoft },
@@ -140,7 +183,9 @@ const styles = StyleSheet.create({
   otherBadge: { backgroundColor: colors.surfaceSubtle },
   otherBadgeText: { color: colors.muted },
   title: { color: colors.text, fontWeight: "900" },
+  readTitle: { color: colors.textSecondary, fontWeight: "800" },
   body: { color: colors.muted, fontSize: 12 },
+  readBody: { color: colors.subtle },
   date: { color: colors.subtle, fontSize: 10 },
   empty: { color: colors.muted },
   error: { color: colors.red, fontSize: 12 },
